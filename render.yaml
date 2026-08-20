@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: blast-buddies
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /

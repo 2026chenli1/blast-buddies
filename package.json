@@ -1,0 +1,12 @@
+{
+  "name": "blast-buddies",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Blast Buddies 在线联机射击游戏（静态托管 + WebSocket 房间服务器，零依赖）",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
