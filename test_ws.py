@@ -63,6 +63,16 @@ async def main():
         st = await recv_msg(guest)
         check("host state 转发给 guest", st.get("t") == "state" and st.get("d", {}).get("score") == 100, str(st))
 
+        # 5.5 ping/pong RTT 测量转发
+        import time
+        t0 = time.monotonic()
+        await host.send(json.dumps({"t": "ping", "d": 12345}))
+        p1 = await recv_msg(guest)
+        check("host ping 转发给 guest", p1.get("t") == "ping" and p1.get("d") == 12345, str(p1))
+        await guest.send(json.dumps({"t": "pong", "d": 12345}))
+        p2 = await recv_msg(host)
+        check("guest pong 转发给 host", p2.get("t") == "pong" and p2.get("d") == 12345, str(p2))
+
         # 6. guest 断开 -> host 收到 disconnected
         await guest.close()
         disc = await recv_msg(host)
