@@ -196,6 +196,7 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .hud-net.warn { color: #ff6b6b; border-color: rgba(255,107,107,.35); }
+  .hud-net.high-ping { color: #ffb703; border-color: rgba(255,183,3,.4); }
 
   .final-score { font-size: 22px; color: #ffd166; margin: 14px 0 4px; font-weight: 700; }
   .final-stats { font-size: 14.5px; color: #9fb3c8; margin-bottom: 14px; }
@@ -2248,12 +2249,24 @@ const NET = {
   connected: false,
   peer: false,     // 对方是否在线
   input2: null,    // host：最近收到的 guest 输入 {dx,dy,ax,ay,fire}
+  rtt: 0,          // host：到 guest 的往返延迟（ms），ping/pong 测得
 };
 
 function wsURL() {
   const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   return proto + location.host + '/ws';
 }
+// ---------- RTT 测量：host 每 2 秒发 ping，guest 立即回 pong ----------
+let netPingLast = 0;
+function netPing() {
+  if (!NET.ws || NET.role !== 'host') return;
+  if (!NET.peer) { NET.rtt = 0; return; }
+  const now = performance.now();
+  if (now - netPingLast < 2000) return;
+  netPingLast = now;
+  netSend({ t: 'ping', d: now });
+}
+
 function netSend(obj) {
   if (NET.ws && NET.ws.readyState === 1) {
     try { NET.ws.send(JSON.stringify(obj)); } catch (e) {}
@@ -2280,14 +2293,19 @@ function updateNetHud() {
   if (!el) return;
   if (NET.connected && G.state !== 'menu') {
     el.style.display = 'block';
+    // 延迟标签：>300ms 红 / >150ms 黄 / 其他绿
+    const ping = NET.role === 'host' ? (NET.rtt || 0) : (G.netPing || 0);
+    const pingTag = ping > 0 ? ` · ${ping}ms` : '';
     if (NET.role === 'host') {
-      el.textContent = NET.peer ? `房间 ${NET.room} · P2 已连接` : `房间 ${NET.room} · 等待 P2…`;
+      el.textContent = NET.peer ? `房间 ${NET.room} · P2 已连接${pingTag}` : `房间 ${NET.room} · 等待 P2…`;
       el.classList.toggle('warn', !NET.peer);
     } else {
       el.textContent = `房间 ${NET.room} · 已加入，等待房主…`;
       el.classList.toggle('warn', G.state === 'playing' ? false : true);
-      if (G.state === 'playing') el.textContent = `房间 ${NET.room} · 联机中`;
+      if (G.state === 'playing') el.textContent = `房间 ${NET.room} · 联机中${pingTag}`;
     }
+    el.classList.toggle('high-ping', ping > 300);
+    if (NET.role === 'host' && !NET.peer) el.classList.remove('high-ping');
   } else {
     el.style.display = 'none';
   }
@@ -2338,6 +2356,9 @@ function netCreate() {
       updateNetHud();
     } else if (m.t === 'input') {
       NET.input2 = m.d || null;
+    } else if (m.t === 'pong') {
+      NET.rtt = Math.round(performance.now() - m.d);
+      updateNetHud();
     } else if (m.t === 'error') {
       clearTimeout(NET.createTimer);
       setNetStatus('create', m.msg, 'err');
@@ -2383,6 +2404,8 @@ function netJoin(room) {
       updateNetHud();
     } else if (m.t === 'state') {
       applyNetState(m.d);
+    } else if (m.t === 'ping') {
+      netSend({ t: 'pong', d: m.d }); // 立即回 pong，host 计算 RTT
     } else if (m.t === 'peer') {
       // 房主断开
       netClose();
@@ -2424,36 +2447,40 @@ let guestRoomGone = () => {
 // ---------- host：快照广播 ----------
 let netLastSnap = 0;
 function snapshotState() {
+  // 数值取整：像素级精度足够，JSON 体积减半——跨洋传输更快更稳（20GB/月流量也省一半）
+  const R = Math.round;
+  const A = a => Math.round(a * 100) / 100; // 角度/计时保留 2 位小数
   return {
     v: 3,                              // v3：动态对象（敌人/子弹/弹幕）带稳定 id，客机按 id 匹配 + 子弹本地推进
     st: G.state,                       // menu | playing | paused | over
-    s: G.score, k: G.kills, w: G.wave, wt: G.waveTimer,
+    s: G.score, k: G.kills, w: G.wave, wt: A(G.waveTimer),
     time: G.time, sb: G.spreadBoost, rb: G.rapidBoost,
+    ping: NET.rtt || 0,                // 房主测得的 RTT，guest 用于 HUD 显示
     players: G.players.map(p => ({
-      id: p.id, x: p.x, y: p.y, r: p.r, hp: p.hp, maxHp: p.maxHp,
-      angle: p.angle, aimAngle: p.aimAngle, invuln: p.invuln, anim: p.anim,
-      moving: p.moving, flash: p.flash, dead: p.dead,
-      respawnTimer: p.respawnTimer, fireCd: p.fireCd,
+      id: p.id, x: R(p.x), y: R(p.y), r: p.r, hp: p.hp, maxHp: p.maxHp,
+      angle: A(p.angle), aimAngle: A(p.aimAngle), invuln: A(p.invuln), anim: A(p.anim),
+      moving: p.moving, flash: A(p.flash), dead: p.dead,
+      respawnTimer: A(p.respawnTimer), fireCd: A(p.fireCd),
     })),
     enemies: G.enemies.map(e => ({
-      id: e.id, t: e.type, x: e.x, y: e.y, r: e.r, hp: e.hp, maxHp: e.maxHp,
-      speed: e.speed, color: e.color,
-      angle: e.angle, anim: e.anim, flash: e.flash, damageCooldown: e.damageCooldown,
+      id: e.id, t: e.type, x: R(e.x), y: R(e.y), r: R(e.r), hp: e.hp, maxHp: e.maxHp,
+      speed: R(e.speed), color: e.color,
+      angle: A(e.angle), anim: A(e.anim), flash: A(e.flash), damageCooldown: A(e.damageCooldown),
     })),
-    bullets: G.bullets.map(b => ({ id: b.id, x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, damage: b.damage, color: b.color })),
-    ebullets: G.enemyBullets.map(b => ({ id: b.id, x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, color: b.color })),
-    obstacles: G.obstacles.map(o => ({ x: o.x, y: o.y, r: o.r, hp: o.hp, maxHp: o.maxHp, color: o.color, dark: o.dark, anim: o.anim, flash: o.flash })),
-    powerups: G.powerups.map(pu => ({ x: pu.x, y: pu.y, type: pu.type, icon: pu.icon, color: pu.color, label: pu.label, life: pu.life, r: pu.r, anim: pu.anim })),
+    bullets: G.bullets.map(b => ({ id: b.id, x: R(b.x), y: R(b.y), vx: R(b.vx), vy: R(b.vy), r: b.r, life: A(b.life), damage: b.damage, color: b.color })),
+    ebullets: G.enemyBullets.map(b => ({ id: b.id, x: R(b.x), y: R(b.y), vx: R(b.vx), vy: R(b.vy), r: b.r, life: A(b.life), color: b.color })),
+    obstacles: G.obstacles.map(o => ({ x: R(o.x), y: R(o.y), r: R(o.r), hp: o.hp, maxHp: o.maxHp, color: o.color, dark: o.dark, anim: A(o.anim), flash: A(o.flash) })),
+    powerups: G.powerups.map(pu => ({ x: R(pu.x), y: R(pu.y), type: pu.type, icon: pu.icon, color: pu.color, label: pu.label, life: A(pu.life), r: pu.r, anim: A(pu.anim) })),
     boss: G.boss ? {
-      name: G.boss.name, x: G.boss.x, y: G.boss.y, r: G.boss.r,
-      hp: G.boss.hp, maxHp: G.boss.maxHp, speed: G.boss.speed, score: G.boss.score,
-      color: G.boss.color, anim: G.boss.anim, flash: G.boss.flash,
-      state: G.boss.state, stateTime: G.boss.stateTime,
-      burstTimer: G.boss.burstTimer, chargeTimer: G.boss.chargeTimer, summonTimer: G.boss.summonTimer,
-      charging: G.boss.charging, telegraph: G.boss.telegraph,
-      chargeVec: { x: G.boss.chargeVec.x, y: G.boss.chargeVec.y },
-      chargeTime: G.boss.chargeTime, hitCd: G.boss.hitCd,
-      enraged: G.boss.enraged, enragePulse: G.boss.enragePulse,
+      name: G.boss.name, x: R(G.boss.x), y: R(G.boss.y), r: R(G.boss.r),
+      hp: G.boss.hp, maxHp: G.boss.maxHp, speed: R(G.boss.speed), score: G.boss.score,
+      color: G.boss.color, anim: A(G.boss.anim), flash: A(G.boss.flash),
+      state: G.boss.state, stateTime: A(G.boss.stateTime),
+      burstTimer: A(G.boss.burstTimer), chargeTimer: A(G.boss.chargeTimer), summonTimer: A(G.boss.summonTimer),
+      charging: G.boss.charging, telegraph: A(G.boss.telegraph),
+      chargeVec: { x: R(G.boss.chargeVec.x), y: R(G.boss.chargeVec.y) },
+      chargeTime: A(G.boss.chargeTime), hitCd: A(G.boss.hitCd),
+      enraged: G.boss.enraged, enragePulse: A(G.boss.enragePulse),
     } : null,
   };
 }
@@ -2501,6 +2528,7 @@ function applyNetState(s) {
   if (!s) return;
   const prevState = G.state;
   G.state = s.st;
+  G.netPing = s.ping || 0;               // host 测得的 RTT（ms），HUD 显示用
   G.mode = 'net';
   G.score = s.s; G.kills = s.k; G.wave = s.w; G.waveTimer = s.wt;
   G.time = s.time; G.spreadBoost = s.sb; G.rapidBoost = s.rb;
@@ -2514,10 +2542,15 @@ function applyNetState(s) {
     if (!p) {
       p = G.players[i] = { colors: sp.id === 1 ? P1_COLORS : P2_COLORS, netAim: null, netFire: false, x: sp.x, y: sp.y, aimAngle: sp.aimAngle };
     }
-    p._tx = sp.x; p._ty = sp.y; p._ta = sp.aimAngle;
+    // guest 自己的角色（P2）：移动/瞄准本地预测（零延迟），
+    // 快照只提供位置目标用于校正，朝向/动画等视觉字段以本地为准
+    const isMe = (NET.role === 'guest' && sp.id === 2);
+    p._tx = sp.x; p._ty = sp.y;
+    if (!isMe) p._ta = sp.aimAngle;
     p.id = sp.id; p.r = sp.r; p.maxHp = sp.maxHp;
-    p.hp = sp.hp; p.angle = sp.angle; p.invuln = sp.invuln; p.anim = sp.anim;
-    p.moving = sp.moving; p.flash = sp.flash; p.dead = sp.dead;
+    p.hp = sp.hp; p.invuln = sp.invuln;
+    if (!isMe) { p.angle = sp.angle; p.anim = sp.anim; p.moving = sp.moving; }
+    p.flash = sp.flash; p.dead = sp.dead;
     p.respawnTimer = sp.respawnTimer; p.fireCd = sp.fireCd;
   }
   G.players.length = s.players.length;
@@ -2824,10 +2857,12 @@ function loop(now) {
     if (G.state === 'playing') {
       netSendInput();
       stepFx(dt);        // 本地演化粒子/飘字（纯视觉，不占网络带宽）
+      guestPredictSelf(dt); // 自己的角色本地预测：移动/瞄准零延迟
       smoothNetState(dt); // 向最新快照位置平滑滑动，消除跳变
     }
   } else if (NET.role === 'host') {
     netBroadcast();
+    netPing();           // RTT 测量（每 2 秒一次）
   }
   draw();
   requestAnimationFrame(loop);
@@ -2854,11 +2889,57 @@ function stepFx(dt) {
   }
 }
 
+// ---------- guest：自己角色（P2）本地预测——操作零延迟 ----------
+// 与 host 端完全相同的移动物理（速度/障碍推挤/边界/瞄准），
+// 输入不再等"跨洋上报→房主模拟→快照跨洋回传"的 400-600ms 往返。
+// 权威仍是房主快照：smoothNetState 里对 P2 做轻校正消除预测误差。
+function guestPredictSelf(dt) {
+  const me = G.players.find(p => p.id === 2);
+  if (!me || me.dead || me.respawnTimer > 0) return;
+  let dx = 0, dy = 0;
+  if (keys.has('KeyW') || keys.has('ArrowUp')) dy -= 1;
+  if (keys.has('KeyS') || keys.has('ArrowDown')) dy += 1;
+  if (keys.has('KeyA') || keys.has('ArrowLeft')) dx -= 1;
+  if (keys.has('KeyD') || keys.has('ArrowRight')) dx += 1;
+  const len = Math.hypot(dx, dy);
+  me.moving = len > 0;
+  if (len > 0) {
+    me.x += dx / len * CFG.playerSpeed * dt;
+    me.y += dy / len * CFG.playerSpeed * dt;
+    me.anim += dt * 10;
+  }
+  // 障碍推挤（与 host 一致：玩家不能穿过箱子）
+  for (const ob of G.obstacles) {
+    const d2 = dist2(me.x, me.y, ob.x, ob.y);
+    const minD = me.r + ob.r;
+    if (d2 < minD * minD && d2 > 0.01) {
+      const d = Math.sqrt(d2);
+      const push = (minD - d) / d;
+      me.x += (me.x - ob.x) * push;
+      me.y += (me.y - ob.y) * push;
+    }
+  }
+  me.x = clamp(me.x, me.r, W - me.r);
+  me.y = clamp(me.y, me.r, H - me.r);
+  // 瞄准完全本地（鼠标零延迟）
+  me.aimAngle = Math.atan2(mouse.y - me.y, mouse.x - me.x);
+  me.angle = me.aimAngle;
+}
+
 // ---------- guest 平滑插值：物体向最新快照目标位置滑动，消除跳变 ----------
 function smoothNetState(dt) {
-  const k = Math.min(1, dt * 14);
+  const k = Math.min(1, dt * 18);
   for (const p of G.players) {
     if (p._tx === undefined) continue;
+    // guest 自己的角色（P2）：移动由本地预测负责（guestPredictSelf），
+    // 这里只做轻校正消除预测误差；大误差（被击退/重生/传送）时快速收敛
+    if (NET.role === 'guest' && p.id === 2) {
+      const err = Math.hypot(p._tx - p.x, p._ty - p.y);
+      const kk = Math.min(1, dt * (err > 80 ? 20 : 8));
+      p.x += (p._tx - p.x) * kk;
+      p.y += (p._ty - p.y) * kk;
+      continue;
+    }
     p.x += (p._tx - p.x) * k;
     p.y += (p._ty - p.y) * k;
     if (p._ta !== undefined) {
