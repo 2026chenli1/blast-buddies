@@ -234,6 +234,30 @@ function handleWsMessage(ws, connId, raw) {
       }
       break;
     }
+    case 'ping': {
+      // host → guest：RTT 测量探针
+      if (c && c.role === 'host' && c.room) {
+        broadcast({
+          type: 'relay',
+          room: c.room,
+          from: connId,
+          payload: { t: 'ping', d: msg.d },
+        });
+      }
+      break;
+    }
+    case 'pong': {
+      // guest → host：RTT 测量回执
+      if (c && c.role === 'guest' && c.room) {
+        broadcast({
+          type: 'relay',
+          room: c.room,
+          from: connId,
+          payload: { t: 'pong', d: msg.d },
+        });
+      }
+      break;
+    }
     default:
       break;
   }
