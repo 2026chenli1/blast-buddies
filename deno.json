@@ -1,10 +1,8 @@
 {
   "deploy": {
-    "install": "",
-    "build": "",
     "runtime": {
       "type": "dynamic",
-      "entrypoint": "./deploy.ts"
+      "entrypoint": "deploy.ts"
     }
   }
 }
