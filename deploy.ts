@@ -13,8 +13,9 @@
 // ---------- 全局状态 ----------
 // 每个 isolate 维护自己的连接表；跨 isolate 用 BroadcastChannel 转发
 let connSeq = 0;
-const conns = new Map(); // connId -> { ws, room, role }
-const rooms = new Map(); // room -> { host, guest, created }
+const conns = new Map(); // connId -> { ws, room, role, slot }
+const rooms = new Map(); // room -> { host, guests: [{slot, id}], created, cap, mode }
+// cap: 0 = 不限人数；mode: 'public'（房间列表可见）| 'private'（凭房间号加入）
 
 const bc = new BroadcastChannel('blast-relay');
 
@@ -31,8 +32,8 @@ function send(ws, obj) {
 // 事件类型：
 //   relay     -> 转发游戏消息 { type:'relay', room, from, payload }
 //   created   -> 房间创建   { type:'room', action:'created', room, host, created }
-//   joined    -> guest 加入 { type:'room', action:'joined', room, host, guest, created, prevGuest }
-//   left      -> guest 离开 { type:'room', action:'left',   room, host, created, prevGuest }
+//   joined    -> guest 加入 { type:'room', action:'joined', room, host, guest, slot, created, cap, mode }
+//   left      -> guest 离开 { type:'room', action:'left',   room, host, guest, slot, created, cap, mode }
 //   destroyed -> host 断开  { type:'room', action:'destroyed', room }
 function dispatch(m) {
   if (!m) return;
@@ -49,44 +50,45 @@ function dispatch(m) {
   switch (m.action) {
     case 'created': {
       if (!rooms.has(m.room)) {
-        rooms.set(m.room, { host: m.host, guest: null, created: m.created });
+        rooms.set(m.room, { host: m.host, guests: [], created: m.created, cap: m.cap || 0, mode: m.mode || 'public' });
       }
       break;
     }
     case 'joined': {
-      rooms.set(m.room, { host: m.host, guest: m.guest, created: m.created });
-      // guest 是首次加入（prevGuest 为空）才通知 host
-      if (!m.prevGuest) {
-        const h = m.host ? conns.get(m.host) : null;
-        if (h && h.role === 'host' && h.room === m.room) {
-          send(h.ws, { t: 'peer', state: 'connected' });
-        }
+      let r = rooms.get(m.room);
+      if (!r) {
+        rooms.set(m.room, { host: m.host, guests: [], created: m.created, cap: m.cap || 0, mode: m.mode || 'public' });
+        r = rooms.get(m.room);
+      }
+      if (!r.guests.some(g => g.id === m.guest)) r.guests.push({ slot: m.slot, id: m.guest });
+      // 通知 host：某 slot 的玩家加入
+      const h = m.host ? conns.get(m.host) : null;
+      if (h && h.role === 'host' && h.room === m.room) {
+        send(h.ws, { t: 'peer', state: 'connected', slot: m.slot });
       }
       break;
     }
     case 'left': {
-      if (rooms.has(m.room)) {
-        rooms.set(m.room, { host: m.host, guest: null, created: m.created });
-      }
-      // guest 确实离开过才通知 host
-      if (m.prevGuest) {
+      const r = rooms.get(m.room);
+      if (r) {
+        r.guests = r.guests.filter(g => g.id !== m.guest);
+        // 通知 host：某 slot 的玩家离开
         const h = m.host ? conns.get(m.host) : null;
         if (h && h.role === 'host' && h.room === m.room) {
-          send(h.ws, { t: 'peer', state: 'disconnected' });
+          send(h.ws, { t: 'peer', state: 'disconnected', slot: m.slot });
         }
       }
       break;
     }
     case 'destroyed': {
-      const prev = rooms.get(m.room);
       rooms.delete(m.room);
-      // host 断开解散房间：通知本 isolate 中该房间的 guest
-      if (prev && prev.guest) {
-        const g = conns.get(prev.guest);
-        if (g && g.role === 'guest' && g.room === m.room) {
-          send(g.ws, { t: 'peer', state: 'disconnected' });
-          g.room = null;
-          g.role = null;
+      // host 断开解散房间：通知本 isolate 中该房间的所有 guest
+      for (const [id, c] of conns) {
+        if (c.role === 'guest' && c.room === m.room) {
+          send(c.ws, { t: 'peer', state: 'disconnected' });
+          c.room = null;
+          c.role = null;
+          c.slot = null;
         }
       }
       break;
@@ -108,7 +110,7 @@ function genRoomCode() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
-function createRoom(connId) {
+function createRoom(connId, cap, mode) {
   let room = genRoomCode();
   let tries = 0;
   while (rooms.has(room) && tries < 50) {
@@ -116,26 +118,33 @@ function createRoom(connId) {
     tries++;
   }
   const created = Date.now();
-  rooms.set(room, { host: connId, guest: null, created });
+  rooms.set(room, { host: connId, guests: [], created, cap, mode });
   const c = conns.get(connId);
   if (c) {
     c.room = room;
     c.role = 'host';
+    c.slot = 1;
   }
-  broadcast({ type: 'room', action: 'created', room, host: connId, created });
+  broadcast({ type: 'room', action: 'created', room, host: connId, created, cap, mode });
   return room;
 }
 
 function joinRoom(connId, room) {
   const r = rooms.get(room);
   if (!r) return { ok: false, msg: '房间不存在，请检查房间号' };
-  if (r.guest) return { ok: false, msg: '房间已满（已有 2 名玩家）' };
-  const prevGuest = r.guest; // 一定为 null
-  r.guest = connId;
+  if (r.cap > 0 && r.guests.length >= r.cap - 1) {
+    return { ok: false, msg: `房间已满（${r.guests.length + 1}/${r.cap} 人）` };
+  }
+  // 分配最小可用玩家位（P2 起）
+  const used = new Set(r.guests.map(g => g.slot));
+  let slot = 2;
+  while (used.has(slot)) slot++;
+  r.guests.push({ slot, id: connId });
   const c = conns.get(connId);
   if (c) {
     c.room = room;
     c.role = 'guest';
+    c.slot = slot;
   }
   broadcast({
     type: 'room',
@@ -143,10 +152,12 @@ function joinRoom(connId, room) {
     room,
     host: r.host,
     guest: connId,
+    slot,
     created: r.created,
-    prevGuest,
+    cap: r.cap,
+    mode: r.mode,
   });
-  return { ok: true };
+  return { ok: true, slot };
 }
 
 function leaveRoom(connId) {
@@ -155,26 +166,30 @@ function leaveRoom(connId) {
   const room = c.room;
   const r = rooms.get(room);
   const wasHost = c.role === 'host';
+  const slot = c.slot;
 
   if (r) {
     if (wasHost) {
       rooms.delete(room);
       broadcast({ type: 'room', action: 'destroyed', room });
     } else {
-      const prevGuest = r.guest;
-      r.guest = null;
+      r.guests = r.guests.filter(g => g.id !== connId);
       broadcast({
         type: 'room',
         action: 'left',
         room,
         host: r.host,
+        guest: connId,
+        slot,
         created: r.created,
-        prevGuest,
+        cap: r.cap,
+        mode: r.mode,
       });
     }
   }
   c.room = null;
   c.role = null;
+  c.slot = null;
 }
 
 // ---------- 消息处理 ----------
@@ -194,8 +209,13 @@ function handleWsMessage(ws, connId, raw) {
         send(ws, { t: 'error', msg: '你已经在房间里了' });
         return;
       }
-      const room = createRoom(connId);
-      send(ws, { t: 'created', room });
+      // 最多人数：不填/非法 = 0（不限）；模式：public 公开 / private 私有
+      let cap = Math.floor(Number(msg.max));
+      if (!isFinite(cap) || cap < 0) cap = 0;
+      if (cap > 99) cap = 99;
+      const mode = msg.mode === 'private' ? 'private' : 'public';
+      const room = createRoom(connId, cap, mode);
+      send(ws, { t: 'created', room, cap, mode });
       break;
     }
     case 'join': {
@@ -209,7 +229,19 @@ function handleWsMessage(ws, connId, raw) {
         send(ws, { t: 'error', msg: res.msg });
         return;
       }
-      send(ws, { t: 'joined', room });
+      send(ws, { t: 'joined', room, slot: res.slot });
+      break;
+    }
+    case 'list': {
+      // 房间大厅：返回所有公开且未满员的房间
+      const list = [];
+      for (const [room, r] of rooms) {
+        if (r.mode !== 'public') continue;
+        if (r.cap > 0 && r.guests.length >= r.cap - 1) continue; // 满员不再展示
+        list.push({ room, n: r.guests.length + 1, cap: r.cap });
+      }
+      list.sort((a, b) => (a.room < b.room ? -1 : 1));
+      send(ws, { t: 'rooms', d: list });
       break;
     }
     case 'input': {
@@ -218,7 +250,7 @@ function handleWsMessage(ws, connId, raw) {
           type: 'relay',
           room: c.room,
           from: connId,
-          payload: { t: 'input', d: msg.d || {} },
+          payload: { t: 'input', d: msg.d || {}, slot: c.slot },
         });
       }
       break;
@@ -249,7 +281,7 @@ function handleWsMessage(ws, connId, raw) {
 
 function setupSocket(ws) {
   const connId = 'c' + (++connSeq) + '-' + Math.random().toString(36).slice(2, 8);
-  conns.set(connId, { ws, room: null, role: null });
+  conns.set(connId, { ws, room: null, role: null, slot: null });
 
   ws.onmessage = (ev) => handleWsMessage(ws, connId, ev.data);
   ws.onclose = () => {
