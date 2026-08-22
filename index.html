@@ -2256,16 +2256,42 @@ function wsURL() {
   const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   return proto + location.host + '/ws';
 }
-// ---------- RTT 测量：host 每 2 秒发 ping，guest 立即回 pong ----------
+// ---------- RTT 测量：每 2 秒发 ping，服务器直接回 pong ----------
+// （不绕经对方浏览器：对方标签页后台节流会把 RTT 拉到几万毫秒）
 let netPingLast = 0;
 function netPing() {
-  if (!NET.ws || NET.role !== 'host') return;
-  if (!NET.peer) { NET.rtt = 0; return; }
+  if (!NET.ws || NET.ws.readyState !== 1) return;
+  if (NET.role !== 'host' && NET.role !== 'guest') return;
+  if (NET.role === 'host' && !NET.peer) { NET.rtt = 0; return; }
+  if (NET.role === 'guest' && G.state !== 'playing') return;
   const now = performance.now();
   if (now - netPingLast < 2000) return;
   netPingLast = now;
   netSend({ t: 'ping', d: now });
 }
+
+// ---------- 网络心跳定时器（Web Worker） ----------
+// 主线程的 rAF/定时器在后台标签页会被 Chrome 节流（最低每分钟 1 次），
+// Worker 的 postMessage 不受此限制：保证后台也能持续发 ping/快照，
+// 避免切一下标签页 RTT 就飙到几万毫秒、guest 画面冻结。
+let netTickerStarted = false;
+function startNetTicker() {
+  if (netTickerStarted) return;
+  netTickerStarted = true;
+  const tick = () => {
+    if (!NET.ws || NET.ws.readyState !== 1) return;
+    netPing();
+    if (NET.role === 'host') netBroadcast(); // rAF 停摆时兜底发快照（内部有频率限制）
+  };
+  try {
+    const src = 'setInterval(function(){postMessage(0)},1000);';
+    const w = new Worker(URL.createObjectURL(new Blob([src], { type: 'application/javascript' })));
+    w.onmessage = () => tick();
+  } catch (e) {
+    setInterval(tick, 1000); // Worker 不可用时退化为普通定时器
+  }
+}
+startNetTicker();
 
 function netSend(obj) {
   if (NET.ws && NET.ws.readyState === 1) {
@@ -2293,8 +2319,8 @@ function updateNetHud() {
   if (!el) return;
   if (NET.connected && G.state !== 'menu') {
     el.style.display = 'block';
-    // 延迟标签：>300ms 红 / >150ms 黄 / 其他绿
-    const ping = NET.role === 'host' ? (NET.rtt || 0) : (G.netPing || 0);
+    // 延迟标签：>300ms 红 / >150ms 黄 / 其他绿（双端各自测的 客户端↔服务器 RTT）
+    const ping = NET.rtt || 0;
     const pingTag = ping > 0 ? ` · ${ping}ms` : '';
     if (NET.role === 'host') {
       el.textContent = NET.peer ? `房间 ${NET.room} · P2 已连接${pingTag}` : `房间 ${NET.room} · 等待 P2…`;
@@ -2404,8 +2430,10 @@ function netJoin(room) {
       updateNetHud();
     } else if (m.t === 'state') {
       applyNetState(m.d);
-    } else if (m.t === 'ping') {
-      netSend({ t: 'pong', d: m.d }); // 立即回 pong，host 计算 RTT
+    } else if (m.t === 'pong') {
+      // 服务器直接回的 pong：guest 自己测 RTT（不依赖房主浏览器）
+      NET.rtt = Math.round(performance.now() - m.d);
+      updateNetHud();
     } else if (m.t === 'peer') {
       // 房主断开
       netClose();
