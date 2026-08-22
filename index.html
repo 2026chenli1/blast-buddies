@@ -27,20 +27,20 @@
 
   /* ---------- 手机适配 ---------- */
   body.mobile-mode canvas { cursor: default; }
+  .hud-right-wrap { display: flex; align-items: center; gap: 10px; }
   #mobile-pause-btn {
     display: none;
-    position: fixed;
-    top: calc(10px + env(safe-area-inset-top));
-    right: calc(12px + env(safe-area-inset-right));
-    z-index: 5;
-    width: 46px; height: 46px;
+    pointer-events: auto; /* hud-top 是 pointer-events:none，按钮要可点 */
+    width: 44px; height: 44px;
+    flex: none;
     border-radius: 12px;
     border: 2px solid rgba(255,255,255,.28);
     background: rgba(13,27,42,.6);
     color: #cfe0f0;
-    font-size: 19px;
+    font-size: 18px;
     align-items: center; justify-content: center;
     backdrop-filter: blur(2px);
+    touch-action: manipulation;
   }
   body.mobile-mode #mobile-pause-btn.show { display: flex; }
 
@@ -181,6 +181,61 @@
   .net-status { font-size: 13px; color: #9fb3c8; min-height: 18px; margin: 6px 0 8px; line-height: 1.5; }
   .net-status.ok { color: #2ec4b6; }
   .net-status.err { color: #ff6b6b; }
+
+  /* ---------- 建房设置弹窗 ---------- */
+  #room-setup-modal {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(8,15,26,.72);
+    backdrop-filter: blur(3px);
+  }
+  .room-setup-box {
+    width: min(92vw, 380px);
+    background: linear-gradient(180deg, #14263c, #0d1b2a);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 16px;
+    padding: 22px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.5);
+    color: #eef4ff; text-align: left;
+  }
+  .room-setup-title { font-size: 20px; font-weight: 900; margin-bottom: 16px; text-align: center; letter-spacing: 1px; }
+  .room-setup-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .room-setup-label { font-size: 14px; color: #cfe0f0; font-weight: 700; flex: none; width: 64px; }
+  #net-max-input {
+    width: 100%; max-width: 140px;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 8px;
+    color: #fff; font-size: 16px; font-weight: 800;
+    padding: 8px 10px; text-align: center;
+    outline: none;
+  }
+  #net-max-input:focus { border-color: #ffb703; }
+  .room-mode-opts { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .room-mode-opt {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 10px;
+    padding: 9px 12px; cursor: pointer;
+    font-size: 13px; color: #cfe0f0;
+  }
+  .room-mode-opt:has(input:checked) { border-color: #ffd166; background: rgba(255,209,102,.1); color: #ffd166; }
+  .room-mode-opt input { accent-color: #ffd166; }
+  .room-setup-btns { display: flex; justify-content: center; gap: 12px; margin-top: 18px; }
+
+  /* ---------- 房间大厅列表 ---------- */
+  .net-lobby-title { font-size: 13px; color: #7d93a8; margin: 12px 0 6px; text-align: left; font-weight: 700; }
+  #net-room-list { max-height: 180px; overflow-y: auto; }
+  .room-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 10px;
+    padding: 8px 12px; margin-bottom: 6px;
+  }
+  .room-row .room-code { font-weight: 900; font-size: 18px; letter-spacing: 2px; color: #ffd166; }
+  .room-row .room-info { flex: 1; font-size: 13px; color: #9fb3c8; text-align: left; }
   .net-room-code {
     font-size: 42px; font-weight: 900; letter-spacing: 10px;
     color: #ffe066;
@@ -416,13 +471,15 @@
 <div id="game-container">
   <canvas id="game"></canvas>
 </div>
-<button id="mobile-pause-btn" aria-label="暂停">⏸</button>
 
 <!-- HUD -->
 <div class="hud-top" id="hud" style="display:none;">
   <div class="hud-score">得分 <span id="score-display">0</span></div>
   <div class="hud-wave" id="wave-display">第 1 波</div>
-  <div class="hud-right" id="hearts-display"></div>
+  <div class="hud-right-wrap">
+    <button id="mobile-pause-btn" aria-label="暂停">⏸</button>
+    <div class="hud-right" id="hearts-display"></div>
+  </div>
 </div>
 <div id="wave-banner"></div>
 <div class="hud-challenge" id="hud-challenge"></div>
@@ -449,19 +506,44 @@
       <button class="mode-btn" id="net-tab-join">加入房间</button>
     </div>
     <div id="net-create-view">
-      <div class="net-status" id="net-status-create">房主需要先运行 server.js 开服，再创建房间</div>
+      <div class="net-status" id="net-status-create">点击「创建房间」设置房间选项</div>
       <div class="net-room-code" id="net-room-code">----</div>
-      <div class="net-hint">把房间号发给好友，好友在另一台设备上打开同样的网址，点「加入房间」输入房间号即可一起玩</div>
+      <div class="net-hint">公开房间会出现在「加入房间」的列表里，点击即可进入；私有房间需要把房间号发给好友，好友输入房间号加入</div>
       <div style="margin-top:12px;">
         <button class="btn btn-small" id="net-create-btn">创建房间</button>
         <button class="btn btn-small btn-secondary" id="net-start-btn" style="display:none; margin-top:0;">开始联机</button>
       </div>
     </div>
     <div id="net-join-view" style="display:none;">
-      <div class="net-status" id="net-status-join">输入房主提供的 4 位房间号</div>
+      <div class="net-status" id="net-status-join">公开房间直接点击加入</div>
+      <div class="net-lobby-title">🌐 公开房间</div>
+      <div id="net-room-list"><div class="lb-empty">正在获取房间列表…</div></div>
+      <div class="net-lobby-title">🔒 私有房间 · 输入房间号</div>
       <div class="name-row">
         <input id="net-room-input" maxlength="4" placeholder="0000">
         <button class="btn btn-small" id="net-join-btn">加入房间</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 建房设置弹窗：最多人数 + 公开/私有 -->
+  <div id="room-setup-modal" style="display:none;">
+    <div class="room-setup-box">
+      <div class="room-setup-title">创建房间</div>
+      <div class="room-setup-row">
+        <span class="room-setup-label">最多人数</span>
+        <input id="net-max-input" type="number" min="1" max="99" inputmode="numeric" placeholder="不限">
+      </div>
+      <div class="room-setup-row" style="align-items:flex-start;">
+        <span class="room-setup-label">模式</span>
+        <div class="room-mode-opts">
+          <label class="room-mode-opt"><input type="radio" name="net-mode" value="public" checked><span>公开 · 房间列表可见，点击即进</span></label>
+          <label class="room-mode-opt"><input type="radio" name="net-mode" value="private"><span>私有 · 凭房间号加入</span></label>
+        </div>
+      </div>
+      <div class="room-setup-btns">
+        <button class="btn btn-small btn-secondary" id="room-setup-cancel">取消</button>
+        <button class="btn btn-small" id="room-setup-ok">创建</button>
       </div>
     </div>
   </div>
@@ -483,7 +565,7 @@
     <div class="control-item"><span class="key">左半屏摇杆</span> 移动（任意位置按下即出现）</div>
     <div class="control-item"><span class="key">右下按钮</span> 开火 · 按偏左枪口逆时针转 · 按偏右顺时针转</div>
     <div class="control-item"><span class="key">点击屏幕</span> 朝点击方向开火</div>
-    <div class="control-item"><span class="key">⏸ 右上角</span> 暂停（仅房主）</div>
+    <div class="control-item"><span class="key">⏸ 血量左边</span> 暂停（仅房主）</div>
   </div>
 
   <button class="btn" id="start-btn">开始游戏</button>
@@ -861,16 +943,36 @@ const G = {
 };
 
 // ======================= 实体 =======================
-const P1_COLORS = { body1: '#6ecbff', body2: '#2196f3', gun1: '#1565c0', gun2: '#0d47a1', glow: '#ffd166' };
-const P2_COLORS = { body1: '#86efac', body2: '#16a34a', gun1: '#15803d', gun2: '#14532d', glow: '#86efac' };
+// 多人配色（P1-P6 循环使用，支持不限人数的房间）
+const PLAYER_PALETTE = [
+  { body1: '#6ecbff', body2: '#2196f3', gun1: '#1565c0', gun2: '#0d47a1', glow: '#ffd166' }, // P1 蓝
+  { body1: '#86efac', body2: '#16a34a', gun1: '#15803d', gun2: '#14532d', glow: '#86efac' }, // P2 绿
+  { body1: '#f9a8d4', body2: '#db2777', gun1: '#9d174d', gun2: '#831843', glow: '#f9a8d4' }, // P3 粉
+  { body1: '#fcd34d', body2: '#d97706', gun1: '#b45309', gun2: '#92400e', glow: '#fcd34d' }, // P4 黄
+  { body1: '#c4b5fd', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#c4b5fd' }, // P5 紫
+  { body1: '#5eead4', body2: '#0d9488', gun1: '#0f766e', gun2: '#134e4a', glow: '#5eead4' }, // P6 青
+];
+const P1_COLORS = PLAYER_PALETTE[0];
+const P2_COLORS = PLAYER_PALETTE[1];
+function playerColors(id) { return PLAYER_PALETTE[(id - 1) % PLAYER_PALETTE.length]; }
+
+// 多人开局/重生的横排站位（n 人均匀分布，不超出屏幕）
+function layoutPlayers() {
+  const n = G.players.length;
+  if (n < 1) return;
+  const spread = Math.min(130 * (n - 1), W * 0.7);
+  G.players.forEach((p, i) => {
+    p.x = clamp(W / 2 + (n > 1 ? (i / (n - 1) - 0.5) * spread : 0), 60, W - 60);
+    p.y = H / 2;
+  });
+}
 
 function createPlayer(id) {
-  const c = id === 1 ? P1_COLORS : P2_COLORS;
-  const offsetX = id === 1 ? -60 : 60;
+  const c = playerColors(id);
   return {
     id,
     colors: c,
-    x: clamp(W / 2 + offsetX, 60, W - 60),
+    x: clamp(W / 2, 60, W - 60),
     y: H / 2,
     r: CFG.playerSize,
     hp: CFG.playerHp,
@@ -891,8 +993,10 @@ function respawnPlayer(p) {
   p.dead = false;
   p.hp = p.maxHp;
   p.invuln = 2.5;
-  const offsetX = p.id === 1 ? -70 : 70;
-  p.x = clamp(W / 2 + offsetX, 60, W - 60);
+  const i = G.players.indexOf(p);
+  const n = G.players.length;
+  const spread = Math.min(130 * (n - 1), W * 0.7);
+  p.x = clamp(W / 2 + (n > 1 ? (i / (n - 1) - 0.5) * spread : 0), 60, W - 60);
   p.y = H / 2;
   addParticles(p.x, p.y, p.colors.body2, 14, 200, 4, 0.5);
   addRing(p.x, p.y, p.colors.body2, p.r);
@@ -1166,13 +1270,16 @@ function update(dt) {
           if (keys.has('ArrowRight')) dx += 1;
         }
       }
-    } else if (G.mode === 'net' && NET.role === 'host' && NET.input2) {
-      // 联机：P2 的输入来自 guest 的网络数据（dx/dy 已归一化）
-      const inp = NET.input2;
-      dx = inp.dx || 0;
-      dy = inp.dy || 0;
-      p.netAim = { x: inp.ax, y: inp.ay };
-      p.netFire = !!inp.fire;
+    } else if (G.mode === 'net' && NET.role === 'host') {
+      // 联机：每个 guest 的输入按 slot 各自路由（dx/dy 已归一化）
+      const gi = NET.peers.get(p.id);
+      if (gi && gi.input) {
+        const inp = gi.input;
+        dx = inp.dx || 0;
+        dy = inp.dy || 0;
+        p.netAim = { x: inp.ax, y: inp.ay };
+        p.netFire = !!inp.fire;
+      }
     } else {
       if (keys.has('ArrowUp')) dy -= 1;
       if (keys.has('ArrowDown')) dy += 1;
@@ -1926,7 +2033,7 @@ function drawPlayer(p) {
   // P 标签（单人模式不显示）
   if (G.mode !== 'single') {
     ctx.save();
-    ctx.fillStyle = p.id === 1 ? '#6ecbff' : '#4ade80';
+    ctx.fillStyle = p.colors.body1;
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0,0,0,0.7)';
@@ -2372,7 +2479,7 @@ function setMobile(on) {
 }
 
 function localPlayer() {
-  if (NET.role === 'guest') return G.players.find(p => p.id === 2);
+  if (NET.role === 'guest') return G.players.find(p => p.id === NET.slot);
   return G.players.find(p => p.id === 1);
 }
 function mobileFiring() {
@@ -2534,12 +2641,15 @@ document.getElementById('mobile-pause-btn').addEventListener('click', () => {
 //       guest 只渲染快照 + 发送自己的输入，不跑游戏逻辑。
 const NET = {
   ws: null,
+  lobbyWs: null,   // 房间大厅连接（仅拉取公开房间列表，不进房间）
   role: null,      // 'host' | 'guest' | null
   room: null,      // 房间号
+  slot: 1,         // 我的玩家编号：host=1，guest=2..n（服务器分配）
   connected: false,
-  peer: false,     // 对方是否在线
-  input2: null,    // host：最近收到的 guest 输入 {dx,dy,ax,ay,fire}
-  rtt: 0,          // host：到 guest 的往返延迟（ms），ping/pong 测得
+  peers: new Map(),// host：slot -> { input }（在线的 guest）
+  cap: 0,          // 房间人数上限（0 = 不限）
+  mode: 'public',  // 'public' | 'private'
+  rtt: 0,          // 客户端↔服务器往返延迟（ms），ping/pong 测得
 };
 
 function wsURL() {
@@ -2552,7 +2662,7 @@ let netPingLast = 0;
 function netPing() {
   if (!NET.ws || NET.ws.readyState !== 1) return;
   if (NET.role !== 'host' && NET.role !== 'guest') return;
-  if (NET.role === 'host' && !NET.peer) { NET.rtt = 0; return; }
+  if (NET.role === 'host' && NET.peers.size === 0) { NET.rtt = 0; return; }
   if (NET.role === 'guest' && G.state !== 'playing') return;
   const now = performance.now();
   if (now - netPingLast < 2000) return;
@@ -2591,9 +2701,11 @@ function netSend(obj) {
 function netClose() {
   clearTimeout(NET.createTimer);
   clearTimeout(NET.joinTimer);
+  closeLobby();
   if (NET.ws) { try { NET.ws.close(); } catch (e) {} }
   NET.ws = null; NET.role = null; NET.room = null;
-  NET.connected = false; NET.peer = false; NET.input2 = null;
+  NET.slot = 1; NET.connected = false;
+  NET.peers.clear(); NET.cap = 0; NET.mode = 'public';
   updateNetHud();
 }
 
@@ -2613,29 +2725,31 @@ function updateNetHud() {
     const ping = NET.rtt || 0;
     const pingTag = ping > 0 ? ` · ${ping}ms` : '';
     if (NET.role === 'host') {
-      el.textContent = NET.peer ? `房间 ${NET.room} · P2 已连接${pingTag}` : `房间 ${NET.room} · 等待 P2…`;
-      el.classList.toggle('warn', !NET.peer);
+      const n = NET.peers.size;
+      el.textContent = n > 0 ? `房间 ${NET.room} · ${n + 1} 人在线${pingTag}` : `房间 ${NET.room} · 等待好友…`;
+      el.classList.toggle('warn', n === 0);
     } else {
       el.textContent = `房间 ${NET.room} · 已加入，等待房主…`;
       el.classList.toggle('warn', G.state === 'playing' ? false : true);
-      if (G.state === 'playing') el.textContent = `房间 ${NET.room} · 联机中${pingTag}`;
+      if (G.state === 'playing') el.textContent = `房间 ${NET.room} · P${NET.slot} 联机中${pingTag}`;
     }
     el.classList.toggle('high-ping', ping > 300);
-    if (NET.role === 'host' && !NET.peer) el.classList.remove('high-ping');
+    if (NET.role === 'host' && NET.peers.size === 0) el.classList.remove('high-ping');
   } else {
     el.style.display = 'none';
   }
 }
 
-// ---------- host：创建房间 ----------
-function netCreate() {
+// ---------- host：创建房间（max：人数上限 0=不限；mode：public/private） ----------
+function netCreate(max, mode) {
   if (NET.ws) return;
+  closeLobby();
   setNetStatus('create', '正在连接服务器 (' + wsURL() + ') …');
   clearTimeout(NET.createTimer);
   NET.createTimer = setTimeout(() => {
     if (NET.ws && NET.role !== 'host') {
       netClose();
-      setNetStatus('create', '⏱ 连接超时：连不上服务器，请确认 server.js 正在运行。', 'err');
+      setNetStatus('create', '⏱ 连接超时：连不上服务器，请稍后重试。', 'err');
       document.getElementById('net-create-btn').style.display = 'inline-block';
     }
   }, 8000);
@@ -2645,33 +2759,57 @@ function netCreate() {
     setNetStatus('create', '❌ 连不上服务器：' + wsURL() + '。常见原因：浏览器开了代理/VPN、或页面在受限的预览面板中。请用 Chrome/Edge 直接打开地址重试。', 'err');
     document.getElementById('net-create-btn').style.display = 'inline-block';
   };
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'create' }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'create', max: max || 0, mode: mode || 'public' }));
   ws.onmessage = (e) => {
     let m;
     try { m = JSON.parse(e.data); } catch (err) { return; }
     if (m.t === 'created') {
       clearTimeout(NET.createTimer);
       NET.role = 'host'; NET.room = m.room; NET.connected = true;
+      NET.cap = m.cap || 0; NET.mode = m.mode || 'public';
       document.getElementById('net-room-code').textContent = m.room;
-      setNetStatus('create', '房间已创建，等待好友加入…', 'ok');
+      const modeLabel = NET.mode === 'private' ? '私有 · 凭房间号加入' : '公开 · 房间列表可见';
+      const capLabel = NET.cap > 0 ? `人数上限 ${NET.cap}` : '人数不限';
+      setNetStatus('create', `房间已创建 · ${modeLabel} · ${capLabel}，等待好友加入…`, 'ok');
       document.getElementById('net-create-btn').style.display = 'none';
       updateNetHud();
     } else if (m.t === 'peer') {
-      NET.peer = m.state === 'connected';
-      if (NET.peer) {
-        setNetStatus('create', '✅ P2 已加入！点击「开始联机」', 'ok');
+      const slot = m.slot || 2;
+      if (m.state === 'connected') {
+        NET.peers.set(slot, { input: null });
+        setNetStatus('create', `✅ P${slot} 已加入！（当前 ${NET.peers.size + 1} 人）点击「开始联机」`, 'ok');
         document.getElementById('net-start-btn').style.display = 'inline-block';
         Sfx.powerup();
+        // 好友中途加入：直接为其创建角色参战
+        if (G.state === 'playing' && !G.players.some(p => p.id === slot)) {
+          G.players.push(createPlayer(slot));
+          layoutPlayers();
+          addPopup(W / 2, H * 0.3, `P${slot} 加入了战斗！`, '#4ade80');
+          updateHUD();
+        }
       } else {
-        setNetStatus('create', 'P2 已断开，等待好友加入…', 'err');
-        document.getElementById('net-start-btn').style.display = 'none';
-        NET.input2 = null;
-        for (const p of G.players) { p.netAim = null; p.netFire = false; }
-        if (G.state === 'playing') addPopup(W / 2, H * 0.3, 'P2 已断开', '#ff6b6b');
+        NET.peers.delete(slot);
+        const idx = G.players.findIndex(p => p.id === slot);
+        if (idx >= 0 && G.state !== 'menu') {
+          const pp = G.players[idx];
+          addPopup(pp.x, pp.y - 30, `P${slot} 已断开`, '#ff6b6b');
+          addParticles(pp.x, pp.y, '#ff6b6b', 20, 250, 5, 0.6);
+          G.players.splice(idx, 1);
+          updateHUD();
+        }
+        if (NET.peers.size === 0) {
+          setNetStatus('create', '好友已全部断开，等待加入…', 'err');
+          document.getElementById('net-start-btn').style.display = 'none';
+          if (G.state === 'playing') addPopup(W / 2, H * 0.3, '好友已断开', '#ff6b6b');
+        } else {
+          setNetStatus('create', `P${slot} 已断开（剩 ${NET.peers.size + 1} 人）`, 'err');
+        }
       }
       updateNetHud();
     } else if (m.t === 'input') {
-      NET.input2 = m.d || null;
+      // 每个 guest 的输入按 slot 路由
+      const gi = NET.peers.get(m.slot);
+      if (gi) gi.input = m.d || null;
     } else if (m.t === 'pong') {
       NET.rtt = Math.round(performance.now() - m.d);
       updateNetHud();
@@ -2696,12 +2834,13 @@ function netCreate() {
 // ---------- guest：加入房间 ----------
 function netJoin(room) {
   if (NET.ws) return;
+  closeLobby();
   setNetStatus('join', '正在连接房间 ' + room + ' (' + wsURL() + ') …');
   clearTimeout(NET.joinTimer);
   NET.joinTimer = setTimeout(() => {
     if (NET.ws && NET.role !== 'guest') {
       netClose();
-      setNetStatus('join', '⏱ 连接超时：连不上服务器。请确认：① 房主服务器在运行 ② 你与房主在同一网络（同一 WiFi/局域网）。', 'err');
+      setNetStatus('join', '⏱ 连接超时：连不上服务器，请检查网络后重试。', 'err');
     }
   }, 8000);
   const ws = new WebSocket(wsURL());
@@ -2716,7 +2855,8 @@ function netJoin(room) {
     if (m.t === 'joined') {
       clearTimeout(NET.joinTimer);
       NET.role = 'guest'; NET.room = m.room; NET.connected = true;
-      setNetStatus('join', `✅ 已加入房间 ${m.room}，等待房主开始…`, 'ok');
+      NET.slot = m.slot || 2; // 服务器分配的玩家编号（P2..Pn）
+      setNetStatus('join', `✅ 已加入房间 ${m.room}，你是 P${NET.slot}，等待房主开始…`, 'ok');
       updateNetHud();
     } else if (m.t === 'state') {
       applyNetState(m.d);
@@ -2804,7 +2944,7 @@ function snapshotState() {
 }
 
 function netBroadcast() {
-  if (!NET.ws || NET.role !== 'host' || !NET.connected || !NET.peer) return;
+  if (!NET.ws || NET.role !== 'host' || !NET.connected || NET.peers.size === 0) return;
   if (G.state !== 'playing' && G.state !== 'paused' && G.state !== 'over') return;
   const now = performance.now();
   // 暂停/结束：画面静止，低频同步即可（500ms），大幅省带宽
@@ -2831,8 +2971,8 @@ function renderHearts() {
   const hearts = document.getElementById('hearts-display');
   let h = '';
   for (const p of G.players) {
-    const tagColor = p.id === 1 ? '#2196f3' : '#16a34a';
-    h += `<div class="hearts-row"><span class="p-tag" style="background:${tagColor}55;color:${p.id === 1 ? '#6ecbff' : '#4ade80'};">P${p.id}</span>`;
+    const c = playerColors(p.id);
+    h += `<div class="hearts-row"><span class="p-tag" style="background:${c.body2}55;color:${c.body1};">P${p.id}</span>`;
     for (let i = 0; i < p.maxHp; i++) {
       if (p.dead) h += '<span style="color:rgba(255,255,255,0.12);">✕</span>';
       else h += i < p.hp ? '<span style="color:#ff6b6b;">♥</span>' : '<span style="color:rgba(255,255,255,0.18);">♥</span>';
@@ -2853,16 +2993,18 @@ function applyNetState(s) {
   // G.shake 不随快照更新：guest 端保持稳定画面（震动是纯视觉）
 
   // --- 对象应用：原地更新 + 记录目标位置（guest 渲染时平滑插值，避免跳变） ---
-  // 玩家（人数固定 1-2，索引匹配即可）
+  // 玩家（人数可变 1-n，索引匹配即可；host 端 players 数组保持与快照一致）
   for (let i = 0; i < s.players.length; i++) {
     const sp = s.players[i];
     let p = G.players[i];
     if (!p) {
-      p = G.players[i] = { colors: sp.id === 1 ? P1_COLORS : P2_COLORS, netAim: null, netFire: false, x: sp.x, y: sp.y, aimAngle: sp.aimAngle };
+      p = G.players[i] = { colors: playerColors(sp.id), netAim: null, netFire: false, x: sp.x, y: sp.y, aimAngle: sp.aimAngle };
+    } else {
+      p.colors = playerColors(sp.id);
     }
-    // guest 自己的角色（P2）：移动/瞄准本地预测（零延迟），
+    // guest 自己的角色：移动/瞄准本地预测（零延迟），
     // 快照只提供位置目标用于校正，朝向/动画等视觉字段以本地为准
-    const isMe = (NET.role === 'guest' && sp.id === 2);
+    const isMe = (NET.role === 'guest' && sp.id === NET.slot);
     p._tx = sp.x; p._ty = sp.y;
     if (!isMe) p._ta = sp.aimAngle;
     p.id = sp.id; p.r = sp.r; p.maxHp = sp.maxHp;
@@ -3041,7 +3183,7 @@ function netSendInput() {
   // 瞄准：电脑=鼠标位置；手机=沿当前瞄准角的方向点（host 端逻辑不变）
   let ax = mouse.x, ay = mouse.y;
   if (Mobile.active) {
-    const me = G.players.find(p => p.id === 2);
+    const me = G.players.find(p => p.id === NET.slot);
     const bx = me ? me.x : W / 2, by = me ? me.y : H / 2;
     ax = Math.round(bx + Math.cos(Mobile.aim) * 120);
     ay = Math.round(by + Math.sin(Mobile.aim) * 120);
@@ -3099,8 +3241,12 @@ function startGame() {
   G.scoreSaved = false;
   lastSavedEntry = null;
   G.players = [createPlayer(1)];
-  if (G.mode === 'net' && NET.role === 'host') G.players.push(createPlayer(2));
-  NET.input2 = null;
+  if (G.mode === 'net' && NET.role === 'host') {
+    // 按当前在线的 guest 创建对应角色（P2..Pn，slot 递增）
+    const slots = [...NET.peers.keys()].sort((a, b) => a - b);
+    for (const s of slots) G.players.push(createPlayer(s));
+  }
+  layoutPlayers();
   mouse.down = false;
   resetMobileInput();
   Mobile.aim = -Math.PI / 2; // 手机版：开局枪口朝上
@@ -3227,7 +3373,7 @@ function stepFx(dt) {
 // 输入不再等"跨洋上报→房主模拟→快照跨洋回传"的 400-600ms 往返。
 // 权威仍是房主快照：smoothNetState 里对 P2 做轻校正消除预测误差。
 function guestPredictSelf(dt) {
-  const me = G.players.find(p => p.id === 2);
+  const me = G.players.find(p => p.id === NET.slot);
   if (!me || me.dead || me.respawnTimer > 0) return;
   let dx = 0, dy = 0;
   if (Mobile.active && Mobile.joy.id !== null) {
@@ -3276,9 +3422,9 @@ function smoothNetState(dt) {
   const k = Math.min(1, dt * 18);
   for (const p of G.players) {
     if (p._tx === undefined) continue;
-    // guest 自己的角色（P2）：移动由本地预测负责（guestPredictSelf），
+    // guest 自己的角色：移动由本地预测负责（guestPredictSelf），
     // 这里只做轻校正消除预测误差；大误差（被击退/重生/传送）时快速收敛
-    if (NET.role === 'guest' && p.id === 2) {
+    if (NET.role === 'guest' && p.id === NET.slot) {
       const err = Math.hypot(p._tx - p.x, p._ty - p.y);
       const kk = Math.min(1, dt * (err > 80 ? 20 : 8));
       p.x += (p._tx - p.x) * kk;
@@ -3353,10 +3499,83 @@ function showNetView(create) {
   netTabJoin.classList.toggle('active', !create);
   netCreateView.style.display = create ? 'block' : 'none';
   netJoinView.style.display = create ? 'none' : 'block';
+  // 加入页显示时拉取公开房间列表；离开时停止
+  if (create) closeLobby();
+  else startLobby();
 }
 netTabCreate.addEventListener('click', () => showNetView(true));
 netTabJoin.addEventListener('click', () => showNetView(false));
-netCreateBtn.addEventListener('click', netCreate);
+
+// ---------- 建房设置弹窗 ----------
+const roomSetupModal = document.getElementById('room-setup-modal');
+netCreateBtn.addEventListener('click', () => {
+  if (NET.ws) return; // 已在房间中
+  roomSetupModal.style.display = 'flex';
+});
+document.getElementById('room-setup-cancel').addEventListener('click', () => {
+  roomSetupModal.style.display = 'none';
+});
+document.getElementById('room-setup-ok').addEventListener('click', () => {
+  const maxVal = parseInt(document.getElementById('net-max-input').value, 10);
+  const max = (isFinite(maxVal) && maxVal >= 1) ? Math.min(maxVal, 99) : 0; // 不填 = 不限
+  const modeEl = document.querySelector('input[name="net-mode"]:checked');
+  const mode = modeEl ? modeEl.value : 'public';
+  roomSetupModal.style.display = 'none';
+  netCreate(max, mode);
+});
+
+// ---------- 房间大厅：拉取公开房间列表 ----------
+var lobbyTimer = null; // var：netClose 在脚本初始化早期就会调 closeLobby，let 会踩 TDZ
+function closeLobby() {
+  if (lobbyTimer) { clearInterval(lobbyTimer); lobbyTimer = null; }
+  if (NET.lobbyWs) { try { NET.lobbyWs.close(); } catch (e) {} NET.lobbyWs = null; }
+}
+function startLobby() {
+  if (NET.lobbyWs || NET.ws) return;
+  try {
+    const ws = new WebSocket(wsURL());
+    NET.lobbyWs = ws;
+    ws.onopen = () => { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'list' })); };
+    ws.onmessage = (e) => {
+      let m;
+      try { m = JSON.parse(e.data); } catch (err) { return; }
+      if (m.t === 'rooms') renderRoomList(m.d || []);
+    };
+    ws.onclose = ws.onerror = () => {
+      if (NET.lobbyWs === ws) NET.lobbyWs = null;
+      if (lobbyTimer) { clearInterval(lobbyTimer); lobbyTimer = null; }
+      const el = document.getElementById('net-room-list');
+      if (el && !NET.ws) el.innerHTML = '<div class="lb-empty">无法连接服务器，请检查网络后重试</div>';
+    };
+    lobbyTimer = setInterval(() => {
+      if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'list' }));
+      else if (NET.lobbyWs === ws) { closeLobby(); startLobby(); } // 断线自动重连
+    }, 3000);
+  } catch (e) {
+    const el = document.getElementById('net-room-list');
+    if (el) el.innerHTML = '<div class="lb-empty">无法连接服务器</div>';
+  }
+}
+function renderRoomList(list) {
+  const el = document.getElementById('net-room-list');
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = '<div class="lb-empty">暂无公开房间 · 私有房间请输入房间号加入</div>';
+    return;
+  }
+  el.innerHTML = list.map(r => `
+    <div class="room-row">
+      <span class="room-code">${r.room}</span>
+      <span class="room-info">${r.n} 人${r.cap > 0 ? ` · 上限 ${r.cap}` : ' · 不限人数'}</span>
+      <button class="btn btn-small" data-room="${r.room}">加入</button>
+    </div>`).join('');
+  for (const b of el.querySelectorAll('button[data-room]')) {
+    b.addEventListener('click', () => {
+      closeLobby();
+      netJoin(b.dataset.room);
+    });
+  }
+}
 netStartBtn.addEventListener('click', startGame);
 netJoinBtn.addEventListener('click', () => {
   const room = netRoomInput.value.trim();
