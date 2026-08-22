@@ -235,29 +235,13 @@ function handleWsMessage(ws, connId, raw) {
       break;
     }
     case 'ping': {
-      // host → guest：RTT 测量探针
-      if (c && c.role === 'host' && c.room) {
-        broadcast({
-          type: 'relay',
-          room: c.room,
-          from: connId,
-          payload: { t: 'ping', d: msg.d },
-        });
-      }
+      // 服务器直接回 pong 给发送者：测的是 客户端↔服务器 的真实网络 RTT。
+      // 旧方案绕经对方浏览器（ping→guest→pong→host），对方标签页一旦被
+      // 后台节流（Chrome 最低降到每分钟 1 次回调），RTT 就飙到几万毫秒。
+      send(ws, { t: 'pong', d: msg.d });
       break;
     }
-    case 'pong': {
-      // guest → host：RTT 测量回执
-      if (c && c.role === 'guest' && c.room) {
-        broadcast({
-          type: 'relay',
-          room: c.room,
-          from: connId,
-          payload: { t: 'pong', d: msg.d },
-        });
-      }
-      break;
-    }
+    // 'pong' 不再需要转发（客户端不回 pong 了），收到直接忽略
     default:
       break;
   }
