@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Blast Buddies - 爆破伙伴</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -24,6 +24,25 @@
     cursor: crosshair;
     touch-action: none;
   }
+
+  /* ---------- 手机适配 ---------- */
+  body.mobile-mode canvas { cursor: default; }
+  #mobile-pause-btn {
+    display: none;
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top));
+    right: calc(12px + env(safe-area-inset-right));
+    z-index: 5;
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    border: 2px solid rgba(255,255,255,.28);
+    background: rgba(13,27,42,.6);
+    color: #cfe0f0;
+    font-size: 19px;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  body.mobile-mode #mobile-pause-btn.show { display: flex; }
 
   /* ---------- UI Overlays ---------- */
   .overlay {
@@ -397,6 +416,7 @@
 <div id="game-container">
   <canvas id="game"></canvas>
 </div>
+<button id="mobile-pause-btn" aria-label="暂停">⏸</button>
 
 <!-- HUD -->
 <div class="hud-top" id="hud" style="display:none;">
@@ -448,15 +468,22 @@
 
   <div style="margin-bottom:16px;">
     <button class="btn btn-secondary sound-btn" id="sound-menu-btn" style="margin-top:0;">🔊 音效：开</button>
+    <button class="btn btn-secondary btn-small" id="mode-switch-btn" style="margin-top:0; margin-left:8px;">🖥 切换电脑版</button>
   </div>
 
-  <div class="controls-grid">
+  <div class="controls-grid" id="controls-desktop">
     <div class="control-item"><span class="p-tag p1-tag">P1</span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> 移动</div>
     <div class="control-item"><span class="p-tag p1-tag">P1</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
     <div class="control-item net-only"><span class="p-tag p2-tag">P2</span><span class="key">WASD</span> / <span class="key">方向键</span> 移动</div>
     <div class="control-item net-only"><span class="p-tag p2-tag">P2</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
     <div class="control-item"><span class="key">P</span> / <span class="key">Esc</span> 暂停（仅房主）</div>
     <div class="control-item"><span class="key">Space</span> 开始 / 重开</div>
+  </div>
+  <div class="controls-grid" id="controls-mobile" style="display:none;">
+    <div class="control-item"><span class="key">左半屏摇杆</span> 移动（任意位置按下即出现）</div>
+    <div class="control-item"><span class="key">右下按钮</span> 开火 · 按偏左枪口逆时针转 · 按偏右顺时针转</div>
+    <div class="control-item"><span class="key">点击屏幕</span> 朝点击方向开火</div>
+    <div class="control-item"><span class="key">⏸ 右上角</span> 暂停（仅房主）</div>
   </div>
 
   <button class="btn" id="start-btn">开始游戏</button>
@@ -1123,15 +1150,21 @@ function update(dt) {
     }
     let dx = 0, dy = 0;
     if (p.id === 1) {
-      if (keys.has('KeyW')) dy -= 1;
-      if (keys.has('KeyS')) dy += 1;
-      if (keys.has('KeyA')) dx -= 1;
-      if (keys.has('KeyD')) dx += 1;
-      if (G.mode === 'single') {
-        if (keys.has('ArrowUp')) dy -= 1;
-        if (keys.has('ArrowDown')) dy += 1;
-        if (keys.has('ArrowLeft')) dx -= 1;
-        if (keys.has('ArrowRight')) dx += 1;
+      if (Mobile.active && Mobile.joy.id !== null) {
+        // 手机：摇杆模拟量（轻推慢走、推满快跑）
+        dx = Mobile.joy.dx;
+        dy = Mobile.joy.dy;
+      } else {
+        if (keys.has('KeyW')) dy -= 1;
+        if (keys.has('KeyS')) dy += 1;
+        if (keys.has('KeyA')) dx -= 1;
+        if (keys.has('KeyD')) dx += 1;
+        if (G.mode === 'single') {
+          if (keys.has('ArrowUp')) dy -= 1;
+          if (keys.has('ArrowDown')) dy += 1;
+          if (keys.has('ArrowLeft')) dx -= 1;
+          if (keys.has('ArrowRight')) dx += 1;
+        }
       }
     } else if (G.mode === 'net' && NET.role === 'host' && NET.input2) {
       // 联机：P2 的输入来自 guest 的网络数据（dx/dy 已归一化）
@@ -1150,8 +1183,10 @@ function update(dt) {
     p.moving = len > 0;
     if (len > 0) {
       dx /= len; dy /= len;
-      p.x += dx * CFG.playerSpeed * dt;
-      p.y += dy * CFG.playerSpeed * dt;
+      // 手机摇杆：速度带模拟量（键盘保持全速）
+      const spd = (Mobile.active && p.id === 1 && Mobile.joy.id !== null) ? Math.max(0.3, len) : 1;
+      p.x += dx * CFG.playerSpeed * spd * dt;
+      p.y += dy * CFG.playerSpeed * spd * dt;
       p.anim += dt * 10;
     }
     // 障碍推挤（玩家不能穿过箱子）
@@ -1171,9 +1206,18 @@ function update(dt) {
     p.flash = Math.max(0, p.flash - dt);
     p.fireCd -= dt;
 
-    // 瞄准：P1 鼠标 / P2 网络瞄准（guest 未发输入时自动瞄准最近敌人）
+    // 瞄准：P1 鼠标（手机=自维护瞄准角）/ P2 网络瞄准（guest 未发输入时自动瞄准最近敌人）
     if (p.id === 1) {
-      p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+      if (Mobile.active) {
+        // 开火按钮按住时枪口持续旋转：偏右顺时针 / 偏左逆时针
+        if (Mobile.fire.rotate !== 0) Mobile.aim += Mobile.fire.rotate * MOBILE_ROT_SPEED * dt;
+        if (Mobile.aim > Math.PI) Mobile.aim -= Math.PI * 2;
+        if (Mobile.aim < -Math.PI) Mobile.aim += Math.PI * 2;
+        p.angle = Mobile.aim;
+        p.aimAngle = Mobile.aim;
+      } else {
+        p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+      }
     } else if (p.netAim) {
       p.angle = Math.atan2(p.netAim.y - p.y, p.netAim.x - p.x);
       p.aimAngle = p.angle;
@@ -1183,12 +1227,15 @@ function update(dt) {
       p.aimAngle = p.angle;
     }
 
-    // 射击：P1 按住鼠标 / P2 网络开火或 Enter
-    const wantFire = p.id === 1 ? mouse.down : (p.netFire || keys.has('Enter') || keys.has('ShiftRight') || keys.has('Numpad0'));
+    // 射击：P1 按住鼠标（手机=开火按钮/点屏）/ P2 网络开火或 Enter
+    const wantFire = p.id === 1
+      ? (Mobile.active ? mobileFiring() : mouse.down)
+      : (p.netFire || keys.has('Enter') || keys.has('ShiftRight') || keys.has('Numpad0'));
     if (wantFire && p.fireCd <= 0) {
       p.fireCd = CFG.fireRate * (G.rapidBoost > 0 ? 0.55 : 1);
       const count = (G.spreadBoost > 0) ? CFG.spreadCount : 1;
-      const baseAngle = p.id === 1 ? Math.atan2(mouse.y - p.y, mouse.x - p.x) : p.aimAngle;
+      // P1 桌面版朝鼠标；手机版/其余朝当前瞄准角（update 顶部已算好 p.angle）
+      const baseAngle = (p.id === 1 && !Mobile.active) ? Math.atan2(mouse.y - p.y, mouse.x - p.x) : p.angle;
       const spreadAngle = count > 1 ? 0.22 : 0;
       for (let i = 0; i < count; i++) {
         const a = baseAngle + (count > 1 ? (i - (count - 1) / 2) * spreadAngle : 0);
@@ -1700,6 +1747,101 @@ function draw() {
     ctx.fillRect(0, H - cw, cw, cw); ctx.fillRect(W - cw, H - cw, cw, cw);
   }
   ctx.restore();
+
+  // 手机版虚拟控件（不受屏幕震动影响）
+  drawMobileControls();
+  const pauseBtn = document.getElementById('mobile-pause-btn');
+  if (pauseBtn) pauseBtn.classList.toggle('show', Mobile.active && G.state === 'playing');
+}
+
+// ---------- 手机版虚拟控件绘制 ----------
+function drawMobileControls() {
+  if (!Mobile.active || G.state !== 'playing') return;
+  ctx.save();
+
+  // ===== 摇杆（浮动摇杆：手指按下处出现；无输入时左下角显示提示圈）=====
+  if (Mobile.joy.id !== null) {
+    ctx.strokeStyle = 'rgba(255,255,255,.28)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(Mobile.joy.bx, Mobile.joy.by, JOY_R, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.05)';
+    ctx.fill();
+    // 摇杆头（沿拖动方向偏移）
+    const l = Math.hypot(Mobile.joy.dx, Mobile.joy.dy);
+    const sx = Mobile.joy.bx + (l > 0 ? (Mobile.joy.dx / l) * Mobile.joy.mag * JOY_R * 0.72 : 0);
+    const sy = Mobile.joy.by + (l > 0 ? (Mobile.joy.dy / l) * Mobile.joy.mag * JOY_R * 0.72 : 0);
+    const grad = ctx.createRadialGradient(sx, sy, 3, sx, sy, 24);
+    grad.addColorStop(0, '#6fdcff');
+    grad.addColorStop(1, '#175e88');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(sx, sy, 24, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.55)';
+    ctx.lineWidth = 2; ctx.stroke();
+  } else {
+    // 无输入提示：左下角幽灵摇杆
+    const hx = JOY_R + 40, hy = H - JOY_R - 48;
+    ctx.globalAlpha = 0.16;
+    ctx.strokeStyle = '#cfe0f0';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(hx, hy, JOY_R, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#cfe0f0';
+    ctx.beginPath(); ctx.arc(hx, hy, 20, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // ===== 开火按钮（右下）：左半=逆时针转枪口，右半=顺时针转枪口 =====
+  const fb = fireBtnPos();
+  const active = Mobile.fire.id !== null;
+  // 底盘
+  ctx.fillStyle = active ? 'rgba(20,40,62,.78)' : 'rgba(13,27,42,.55)';
+  ctx.beginPath(); ctx.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // 按住的半边高亮（左=逆时针 / 右=顺时针）
+  if (active) {
+    ctx.fillStyle = 'rgba(255,183,3,.30)';
+    ctx.beginPath();
+    if (Mobile.fire.rotate > 0) ctx.arc(fb.x, fb.y, fb.r - 2, -Math.PI / 2, Math.PI / 2);
+    else ctx.arc(fb.x, fb.y, fb.r - 2, Math.PI / 2, Math.PI * 1.5);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // 中线分隔
+  ctx.strokeStyle = 'rgba(255,255,255,.18)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(fb.x, fb.y - fb.r + 6); ctx.lineTo(fb.x, fb.y + fb.r - 6);
+  ctx.stroke();
+  // 图标：↺ ↻
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold ' + Math.round(fb.r * 0.42) + 'px sans-serif';
+  ctx.fillStyle = active ? '#ffd166' : 'rgba(255,209,102,.75)';
+  ctx.fillText('↺', fb.x - fb.r * 0.46, fb.y);
+  ctx.fillText('↻', fb.x + fb.r * 0.46, fb.y);
+  // 中间子弹图标
+  const bw = fb.r * 0.34, bh = fb.r * 0.62;
+  ctx.save();
+  ctx.translate(fb.x, fb.y);
+  ctx.rotate(-Math.PI / 2); // 弹头朝上
+  ctx.fillStyle = active ? '#ffd166' : '#e8b04b';
+  ctx.beginPath();
+  ctx.moveTo(0, -bh / 2);
+  ctx.quadraticCurveTo(bw / 2, -bh / 6, bw / 2, bh / 2);
+  ctx.lineTo(-bw / 2, bh / 2);
+  ctx.quadraticCurveTo(-bw / 2, -bh / 6, 0, -bh / 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(13,27,42,.85)';
+  ctx.fillRect(-bw / 2, bh / 2 - bh * 0.28, bw, bh * 0.28);
+  ctx.restore();
+  // 按下时的外圈脉冲
+  if (active) {
+    const pulse = 0.35 + Math.sin(G.time * 10) * 0.15;
+    ctx.strokeStyle = `rgba(255,209,102,${pulse})`;
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(fb.x, fb.y, fb.r + 6, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawPlayer(p) {
@@ -2188,6 +2330,63 @@ function updateBossBar() {
 }
 function hideBossBar() { document.getElementById('boss-bar').style.display = 'none'; }
 
+// ======================= 手机适配层 =======================
+// 检测到手机自动切换；菜单里也可手动切换（触摸笔记本可能误判）
+// 摇杆：左半屏任意位置按下即出现（浮动摇杆）
+// 开火：右下按钮——按偏左枪口逆时针转、按偏右顺时针转，按住持续开火
+//       也可直接点击屏幕任意处朝该方向开火（拖动持续瞄准）
+const MOBILE_ROT_SPEED = 2.6; // 开火按钮旋转枪口速度（弧度/秒）
+const JOY_R = 56;             // 摇杆底座半径
+const Mobile = {
+  active: false,
+  joy: { id: null, bx: 0, by: 0, dx: 0, dy: 0, mag: 0 },
+  fire: { id: null, rotate: 0 },  // rotate: +1 顺时针 / -1 逆时针
+  tap: { id: null },              // 点屏开火的手指
+  aim: -Math.PI / 2,              // 当前瞄准角（弧度）
+};
+
+function detectMobile() {
+  const touch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  const ua = /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent);
+  const iPadOS = /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1; // iPadOS 桌面版 UA
+  return touch && (coarse || ua || iPadOS);
+}
+
+function resetMobileInput() {
+  Mobile.joy.id = null; Mobile.joy.dx = 0; Mobile.joy.dy = 0; Mobile.joy.mag = 0;
+  Mobile.fire.id = null; Mobile.fire.rotate = 0;
+  Mobile.tap.id = null;
+}
+
+function setMobile(on) {
+  Mobile.active = on;
+  resetMobileInput();
+  document.body.classList.toggle('mobile-mode', on);
+  const d = document.getElementById('controls-desktop');
+  const m = document.getElementById('controls-mobile');
+  if (d) d.style.display = on ? 'none' : '';
+  if (m) m.style.display = on ? '' : 'none';
+  const btn = document.getElementById('mode-switch-btn');
+  if (btn) btn.textContent = on ? '🖥 切换电脑版' : '📱 切换手机版';
+}
+
+function localPlayer() {
+  if (NET.role === 'guest') return G.players.find(p => p.id === 2);
+  return G.players.find(p => p.id === 1);
+}
+function mobileFiring() {
+  return Mobile.fire.id !== null || Mobile.tap.id !== null;
+}
+function mobileAimAt(x, y) {
+  const me = localPlayer();
+  if (me) Mobile.aim = Math.atan2(y - me.y, x - me.x);
+}
+function fireBtnPos() {
+  const r = Math.max(52, Math.min(78, Math.min(W, H) * 0.115));
+  return { x: W - r - 34, y: H - r - 44, r };
+}
+
 // ======================= 输入 =======================
 const keys = new Set();
 const mouse = { x: W / 2, y: H / 2, down: false };
@@ -2203,7 +2402,11 @@ window.addEventListener('keydown', (e) => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
-window.addEventListener('blur', () => { keys.clear(); if (NET.role !== 'guest' && G.state === 'playing') pauseGame(); });
+window.addEventListener('blur', () => {
+  keys.clear();
+  resetMobileInput();
+  if (NET.role !== 'guest' && G.state === 'playing') pauseGame();
+});
 
 canvas.addEventListener('mousemove', (e) => {
   const r = canvas.getBoundingClientRect();
@@ -2217,27 +2420,114 @@ canvas.addEventListener('mousedown', (e) => {
 });
 window.addEventListener('mouseup', () => mouse.down = false);
 
-// 触摸 = 本机角色操作（单人 / 联机 host 控制 P1，guest 控制自己的角色，输入会发给房主）
+// ---------- 触摸输入 ----------
+// 电脑版：触摸 = 鼠标（原有行为）
+// 手机版：多点触控按区域路由——左半屏=摇杆 / 右下按钮=旋转开火 / 其余=点屏开火
+function touchXY(t) {
+  const r = canvas.getBoundingClientRect();
+  return { x: t.clientX - r.left, y: t.clientY - r.top };
+}
+
 canvas.addEventListener('touchstart', (e) => {
   ensureAudio();
   e.preventDefault();
-  const t = e.touches[0];
-  const r = canvas.getBoundingClientRect();
-  mouse.x = t.clientX - r.left;
-  mouse.y = t.clientY - r.top;
-  if (NET.role !== 'guest' && G.state === 'menu') startGame();
-  if (NET.role !== 'guest' && G.state === 'over') startGame();
-  if (G.state === 'playing') mouse.down = true;
+  if (!Mobile.active) {
+    // 电脑版触摸：模拟鼠标（单人 / 联机 host 控制 P1，guest 控制自己的角色）
+    const t = e.changedTouches[0];
+    const p = touchXY(t);
+    mouse.x = p.x; mouse.y = p.y;
+    if (NET.role !== 'guest' && G.state === 'menu') startGame();
+    if (NET.role !== 'guest' && G.state === 'over') startGame();
+    if (G.state === 'playing') mouse.down = true;
+    return;
+  }
+  // 手机版
+  if (G.state !== 'playing') return;
+  for (const t of e.changedTouches) {
+    const p = touchXY(t);
+    const fb = fireBtnPos();
+    const inFire = Math.hypot(p.x - fb.x, p.y - fb.y) <= fb.r * 1.18;
+    if (inFire && Mobile.fire.id === null) {
+      // 开火按钮：偏右顺时针 / 偏左逆时针，同时开火
+      Mobile.fire.id = t.identifier;
+      Mobile.fire.rotate = (p.x >= fb.x) ? 1 : -1;
+    } else if (p.x < W * 0.45 && Mobile.joy.id === null) {
+      // 左半屏：浮动摇杆（按下的地方出现底座）
+      Mobile.joy.id = t.identifier;
+      Mobile.joy.bx = p.x; Mobile.joy.by = p.y;
+      Mobile.joy.dx = 0; Mobile.joy.dy = 0; Mobile.joy.mag = 0;
+    } else if (Mobile.tap.id === null) {
+      // 点屏开火：朝手指方向开火，拖动可持续瞄准
+      Mobile.tap.id = t.identifier;
+      mobileAimAt(p.x, p.y);
+    }
+  }
 }, { passive: false });
+
 canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
-  const t = e.touches[0];
-  const r = canvas.getBoundingClientRect();
-  mouse.x = t.clientX - r.left;
-  mouse.y = t.clientY - r.top;
+  if (!Mobile.active) {
+    const t = e.touches[0];
+    const p = touchXY(t);
+    mouse.x = p.x; mouse.y = p.y;
+    return;
+  }
+  const dead = 10; // 摇杆死区（像素）
+  for (const t of e.changedTouches) {
+    const p = touchXY(t);
+    if (t.identifier === Mobile.joy.id) {
+      let dx = p.x - Mobile.joy.bx, dy = p.y - Mobile.joy.by;
+      const d = Math.hypot(dx, dy);
+      if (d > JOY_R) {
+        // 拖出最大行程：底座跟手滑动（"拖着走"手感，不会够不着）
+        Mobile.joy.bx += (dx / d) * (d - JOY_R);
+        Mobile.joy.by += (dy / d) * (d - JOY_R);
+        dx = (dx / d) * JOY_R;
+        dy = (dy / d) * JOY_R;
+      }
+      if (d < dead) {
+        Mobile.joy.dx = 0; Mobile.joy.dy = 0; Mobile.joy.mag = 0;
+      } else {
+        const m = Math.min(1, (d - dead) / (JOY_R - dead)); // 模拟量：轻推慢走、推满快跑
+        const l = Math.hypot(dx, dy) || 1;
+        Mobile.joy.dx = dx / l * m;
+        Mobile.joy.dy = dy / l * m;
+        Mobile.joy.mag = m;
+      }
+    } else if (t.identifier === Mobile.fire.id) {
+      // 手指在按钮上左右滑动可随时换旋转方向
+      const fb = fireBtnPos();
+      Mobile.fire.rotate = (p.x >= fb.x) ? 1 : -1;
+    } else if (t.identifier === Mobile.tap.id) {
+      mobileAimAt(p.x, p.y);
+    }
+  }
 }, { passive: false });
-canvas.addEventListener('touchend', () => mouse.down = false);
-canvas.addEventListener('touchcancel', () => mouse.down = false);
+
+function endTouch(e) {
+  if (!Mobile.active) { mouse.down = false; return; }
+  for (const t of e.changedTouches) {
+    if (t.identifier === Mobile.joy.id) {
+      Mobile.joy.id = null; Mobile.joy.dx = 0; Mobile.joy.dy = 0; Mobile.joy.mag = 0;
+    }
+    if (t.identifier === Mobile.fire.id) {
+      Mobile.fire.id = null; Mobile.fire.rotate = 0;
+    }
+    if (t.identifier === Mobile.tap.id) Mobile.tap.id = null;
+  }
+}
+canvas.addEventListener('touchend', endTouch);
+canvas.addEventListener('touchcancel', endTouch);
+
+// 手机自动检测 + 菜单手动切换按钮
+setMobile(detectMobile());
+document.getElementById('mode-switch-btn').addEventListener('click', () => setMobile(!Mobile.active));
+document.getElementById('mobile-pause-btn').addEventListener('click', () => {
+  if (NET.role !== 'guest') {
+    if (G.state === 'playing') pauseGame();
+    else if (G.state === 'paused') resumeGame();
+  }
+});
 
 // ======================= 联机网络层 =======================
 // 架构：房主(host) 运行完整游戏逻辑，把状态快照广播给加入者(guest)；
@@ -2739,12 +3029,25 @@ function netSendInput() {
   if (now - netLastInput < 33) return; // ~30Hz
   netLastInput = now;
   let dx = 0, dy = 0;
-  if (keys.has('KeyW') || keys.has('ArrowUp')) dy -= 1;
-  if (keys.has('KeyS') || keys.has('ArrowDown')) dy += 1;
-  if (keys.has('KeyA') || keys.has('ArrowLeft')) dx -= 1;
-  if (keys.has('KeyD') || keys.has('ArrowRight')) dx += 1;
+  if (Mobile.active && Mobile.joy.id !== null) {
+    dx = Mobile.joy.dx; dy = Mobile.joy.dy;
+  } else {
+    if (keys.has('KeyW') || keys.has('ArrowUp')) dy -= 1;
+    if (keys.has('KeyS') || keys.has('ArrowDown')) dy += 1;
+    if (keys.has('KeyA') || keys.has('ArrowLeft')) dx -= 1;
+    if (keys.has('KeyD') || keys.has('ArrowRight')) dx += 1;
+  }
   const len = Math.hypot(dx, dy) || 1;
-  netSend({ t: 'input', d: { dx: dx / len, dy: dy / len, ax: mouse.x, ay: mouse.y, fire: mouse.down } });
+  // 瞄准：电脑=鼠标位置；手机=沿当前瞄准角的方向点（host 端逻辑不变）
+  let ax = mouse.x, ay = mouse.y;
+  if (Mobile.active) {
+    const me = G.players.find(p => p.id === 2);
+    const bx = me ? me.x : W / 2, by = me ? me.y : H / 2;
+    ax = Math.round(bx + Math.cos(Mobile.aim) * 120);
+    ay = Math.round(by + Math.sin(Mobile.aim) * 120);
+  }
+  const fire = Mobile.active ? mobileFiring() : mouse.down;
+  netSend({ t: 'input', d: { dx: dx / len, dy: dy / len, ax, ay, fire } });
 }
 
 // ======================= 游戏流程 =======================
@@ -2799,6 +3102,8 @@ function startGame() {
   if (G.mode === 'net' && NET.role === 'host') G.players.push(createPlayer(2));
   NET.input2 = null;
   mouse.down = false;
+  resetMobileInput();
+  Mobile.aim = -Math.PI / 2; // 手机版：开局枪口朝上
 
   hide(document.getElementById('start-overlay'));
   hide(document.getElementById('over-overlay'));
@@ -2925,15 +3230,20 @@ function guestPredictSelf(dt) {
   const me = G.players.find(p => p.id === 2);
   if (!me || me.dead || me.respawnTimer > 0) return;
   let dx = 0, dy = 0;
-  if (keys.has('KeyW') || keys.has('ArrowUp')) dy -= 1;
-  if (keys.has('KeyS') || keys.has('ArrowDown')) dy += 1;
-  if (keys.has('KeyA') || keys.has('ArrowLeft')) dx -= 1;
-  if (keys.has('KeyD') || keys.has('ArrowRight')) dx += 1;
+  if (Mobile.active && Mobile.joy.id !== null) {
+    dx = Mobile.joy.dx; dy = Mobile.joy.dy;
+  } else {
+    if (keys.has('KeyW') || keys.has('ArrowUp')) dy -= 1;
+    if (keys.has('KeyS') || keys.has('ArrowDown')) dy += 1;
+    if (keys.has('KeyA') || keys.has('ArrowLeft')) dx -= 1;
+    if (keys.has('KeyD') || keys.has('ArrowRight')) dx += 1;
+  }
   const len = Math.hypot(dx, dy);
   me.moving = len > 0;
   if (len > 0) {
-    me.x += dx / len * CFG.playerSpeed * dt;
-    me.y += dy / len * CFG.playerSpeed * dt;
+    const spd = (Mobile.active && Mobile.joy.id !== null) ? Math.max(0.3, len) : 1;
+    me.x += dx / len * CFG.playerSpeed * spd * dt;
+    me.y += dy / len * CFG.playerSpeed * spd * dt;
     me.anim += dt * 10;
   }
   // 障碍推挤（与 host 一致：玩家不能穿过箱子）
@@ -2949,8 +3259,15 @@ function guestPredictSelf(dt) {
   }
   me.x = clamp(me.x, me.r, W - me.r);
   me.y = clamp(me.y, me.r, H - me.r);
-  // 瞄准完全本地（鼠标零延迟）
-  me.aimAngle = Math.atan2(mouse.y - me.y, mouse.x - me.x);
+  // 瞄准完全本地（零延迟）：电脑=鼠标；手机=自维护瞄准角（开火按钮旋转 / 点屏定向）
+  if (Mobile.active) {
+    if (Mobile.fire.rotate !== 0) Mobile.aim += Mobile.fire.rotate * MOBILE_ROT_SPEED * dt;
+    if (Mobile.aim > Math.PI) Mobile.aim -= Math.PI * 2;
+    if (Mobile.aim < -Math.PI) Mobile.aim += Math.PI * 2;
+    me.aimAngle = Mobile.aim;
+  } else {
+    me.aimAngle = Math.atan2(mouse.y - me.y, mouse.x - me.x);
+  }
   me.angle = me.aimAngle;
 }
 
