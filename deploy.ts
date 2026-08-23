@@ -295,6 +295,171 @@ function setupSocket(ws) {
   };
 }
 
+// ---------- 用户系统（Deno KV 持久化） ----------
+const kv = await Deno.openKv();
+
+// 商城目录：皮肤 + 枪（价格单位：金币；price=0 为初始赠送）
+const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: number }> = {
+  skin_default: { type: 'skin', name: '蓝色战士', price: 0 },
+  skin_green:   { type: 'skin', name: '翠绿战士', price: 200 },
+  skin_pink:    { type: 'skin', name: '樱花甜心', price: 200 },
+  skin_gold:    { type: 'skin', name: '黄金武士', price: 500 },
+  skin_purple:  { type: 'skin', name: '紫电幻影', price: 500 },
+  skin_dark:    { type: 'skin', name: '暗夜行者', price: 1000 },
+  gun_pistol:   { type: 'gun', name: '标准手枪', price: 0 },
+  gun_rapid:    { type: 'gun', name: '冲锋枪', price: 300 },
+  gun_shotgun:  { type: 'gun', name: '散弹枪', price: 600 },
+  gun_sniper:   { type: 'gun', name: '狙击枪', price: 800 },
+};
+
+function jsonResp(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
+}
+
+async function readBody(req: Request): Promise<Record<string, unknown>> {
+  try {
+    return (await req.json()) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+// 从 Authorization: Bearer <token> 解析用户
+async function authUser(req: Request) {
+  const h = req.headers.get('authorization') || '';
+  const token = h.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  const phone = await kv.get(['session', token]);
+  if (!phone.value) return null;
+  const u = await kv.get(['user', phone.value as string]);
+  return u.value ? { phone: phone.value as string, user: u.value as Record<string, any> } : null;
+}
+
+// 下发给前端的用户数据（不含手机号）
+function pubUser(u: Record<string, any>) {
+  return {
+    name: u.name,
+    coins: u.coins,
+    exp: u.exp,
+    level: u.level,
+    ownedSkins: u.ownedSkins,
+    ownedGuns: u.ownedGuns,
+    skin: u.skin,
+    gun: u.gun,
+  };
+}
+
+async function handleApi(req: Request, url: URL): Promise<Response> {
+  const path = url.pathname;
+
+  // POST /api/auth/send-code { phone } —— 生成 10 位验证码
+  if (path === '/api/auth/send-code' && req.method === 'POST') {
+    const { phone } = await readBody(req);
+    const p = String(phone || '').trim();
+    if (!/^1\d{10}$/.test(p)) return jsonResp({ ok: false, msg: '请输入正确的 11 位手机号' }, 400);
+    const code = String(Math.floor(1e9 + Math.random() * 9e9)); // 10 位数字
+    await kv.set(['code', p], code, { expireIn: 5 * 60 * 1000 }); // 5 分钟有效
+    // 没有短信通道：验证码直接返回页面显示（玩具级鉴权，够用）
+    return jsonResp({ ok: true, code });
+  }
+
+  // POST /api/auth/verify { phone, code } —— 校验并登录/注册
+  if (path === '/api/auth/verify' && req.method === 'POST') {
+    const { phone, code } = await readBody(req);
+    const p = String(phone || '').trim();
+    const c = String(code || '').trim();
+    const saved = await kv.get(['code', p]);
+    if (!saved.value || saved.value !== c) {
+      return jsonResp({ ok: false, msg: '验证码错误或已过期' }, 400);
+    }
+    await kv.delete(['code', p]);
+    let u = await kv.get(['user', p]);
+    if (!u.value) {
+      u.value = {
+        name: '玩家' + String(Math.floor(1000 + Math.random() * 9000)),
+        coins: 0,
+        exp: 0,
+        level: 1,
+        ownedSkins: ['skin_default'],
+        ownedGuns: ['gun_pistol'],
+        skin: 'skin_default',
+        gun: 'gun_pistol',
+        created: Date.now(),
+      };
+      await kv.set(['user', p], u.value);
+    }
+    const token = crypto.randomUUID();
+    await kv.set(['session', token], p, { expireIn: 365 * 24 * 3600 * 1000 });
+    return jsonResp({ ok: true, token, user: pubUser(u.value as Record<string, any>) });
+  }
+
+  // 以下接口均需登录
+  const auth = await authUser(req);
+  if (!auth) return jsonResp({ ok: false, msg: '请先登录' }, 401);
+  const u = auth.user;
+
+  // GET /api/user/me
+  if (path === '/api/user/me' && req.method === 'GET') {
+    return jsonResp({ ok: true, user: pubUser(u) });
+  }
+
+  // POST /api/user/name { name } —— 修改用户名
+  if (path === '/api/user/name' && req.method === 'POST') {
+    const { name } = await readBody(req);
+    const n = String(name || '').trim().slice(0, 12);
+    if (!n) return jsonResp({ ok: false, msg: '名字不能为空' }, 400);
+    u.name = n;
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u) });
+  }
+
+  // POST /api/user/buy { item } —— 购买皮肤/枪
+  if (path === '/api/user/buy' && req.method === 'POST') {
+    const { item } = await readBody(req);
+    const def = SHOP_ITEMS[String(item || '')];
+    if (!def) return jsonResp({ ok: false, msg: '商品不存在' }, 400);
+    const owned: string[] = def.type === 'skin' ? u.ownedSkins : u.ownedGuns;
+    if (owned.includes(item as string)) return jsonResp({ ok: false, msg: '已拥有该物品' }, 400);
+    if ((u.coins as number) < def.price) return jsonResp({ ok: false, msg: '金币不足' }, 400);
+    u.coins = (u.coins as number) - def.price;
+    owned.push(item as string);
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u) });
+  }
+
+  // POST /api/user/equip { item } —— 装备
+  if (path === '/api/user/equip' && req.method === 'POST') {
+    const { item } = await readBody(req);
+    const def = SHOP_ITEMS[String(item || '')];
+    if (!def) return jsonResp({ ok: false, msg: '物品不存在' }, 400);
+    const owned: string[] = def.type === 'skin' ? u.ownedSkins : u.ownedGuns;
+    if (!owned.includes(item as string)) return jsonResp({ ok: false, msg: '尚未拥有' }, 400);
+    if (def.type === 'skin') u.skin = item;
+    else u.gun = item;
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u) });
+  }
+
+  // POST /api/user/result { score, kills, wave } —— 局后结算金币/经验
+  if (path === '/api/user/result' && req.method === 'POST') {
+    const { score, wave } = await readBody(req);
+    const s = Math.max(0, Math.min(1000000, Math.floor(Number(score) || 0)));
+    const w = Math.max(0, Math.min(999, Math.floor(Number(wave) || 0)));
+    const gainedCoins = Math.floor(s / 10) + w * 5;
+    const gainedExp = Math.floor(s / 2);
+    u.coins = (u.coins as number) + gainedCoins;
+    u.exp = (u.exp as number) + gainedExp;
+    u.level = 1 + Math.floor((u.exp as number) / 100);
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u), gainedCoins, gainedExp });
+  }
+
+  return jsonResp({ ok: false, msg: 'Not Found' }, 404);
+}
+
 // ---------- 静态文件 ----------
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -338,7 +503,7 @@ async function serveStatic(url) {
 }
 
 // ---------- 入口 ----------
-Deno.serve((req) => {
+Deno.serve(async (req) => {
   const url = new URL(req.url);
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
 
@@ -350,6 +515,11 @@ Deno.serve((req) => {
     } catch (_) {
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
+  }
+
+  // 用户系统 API（登录/商城/结算）
+  if (url.pathname.startsWith('/api/')) {
+    return handleApi(req, url);
   }
 
   return serveStatic(url);

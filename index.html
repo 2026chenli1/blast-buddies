@@ -474,6 +474,119 @@
 
   .tip { position: fixed; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 12.5px; color: rgba(255,255,255,.35); z-index: 5; pointer-events: none; }
   .credit { position: fixed; bottom: 12px; right: 16px; font-size: 11px; color: rgba(255,255,255,.22); z-index: 5; pointer-events: none; }
+
+  /* ---------- 主界面（大厅） ---------- */
+  #home-view { display: flex; flex-direction: column; width: 100%; max-width: 860px; min-height: 100%; }
+  .home-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+  .home-user {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 14px;
+    padding: 10px 14px;
+    text-align: left;
+    min-width: 210px;
+    cursor: pointer;
+    transition: background .15s ease;
+  }
+  .home-user:hover { background: rgba(255,255,255,.11); }
+  .home-user-name { font-size: 15px; font-weight: 800; color: #eef4ff; display: flex; align-items: center; gap: 8px; }
+  .lv-badge {
+    font-size: 11px; font-weight: 900; color: #0d1b2a;
+    background: linear-gradient(180deg,#ffe066,#ffb703);
+    border-radius: 999px; padding: 1px 8px; flex: none;
+  }
+  .home-user-sub { font-size: 12.5px; color: #9fb3c8; margin-top: 4px; display: flex; gap: 14px; }
+  .home-user-sub b { color: #ffd166; }
+  .exp-track { height: 6px; background: rgba(255,255,255,.12); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+  .exp-fill { height: 100%; background: linear-gradient(90deg,#4cc9f0,#06d6a0); border-radius: 999px; transition: width .3s ease; }
+  .home-login-hint { font-size: 11.5px; color: #7d93a8; margin-top: 5px; }
+  .home-top-right { display: flex; gap: 8px; flex-wrap: wrap; }
+  .icon-btn {
+    border: 1px solid rgba(255,255,255,.18);
+    background: rgba(255,255,255,.08);
+    color: #eef4ff; font-weight: 800; font-size: 13px;
+    border-radius: 12px; padding: 9px 14px;
+    cursor: pointer; transition: all .15s ease;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,.16); }
+  .home-mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 14px 0; min-height: 230px; }
+  #preview-canvas { width: 200px; height: 200px; }
+  .home-name-level { font-size: 19px; font-weight: 900; color: #eef4ff; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
+  .home-bottom { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+  .home-start { font-size: 22px; padding: 15px 52px; }
+
+  /* ---------- 弹窗通用 ---------- */
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 40;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(8,15,26,.72);
+    backdrop-filter: blur(3px);
+    padding: 16px;
+  }
+  .modal-box {
+    width: min(92vw, 400px);
+    max-height: 86vh; overflow-y: auto;
+    background: linear-gradient(180deg,#14263c,#0d1b2a);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.5);
+    color: #eef4ff;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .modal-title { font-size: 19px; font-weight: 900; text-align: center; letter-spacing: 1px; }
+  .modal-input {
+    width: 100%; background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 10px; color: #fff;
+    font-size: 16px; font-weight: 700;
+    padding: 10px 12px; outline: none; text-align: center;
+  }
+  .modal-input:focus { border-color: #ffb703; }
+  .login-hint { font-size: 12.5px; color: #9fb3c8; line-height: 1.7; text-align: center; }
+  .login-hint b { color: #ffd166; font-size: 16px; letter-spacing: 2px; }
+  .login-hint.err { color: #ff6b6b; }
+  .mode-big-btn {
+    width: 100%; font-size: 17px; font-weight: 800;
+    color: #cfe0f0; background: rgba(255,255,255,.07);
+    border: 2px solid rgba(255,255,255,.15);
+    border-radius: 14px; padding: 14px;
+    cursor: pointer; transition: all .15s ease;
+    font-family: inherit;
+  }
+  .mode-big-btn:hover { background: rgba(255,255,255,.15); border-color: #ffd166; color: #ffd166; }
+  .mode-big-btn small { display: block; font-size: 12px; font-weight: 400; color: #9fb3c8; margin-top: 3px; }
+
+  /* ---------- 商城 ---------- */
+  .shop-box { width: min(94vw, 540px); }
+  .shop-tabs { display: flex; gap: 10px; justify-content: center; }
+  .shop-coins { font-size: 14px; color: #ffd166; margin-left: 8px; }
+  .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .shop-item {
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px;
+    padding: 10px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    font-size: 13px; color: #cfe0f0;
+  }
+  .shop-item.equipped { border-color: #ffd166; box-shadow: inset 0 0 0 1px rgba(255,209,102,.4); }
+  .shop-item-name { font-weight: 800; color: #eef4ff; font-size: 13.5px; }
+  .shop-item-desc { font-size: 11px; color: #9fb3c8; line-height: 1.5; text-align: center; min-height: 32px; }
+  .shop-item canvas { width: 72px; height: 72px; }
+  .shop-buy {
+    font-size: 12.5px; font-weight: 800;
+    border: none; border-radius: 999px;
+    padding: 6px 16px; cursor: pointer;
+    background: linear-gradient(180deg,#ffe066,#ffb703); color: #0d1b2a;
+    font-family: inherit;
+    transition: transform .08s ease;
+  }
+  .shop-buy:active { transform: translateY(1px); }
+  .shop-buy.own { background: rgba(255,255,255,.14); color: #cfe0f0; }
+  .shop-buy.equipped { background: rgba(46,196,182,.22); color: #2ec4b6; border: 1px solid rgba(46,196,182,.5); }
+  .shop-msg { font-size: 12.5px; color: #ff6b6b; text-align: center; min-height: 16px; }
+  .final-reward { font-size: 14px; color: #ffd166; margin: 4px 0 10px; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -500,18 +613,63 @@
 <div class="hud-net" id="hud-net" style="display:none;"></div>
 <div class="hud-fps" id="hud-fps" style="display:none;">FPS --</div>
 
-<!-- Start overlay -->
+<!-- Start overlay（主界面/大厅） -->
 <div class="overlay" id="start-overlay">
-  <div class="game-title">BLAST BUDDIES</div>
-  <div class="game-subtitle">爆破伙伴 · 竞技场生存射击<br>每 5 波会出现一个 BOSS！单人独闯，或开房间与好友远程联机。</div>
+  <!-- 主界面：左上用户信息 / 右上商城 / 中间人物预览 / 右下开始按钮 -->
+  <div id="home-view">
+    <div class="home-top">
+      <div class="home-user" id="home-user-card" title="点击登录 / 修改用户名">
+        <div class="home-user-name"><span id="hu-name">游客</span><span class="lv-badge" id="hu-lv">Lv.1</span></div>
+        <div class="home-user-sub"><span>💰 <b id="hu-coins">0</b></span><span>经验 <b id="hu-exp">0</b></span></div>
+        <div class="exp-track"><div class="exp-fill" id="hu-exp-fill" style="width:0%"></div></div>
+        <div class="home-login-hint" id="hu-hint">未登录 · 点击登录保存进度</div>
+      </div>
+      <div class="home-top-right">
+        <button class="icon-btn" id="shop-btn">🛒 商城</button>
+        <button class="icon-btn sound-btn" id="sound-menu-btn">🔊 音效：开</button>
+        <button class="icon-btn" id="mode-switch-btn">📱 切换手机版</button>
+      </div>
+    </div>
 
-  <div class="mode-select">
-    <button class="mode-btn active" id="mode-single">单人模式</button>
-    <button class="mode-btn" id="mode-net">联机模式</button>
+    <div class="home-mid">
+      <div class="home-name-level"><span id="home-name">游客</span><span class="lv-badge" id="home-lv">Lv.1</span></div>
+      <canvas id="preview-canvas" width="200" height="200"></canvas>
+    </div>
+
+    <div class="home-bottom">
+      <div class="home-sub-btns"></div>
+      <button class="btn home-start" id="home-start-btn">开始游戏</button>
+    </div>
+
+    <div class="controls-grid" id="controls-desktop" style="margin-top:18px;">
+      <div class="control-item"><span class="p-tag p1-tag">P1</span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> 移动</div>
+      <div class="control-item"><span class="p-tag p1-tag">P1</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
+      <div class="control-item"><span class="p-tag p2-tag">P2</span><span class="key">WASD</span> / <span class="key">方向键</span> 移动</div>
+      <div class="control-item"><span class="p-tag p2-tag">P2</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
+      <div class="control-item"><span class="key">P</span> / <span class="key">Esc</span> 暂停（仅房主）</div>
+      <div class="control-item"><span class="key">Space</span> 重开（结束后）</div>
+    </div>
+    <div class="controls-grid" id="controls-mobile" style="display:none;">
+      <div class="control-item"><span class="key">左半屏摇杆</span> 移动（任意位置按下即出现）</div>
+      <div class="control-item"><span class="key">右下按钮</span> 开火 · 按偏左枪口逆时针转 · 按偏右顺时针转</div>
+      <div class="control-item"><span class="key">点击屏幕</span> 朝点击方向开火</div>
+      <div class="control-item"><span class="key">⏸ 血量左边</span> 暂停（仅房主）</div>
+    </div>
+
+    <div class="challenge-box">
+      <div class="challenge-title">📅 今日挑战</div>
+      <div id="challenge-list"></div>
+    </div>
+
+    <div class="lb-wrap">
+      <div class="lb-title">🏆 排行榜</div>
+      <div class="lb-list" id="lb-list-start"></div>
+    </div>
   </div>
 
-  <!-- 联机面板 -->
+  <!-- 联机面板（点「开始游戏 → 联机模式」进入） -->
   <div id="net-panel" style="display:none;">
+    <button class="icon-btn" id="net-back-btn" style="align-self:flex-start;">← 返回</button>
     <div id="net-tabs">
       <button class="mode-btn active" id="net-tab-create">创建房间</button>
       <button class="mode-btn" id="net-tab-join">加入房间</button>
@@ -537,6 +695,16 @@
     </div>
   </div>
 
+  <!-- 模式选择弹窗 -->
+  <div class="modal-mask" id="mode-modal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-title">选择模式</div>
+      <button class="mode-big-btn" id="pick-single">🎮 单人模式<small>独自挑战无尽波次与 BOSS</small></button>
+      <button class="mode-big-btn" id="pick-net">🌐 联机模式<small>创建房间，或加入好友的战局</small></button>
+      <button class="btn btn-secondary btn-small" id="mode-modal-close" style="margin-top:0;">取消</button>
+    </div>
+  </div>
+
   <!-- 建房设置弹窗：最多人数 + 公开/私有 -->
   <div id="room-setup-modal" style="display:none;">
     <div class="room-setup-box">
@@ -559,36 +727,36 @@
     </div>
   </div>
 
-  <div style="margin-bottom:16px;">
-    <button class="btn btn-secondary sound-btn" id="sound-menu-btn" style="margin-top:0;">🔊 音效：开</button>
-    <button class="btn btn-secondary btn-small" id="mode-switch-btn" style="margin-top:0; margin-left:8px;">🖥 切换电脑版</button>
+  <!-- 登录弹窗：手机号 → 10 位验证码 -->
+  <div class="modal-mask" id="login-modal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-title">登录 / 注册</div>
+      <div id="login-step-1">
+        <input class="modal-input" id="phone-input" maxlength="11" inputmode="numeric" placeholder="输入 11 位手机号">
+        <button class="btn btn-small" id="send-code-btn">发送验证码</button>
+      </div>
+      <div id="login-step-2" style="display:none;">
+        <div class="login-hint" id="code-hint"></div>
+        <input class="modal-input" id="code-input" maxlength="10" inputmode="numeric" placeholder="输入 10 位验证码">
+        <button class="btn btn-small" id="verify-btn">登 录</button>
+      </div>
+      <div class="login-hint" id="login-hint"></div>
+      <button class="btn btn-secondary btn-small" id="login-cancel" style="margin-top:0;">取消</button>
+    </div>
   </div>
 
-  <div class="controls-grid" id="controls-desktop">
-    <div class="control-item"><span class="p-tag p1-tag">P1</span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> 移动</div>
-    <div class="control-item"><span class="p-tag p1-tag">P1</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
-    <div class="control-item net-only"><span class="p-tag p2-tag">P2</span><span class="key">WASD</span> / <span class="key">方向键</span> 移动</div>
-    <div class="control-item net-only"><span class="p-tag p2-tag">P2</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
-    <div class="control-item"><span class="key">P</span> / <span class="key">Esc</span> 暂停（仅房主）</div>
-    <div class="control-item"><span class="key">Space</span> 开始 / 重开</div>
-  </div>
-  <div class="controls-grid" id="controls-mobile" style="display:none;">
-    <div class="control-item"><span class="key">左半屏摇杆</span> 移动（任意位置按下即出现）</div>
-    <div class="control-item"><span class="key">右下按钮</span> 开火 · 按偏左枪口逆时针转 · 按偏右顺时针转</div>
-    <div class="control-item"><span class="key">点击屏幕</span> 朝点击方向开火</div>
-    <div class="control-item"><span class="key">⏸ 血量左边</span> 暂停（仅房主）</div>
-  </div>
-
-  <button class="btn" id="start-btn">开始游戏</button>
-
-  <div class="challenge-box">
-    <div class="challenge-title">📅 今日挑战</div>
-    <div id="challenge-list"></div>
-  </div>
-
-  <div class="lb-wrap">
-    <div class="lb-title">🏆 排行榜</div>
-    <div class="lb-list" id="lb-list-start"></div>
+  <!-- 商城弹窗：皮肤 / 枪 -->
+  <div class="modal-mask" id="shop-modal" style="display:none;">
+    <div class="modal-box shop-box">
+      <div class="modal-title">🛒 商城<span class="shop-coins" id="shop-coins">💰 0</span></div>
+      <div class="shop-tabs">
+        <button class="mode-btn active" id="shop-tab-skin">皮肤</button>
+        <button class="mode-btn" id="shop-tab-gun">枪械</button>
+      </div>
+      <div class="shop-grid" id="shop-list"></div>
+      <div class="shop-msg" id="shop-msg"></div>
+      <button class="btn btn-secondary btn-small" id="shop-close" style="margin-top:0;">关闭</button>
+    </div>
   </div>
 </div>
 
@@ -597,6 +765,7 @@
   <div class="game-title" style="font-size:clamp(38px,8vw,76px);">GAME OVER</div>
   <div class="final-score" id="final-score">得分 0</div>
   <div class="final-stats" id="final-stats"></div>
+  <div class="final-reward" id="final-reward"></div>
   <div class="final-challenge" id="challenge-summary"></div>
   <div class="name-row" id="name-row">
     <input id="name-input" maxlength="12" placeholder="输入名字">
@@ -622,7 +791,7 @@
   </div>
 </div>
 
-<div class="tip">提示：移动角色靠近掉落的道具可以拾取 · 棕色箱子可被子弹打碎（挡子弹挡敌人） · 联机：电脑运行 server.js 开服，房主把房间号发给好友加入</div>
+<div class="tip">提示：登录后可保存金币与等级 · 商城购买皮肤和枪械 · 联机模式开房间和好友一起打 BOSS</div>
 <div class="credit">Blast Buddies 同款玩法 · HTML5 Canvas</div>
 
 <script>
@@ -659,6 +828,328 @@ const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx*
 const TAU = Math.PI * 2;
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ======================= 用户系统 =======================
+// 皮肤目录（与服务器 SHOP_ITEMS 对应）：配色 = body1 亮色 / body2 主色 / gun1·gun2 枪色 / glow 弹色
+const SKIN_DEFS = {
+  skin_default: { name: '蓝色战士', price: 0,   desc: '经典初始造型', body1: '#6ecbff', body2: '#2196f3', gun1: '#1565c0', gun2: '#0d47a1', glow: '#ffd166' },
+  skin_green:   { name: '翠绿战士', price: 200, desc: '森林迷彩配色', body1: '#86efac', body2: '#16a34a', gun1: '#15803d', gun2: '#14532d', glow: '#86efac' },
+  skin_pink:    { name: '樱花甜心', price: 200, desc: '甜美粉色系',   body1: '#f9a8d4', body2: '#db2777', gun1: '#9d174d', gun2: '#831843', glow: '#f9a8d4' },
+  skin_gold:    { name: '黄金武士', price: 500, desc: '闪亮土豪金',   body1: '#fde68a', body2: '#d97706', gun1: '#b45309', gun2: '#92400e', glow: '#fcd34d' },
+  skin_purple:  { name: '紫电幻影', price: 500, desc: '神秘紫电光',   body1: '#c4b5fd', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#c4b5fd' },
+  skin_dark:    { name: '暗夜行者', price: 1000, desc: '低调暗黑忍者', body1: '#64748b', body2: '#1e293b', gun1: '#0f172a', gun2: '#020617', glow: '#94a3b8' },
+};
+// 枪械目录：fireRate 射击间隔(秒) / speed 弹速 / dmg 伤害 / r 弹径 / spread 散射数 / spreadAngle 散射角
+const GUN_DEFS = {
+  gun_pistol:  { name: '标准手枪', price: 0,   desc: '均衡可靠<br>射速·弹速·伤害 标准', fireRate: 0.13, speed: 640,  dmg: 1, r: 5, spread: 1, spreadAngle: 0 },
+  gun_rapid:   { name: '冲锋枪',   price: 300, desc: '超高射速<br>火力压制小怪群',     fireRate: 0.08, speed: 700,  dmg: 1, r: 4, spread: 1, spreadAngle: 0 },
+  gun_shotgun: { name: '散弹枪',   price: 600, desc: '一次 3 发扇形<br>近距离爆发',     fireRate: 0.42, speed: 560,  dmg: 1, r: 4, spread: 3, spreadAngle: 0.3 },
+  gun_sniper:  { name: '狙击枪',   price: 800, desc: '3 倍伤害·超快弹速<br>一发入魂',   fireRate: 0.6,  speed: 1100, dmg: 3, r: 6, spread: 1, spreadAngle: 0 },
+};
+
+const User = {
+  logged: false,
+  token: null,
+  name: '游客',
+  coins: 0,
+  exp: 0,
+  level: 1,
+  ownedSkins: ['skin_default'],
+  ownedGuns: ['gun_pistol'],
+  skin: 'skin_default',
+  gun: 'gun_pistol',
+};
+
+function userLevel(exp) { return 1 + Math.floor(exp / 100); }
+function skinDef() { return SKIN_DEFS[User.skin] || SKIN_DEFS.skin_default; }
+function gunDef() { return GUN_DEFS[User.gun] || GUN_DEFS.gun_pistol; }
+
+async function api(path, body) {
+  const headers = { 'content-type': 'application/json' };
+  if (User.token) headers['authorization'] = 'Bearer ' + User.token;
+  const res = await fetch(path, {
+    method: body ? 'POST' : 'GET',
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json();
+}
+
+function applyUser(u) {
+  if (!u) return;
+  User.logged = true;
+  User.name = u.name || User.name;
+  User.coins = u.coins ?? User.coins;
+  User.exp = u.exp ?? User.exp;
+  User.level = u.level ?? userLevel(User.exp);
+  User.ownedSkins = u.ownedSkins || ['skin_default'];
+  User.ownedGuns = u.ownedGuns || ['gun_pistol'];
+  User.skin = SKIN_DEFS[u.skin] ? u.skin : 'skin_default';
+  User.gun = GUN_DEFS[u.gun] ? u.gun : 'gun_pistol';
+  try { localStorage.setItem('bb_name', User.name); } catch (e) {}
+  renderHomeUser();
+}
+
+// ---------- 主界面用户卡片 ----------
+function renderHomeUser() {
+  User.level = userLevel(User.exp);
+  const name = User.logged ? User.name : (localStorage.getItem('bb_name') || '游客');
+  document.getElementById('hu-name').textContent = name;
+  document.getElementById('home-name').textContent = name;
+  document.getElementById('hu-lv').textContent = 'Lv.' + User.level;
+  document.getElementById('home-lv').textContent = 'Lv.' + User.level;
+  document.getElementById('hu-coins').textContent = User.coins;
+  document.getElementById('hu-exp').textContent = User.exp;
+  document.getElementById('hu-exp-fill').style.width = (User.exp % 100) + '%';
+  document.getElementById('hu-hint').textContent = User.logged ? '已登录 · 点击可修改用户名' : '未登录 · 点击登录保存进度';
+}
+
+// ---------- 登录弹窗 ----------
+let loginPhone = '';
+function openLogin() {
+  document.getElementById('login-modal').style.display = 'flex';
+  document.getElementById('login-step-1').style.display = 'block';
+  document.getElementById('login-step-2').style.display = 'none';
+  document.getElementById('login-hint').textContent = '';
+  document.getElementById('login-hint').classList.remove('err');
+}
+function loginMsg(text, err) {
+  const el = document.getElementById('login-hint');
+  el.textContent = text;
+  el.classList.toggle('err', !!err);
+}
+document.getElementById('home-user-card').addEventListener('click', async () => {
+  if (!User.logged) { openLogin(); return; }
+  // 已登录：修改用户名（网页拿不到微信昵称，可在这里填自己的微信昵称）
+  const name = (prompt('修改用户名（可用你的微信昵称）', User.name) || '').trim();
+  if (!name || name === User.name) return;
+  try {
+    const r = await api('/api/user/name', { name });
+    if (r.ok) { applyUser(r.user); loginMsg(''); }
+  } catch (e) {}
+});
+document.getElementById('send-code-btn').addEventListener('click', async () => {
+  const phone = document.getElementById('phone-input').value.trim();
+  if (!/^1\d{10}$/.test(phone)) { loginMsg('请输入正确的 11 位手机号', true); return; }
+  loginPhone = phone;
+  loginMsg('发送中…');
+  try {
+    const r = await api('/api/auth/send-code', { phone });
+    if (!r.ok) { loginMsg(r.msg || '发送失败', true); return; }
+    document.getElementById('login-step-1').style.display = 'none';
+    document.getElementById('login-step-2').style.display = 'block';
+    document.getElementById('code-input').value = '';
+    document.getElementById('code-hint').innerHTML = `验证码已发送至 <b>${r.code}</b><br>（无短信通道，直接输入上方数字即可）`;
+    document.getElementById('code-input').focus();
+  } catch (e) {
+    loginMsg('网络错误，请重试', true);
+  }
+});
+document.getElementById('verify-btn').addEventListener('click', async () => {
+  const code = document.getElementById('code-input').value.trim();
+  if (code.length !== 10) { loginMsg('请输入 10 位验证码', true); return; }
+  loginMsg('登录中…');
+  try {
+    const r = await api('/api/auth/verify', { phone: loginPhone, code });
+    if (!r.ok) { loginMsg(r.msg || '验证失败', true); return; }
+    User.token = r.token;
+    try { localStorage.setItem('bb_token', r.token); } catch (e) {}
+    applyUser(r.user);
+    document.getElementById('login-modal').style.display = 'none';
+    Sfx.powerup();
+    renderShop(); // 商城若开着则刷新
+  } catch (e) {
+    loginMsg('网络错误，请重试', true);
+  }
+});
+document.getElementById('login-cancel').addEventListener('click', () => {
+  document.getElementById('login-modal').style.display = 'none';
+});
+
+// ---------- 商城 ----------
+let shopTab = 'skin';
+function drawMiniPlayer(cv, def, isGun) {
+  const x = cv.getContext('2d');
+  const w = cv.width, h = cv.height;
+  x.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2 + 4;
+  const r = isGun ? 20 : 24;
+  const col = isGun ? skinDef() : def;
+  // 枪械预览：用当前皮肤的小人 + 该枪的炮管（长/粗随枪变化）
+  const gunLen = isGun ? (def === GUN_DEFS.gun_sniper ? 26 : def === GUN_DEFS.gun_shotgun ? 16 : 20) : 18;
+  const gunW = isGun ? (def === GUN_DEFS.gun_sniper ? 5 : 7) : 7;
+  // 阴影
+  x.fillStyle = 'rgba(0,0,0,.3)';
+  x.beginPath(); x.ellipse(cx, cy + r + 6, r * .9, r * .25, 0, 0, TAU); x.fill();
+  x.save();
+  x.translate(cx, cy);
+  x.rotate(-Math.PI / 2); // 朝上
+  // 身体
+  const grad = x.createRadialGradient(-r * .3, -r * .3, r * .2, 0, 0, r);
+  grad.addColorStop(0, col.body1);
+  grad.addColorStop(1, col.body2);
+  x.fillStyle = grad;
+  x.beginPath(); x.arc(0, 0, r, 0, TAU); x.fill();
+  x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 2; x.stroke();
+  // 高光
+  x.fillStyle = 'rgba(255,255,255,.4)';
+  x.beginPath(); x.ellipse(-r * .3, -r * .33, r * .26, r * .16, -.6, 0, TAU); x.fill();
+  // 眼睛
+  x.fillStyle = '#0d1b2a';
+  x.beginPath(); x.arc(r * .34, -r * .28, 2.6, 0, TAU); x.arc(r * .34, r * .28, 2.6, 0, TAU); x.fill();
+  x.fillStyle = '#fff';
+  x.beginPath(); x.arc(r * .34 + 1, -r * .28 - 1, .9, 0, TAU); x.arc(r * .34 + 1, r * .28 - 1, .9, 0, TAU); x.fill();
+  // 炮口
+  x.fillStyle = isGun ? (def === GUN_DEFS.gun_sniper ? '#451a03' : def === GUN_DEFS.gun_shotgun ? '#7c2d12' : '#334155') : col.gun1;
+  x.beginPath(); x.roundRect(r * .5, -gunW / 2, gunLen, gunW, 3); x.fill();
+  x.fillStyle = isGun ? '#0f172a' : col.gun2;
+  x.fillRect(r * .5 + gunLen - 4, -gunW / 2 + 1.2, 4, gunW - 2.4);
+  x.restore();
+}
+function renderShop() {
+  const listEl = document.getElementById('shop-list');
+  if (!listEl) return;
+  document.getElementById('shop-coins').textContent = '💰 ' + User.coins;
+  document.getElementById('shop-tab-skin').classList.toggle('active', shopTab === 'skin');
+  document.getElementById('shop-tab-gun').classList.toggle('active', shopTab === 'gun');
+  const defs = shopTab === 'skin' ? SKIN_DEFS : GUN_DEFS;
+  const owned = shopTab === 'skin' ? User.ownedSkins : User.ownedGuns;
+  const equipped = shopTab === 'skin' ? User.skin : User.gun;
+  let h = '';
+  for (const id of Object.keys(defs)) {
+    const d = defs[id];
+    const isOwned = owned.includes(id);
+    const isEq = equipped === id;
+    let btn;
+    if (isEq) btn = `<button class="shop-buy equipped" disabled>装备中</button>`;
+    else if (isOwned) btn = `<button class="shop-buy own" data-eq="${id}">装备</button>`;
+    else btn = `<button class="shop-buy" data-buy="${id}">💰 ${d.price}</button>`;
+    h += `<div class="shop-item ${isEq ? 'equipped' : ''}">
+      <canvas data-prev="${id}" width="72" height="72"></canvas>
+      <div class="shop-item-name">${d.name}</div>
+      <div class="shop-item-desc">${d.desc || ''}</div>
+      ${btn}
+    </div>`;
+  }
+  listEl.innerHTML = h;
+  for (const cv of listEl.querySelectorAll('canvas[data-prev]')) {
+    const id = cv.dataset.prev;
+    drawMiniPlayer(cv, defs[id], shopTab === 'gun');
+  }
+  for (const b of listEl.querySelectorAll('[data-buy]')) b.addEventListener('click', () => shopBuy(b.dataset.buy));
+  for (const b of listEl.querySelectorAll('[data-eq]')) b.addEventListener('click', () => shopEquip(b.dataset.eq));
+}
+function shopMsg(text) {
+  const el = document.getElementById('shop-msg');
+  if (el) { el.textContent = text || ''; setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 2500); }
+}
+async function shopBuy(item) {
+  if (!User.logged) { openLogin(); shopMsg('登录后即可购买'); return; }
+  try {
+    const r = await api('/api/user/buy', { item });
+    if (r.ok) { applyUser(r.user); renderShop(); Sfx.powerup(); }
+    else shopMsg(r.msg || '购买失败');
+  } catch (e) { shopMsg('网络错误'); }
+}
+async function shopEquip(item) {
+  if (!User.logged) { openLogin(); return; }
+  try {
+    const r = await api('/api/user/equip', { item });
+    if (r.ok) { applyUser(r.user); renderShop(); Sfx.powerup(); }
+    else shopMsg(r.msg || '装备失败');
+  } catch (e) { shopMsg('网络错误'); }
+}
+document.getElementById('shop-btn').addEventListener('click', () => {
+  document.getElementById('shop-modal').style.display = 'flex';
+  document.getElementById('shop-msg').textContent = '';
+  renderShop();
+});
+document.getElementById('shop-close').addEventListener('click', () => {
+  document.getElementById('shop-modal').style.display = 'none';
+});
+document.getElementById('shop-tab-skin').addEventListener('click', () => { shopTab = 'skin'; renderShop(); });
+document.getElementById('shop-tab-gun').addEventListener('click', () => { shopTab = 'gun'; renderShop(); });
+
+// ---------- 局后结算：上报得分，发金币/经验 ----------
+async function reportResult() {
+  const el = document.getElementById('final-reward');
+  if (!User.logged) { if (el) el.textContent = '登录后可获得金币与经验奖励'; return; }
+  if (G.reported) return;
+  G.reported = true;
+  try {
+    const r = await api('/api/user/result', { score: G.score, kills: G.kills, wave: G.wave });
+    if (r.ok) {
+      applyUser(r.user);
+      if (el) el.textContent = `💰 +${r.gainedCoins} 金币 · ⭐ +${r.gainedExp} 经验`;
+    }
+  } catch (e) {}
+}
+
+// ---------- 自动登录（同设备 token 直接拉用户数据） ----------
+(async () => {
+  let tok = null;
+  try { tok = localStorage.getItem('bb_token'); } catch (e) {}
+  if (tok) {
+    User.token = tok;
+    try {
+      const r = await api('/api/user/me');
+      if (r.ok) applyUser(r.user);
+      else { User.token = null; try { localStorage.removeItem('bb_token'); } catch (e) {} }
+    } catch (e) {}
+  }
+  renderHomeUser();
+})();
+
+// ---------- 主界面人物预览（旋转展示当前皮肤+枪） ----------
+const pcv = document.getElementById('preview-canvas');
+const pctx = pcv.getContext('2d');
+let previewT = 0;
+function drawPreview(dt) {
+  previewT += dt;
+  const x = pctx, w = pcv.width, h = pcv.height;
+  x.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2 + 4;
+  const r = 52;
+  const col = skinDef();
+  const gd = gunDef();
+  const bob = Math.sin(previewT * 2) * 4;
+  const glowPulse = 0.25 + Math.sin(previewT * 3) * 0.12;
+  // 光环
+  const halo = x.createRadialGradient(cx, cy, r * .6, cx, cy, r * 1.6);
+  halo.addColorStop(0, 'rgba(76,201,240,0)');
+  halo.addColorStop(1, `rgba(76,201,240,${glowPulse})`);
+  x.fillStyle = halo;
+  x.beginPath(); x.arc(cx, cy, r * 1.6, 0, TAU); x.fill();
+  // 阴影
+  x.fillStyle = 'rgba(0,0,0,.35)';
+  x.beginPath(); x.ellipse(cx, cy + r + 12 + bob * .3, r * .85, r * .22, 0, 0, TAU); x.fill();
+  x.save();
+  x.translate(cx, cy + bob);
+  x.rotate(previewT * 0.9); // 缓慢旋转展示
+  const gunLen = 22 + (gd === GUN_DEFS.gun_sniper ? 14 : gd === GUN_DEFS.gun_shotgun ? 4 : 8);
+  const gunW = gd === GUN_DEFS.gun_sniper ? 6 : 9;
+  // 身体
+  const grad = x.createRadialGradient(-r * .3, -r * .3, r * .2, 0, 0, r);
+  grad.addColorStop(0, col.body1);
+  grad.addColorStop(1, col.body2);
+  x.fillStyle = grad;
+  x.beginPath(); x.arc(0, 0, r, 0, TAU); x.fill();
+  x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 3; x.stroke();
+  // 高光
+  x.fillStyle = 'rgba(255,255,255,.45)';
+  x.beginPath(); x.ellipse(-r * .3, -r * .33, r * .26, r * .15, -.6, 0, TAU); x.fill();
+  // 眼睛
+  x.fillStyle = '#0d1b2a';
+  x.beginPath(); x.arc(r * .34, -r * .3, 5.2, 0, TAU); x.arc(r * .34, r * .3, 5.2, 0, TAU); x.fill();
+  x.fillStyle = '#fff';
+  x.beginPath(); x.arc(r * .34 + 1.8, -r * .3 - 1.8, 1.8, 0, TAU); x.arc(r * .34 + 1.8, r * .3 - 1.8, 1.8, 0, TAU); x.fill();
+  // 炮口（按装备的枪变化）
+  x.fillStyle = col.gun1;
+  x.beginPath(); x.roundRect(r * .5, -gunW / 2, gunLen, gunW, 4); x.fill();
+  x.fillStyle = col.gun2;
+  x.fillRect(r * .5 + gunLen - 5, -gunW / 2 + 1.6, 5, gunW - 3.2);
+  x.restore();
 }
 
 // ======================= 画布 =======================
@@ -953,6 +1444,7 @@ const G = {
   boss: null,
   obstacles: [],
   scoreSaved: false,
+  reported: false,      // 本局是否已上报得分（登录用户局后结算金币/经验）
   bulletSeq: 0,          // 联机快照用的实体 id 递增计数器（子弹/弹幕/敌人共用）
 };
 
@@ -1293,6 +1785,7 @@ function update(dt) {
         dy = inp.dy || 0;
         p.netAim = { x: inp.ax, y: inp.ay };
         p.netFire = !!inp.fire;
+        if (inp.g && GUN_DEFS[inp.g]) p.netGun = inp.g; // guest 同步装备的枪
       }
     } else {
       if (keys.has('ArrowUp')) dy -= 1;
@@ -1353,22 +1846,24 @@ function update(dt) {
       ? (Mobile.active ? mobileFiring() : mouse.down)
       : (p.netFire || keys.has('Enter') || keys.has('ShiftRight') || keys.has('Numpad0'));
     if (wantFire && p.fireCd <= 0) {
-      p.fireCd = CFG.fireRate * (G.rapidBoost > 0 ? 0.55 : 1);
-      const count = (G.spreadBoost > 0) ? CFG.spreadCount : 1;
+      // 装备的枪决定射速/弹速/伤害/弹形；联机时 guest 的枪通过输入包同步给 host
+      const gd = (p.id === 1) ? gunDef() : (GUN_DEFS[p.netGun] || GUN_DEFS.gun_pistol);
+      p.fireCd = gd.fireRate * (G.rapidBoost > 0 ? 0.55 : 1);
+      const count = Math.max((G.spreadBoost > 0) ? CFG.spreadCount : 1, gd.spread || 1);
       // P1 桌面版朝鼠标；手机版/其余朝当前瞄准角（update 顶部已算好 p.angle）
       const baseAngle = (p.id === 1 && !Mobile.active) ? Math.atan2(mouse.y - p.y, mouse.x - p.x) : p.angle;
-      const spreadAngle = count > 1 ? 0.22 : 0;
+      const spreadAngle = count > 1 ? (gd.spread > 1 ? gd.spreadAngle : 0.22) : 0;
       for (let i = 0; i < count; i++) {
         const a = baseAngle + (count > 1 ? (i - (count - 1) / 2) * spreadAngle : 0);
         G.bullets.push({
           id: ++G.bulletSeq,   // 联机快照按 id 匹配，保证客机端对象身份稳定
           x: p.x + Math.cos(a) * (p.r + 8),
           y: p.y + Math.sin(a) * (p.r + 8),
-          vx: Math.cos(a) * CFG.bulletSpeed,
-          vy: Math.sin(a) * CFG.bulletSpeed,
-          r: CFG.bulletRadius,
+          vx: Math.cos(a) * gd.speed,
+          vy: Math.sin(a) * gd.speed,
+          r: gd.r,
           life: 1.4,
-          damage: CFG.bulletDamage,
+          damage: gd.dmg,
           color: p.colors.glow,
         });
       }
@@ -1991,7 +2486,9 @@ function drawPlayer(p) {
     return;
   }
   if (p.dead) return;
-  const c = p.colors;
+  // 自己的角色使用已装备皮肤（单人=P1；联机 guest=自己的 slot）
+  const isMe = (G.mode === 'net' && NET.role === 'guest') ? (p.id === NET.slot) : (p.id === 1);
+  const c = isMe ? skinDef() : p.colors;
   ctx.save();
   ctx.translate(p.x, p.y);
   if (p.invuln > 0 && Math.floor(G.time * 20) % 2 === 0) ctx.globalAlpha = 0.45;
@@ -2047,7 +2544,7 @@ function drawPlayer(p) {
   // P 标签（单人模式不显示）
   if (G.mode !== 'single') {
     ctx.save();
-    ctx.fillStyle = p.colors.body1;
+    ctx.fillStyle = isMe ? c.body1 : p.colors.body1;
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0,0,0,0.7)';
@@ -2527,7 +3024,7 @@ window.addEventListener('keydown', (e) => {
     if (G.state === 'playing') pauseGame();
     else if (G.state === 'paused') resumeGame();
   }
-  if (NET.role !== 'guest' && e.code === 'Space' && (G.state === 'menu' || G.state === 'over')) startGame();
+  if (NET.role !== 'guest' && e.code === 'Space' && G.state === 'over') startGame();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
@@ -2565,7 +3062,6 @@ canvas.addEventListener('touchstart', (e) => {
     const t = e.changedTouches[0];
     const p = touchXY(t);
     mouse.x = p.x; mouse.y = p.y;
-    if (NET.role !== 'guest' && G.state === 'menu') startGame();
     if (NET.role !== 'guest' && G.state === 'over') startGame();
     if (G.state === 'playing') mouse.down = true;
     return;
@@ -3214,6 +3710,7 @@ function guestShowOver() {
   document.getElementById('challenge-summary').style.display = 'none';
   document.getElementById('menu-btn').textContent = '退出房间';
   Sfx.gameover();
+  reportResult();
   show(document.getElementById('over-overlay'));
 }
 
@@ -3243,7 +3740,7 @@ function netSendInput() {
     ay = Math.round(by + Math.sin(Mobile.aim) * 120);
   }
   const fire = Mobile.active ? mobileFiring() : mouse.down;
-  netSend({ t: 'input', d: { dx: dx / len, dy: dy / len, ax, ay, fire } });
+  netSend({ t: 'input', d: { dx: dx / len, dy: dy / len, ax, ay, fire, g: User.gun } });
 }
 
 // ======================= 游戏流程 =======================
@@ -3259,6 +3756,11 @@ function showMenu() {
   hide(document.getElementById('over-overlay'));
   hide(document.getElementById('pause-overlay'));
   show(document.getElementById('start-overlay'));
+  // 回主界面：显示 home，收起联机面板与模式弹窗
+  document.getElementById('home-view').style.display = 'flex';
+  document.getElementById('net-panel').style.display = 'none';
+  document.getElementById('mode-modal').style.display = 'none';
+  renderHomeUser();
   document.getElementById('hud').style.display = 'none';
   // 回到菜单时结束联机房间
   netClose();
@@ -3294,6 +3796,7 @@ function startGame() {
   G.boss = null;
   G.obstacles = [];
   G.scoreSaved = false;
+  G.reported = false;
   lastSavedEntry = null;
   G.players = [createPlayer(1)];
   if (G.mode === 'net' && NET.role === 'host') {
@@ -3358,6 +3861,7 @@ function gameOver() {
     const modeTxt = G.mode === 'net' ? '联机模式' : '单人模式';
     document.getElementById('final-stats').innerHTML =
       `${modeTxt} · 消灭敌人 <b>${G.kills}</b> 只 · 命中 <b>${G.hits}</b> 次 · 闯过 <b>${G.wave}</b> 波`;
+    reportResult();
     let name = '玩家';
     try { name = localStorage.getItem('bb_name') || '玩家'; } catch (e) {}
     document.getElementById('name-input').value = name;
@@ -3413,6 +3917,10 @@ function loop(now) {
   } else if (NET.role === 'host') {
     netBroadcast();
     netPing();           // RTT 测量（每 2 秒一次）
+  }
+  // 主界面：人物预览动画（转圈展示皮肤+枪）
+  if (G.state === 'menu' && document.getElementById('home-view').style.display !== 'none') {
+    drawPreview(dt);
   }
   draw();
   requestAnimationFrame(loop);
@@ -3536,24 +4044,38 @@ function smoothNetState(dt) {
 }
 
 // ======================= UI 绑定 =======================
-// 模式切换：单人 | 联机
-const modeSingle = document.getElementById('mode-single');
-const modeNet = document.getElementById('mode-net');
-const netOnlyEls = document.querySelectorAll('.net-only');
+// 主界面：开始游戏 → 模式选择弹窗（单人 / 联机）
 const netPanel = document.getElementById('net-panel');
-const startBtn = document.getElementById('start-btn');
-function setMode(mode) {
-  G.mode = mode;
-  modeSingle.classList.toggle('active', mode === 'single');
-  modeNet.classList.toggle('active', mode === 'net');
-  for (const el of netOnlyEls) el.style.display = mode === 'net' ? 'flex' : 'none';
-  netPanel.style.display = mode === 'net' ? 'block' : 'none';
-  startBtn.style.display = mode === 'single' ? 'inline-block' : 'none';
-  if (mode === 'single') netClose(); // 切回单人时断开联机
-}
-modeSingle.addEventListener('click', () => setMode('single'));
-modeNet.addEventListener('click', () => setMode('net'));
-setMode('single');
+const homeView = document.getElementById('home-view');
+const modeModal = document.getElementById('mode-modal');
+document.getElementById('home-start-btn').addEventListener('click', () => {
+  ensureAudio();
+  modeModal.style.display = 'flex';
+});
+document.getElementById('mode-modal-close').addEventListener('click', () => {
+  modeModal.style.display = 'none';
+});
+document.getElementById('pick-single').addEventListener('click', () => {
+  modeModal.style.display = 'none';
+  G.mode = 'single';
+  netClose();
+  startGame();
+});
+document.getElementById('pick-net').addEventListener('click', () => {
+  modeModal.style.display = 'none';
+  G.mode = 'net';
+  homeView.style.display = 'none';
+  netPanel.style.display = 'block';
+  showNetView(true);
+});
+document.getElementById('net-back-btn').addEventListener('click', () => {
+  netClose();
+  updateNetHud();
+  netPanel.style.display = 'none';
+  homeView.style.display = 'flex';
+  renderHomeUser();
+});
+G.mode = 'single';
 
 // 联机面板
 const netTabCreate = document.getElementById('net-tab-create');
@@ -3660,7 +4182,6 @@ netRoomInput.addEventListener('keydown', (e) => {
   if (e.code === 'Enter') netJoinBtn.click();
 });
 
-document.getElementById('start-btn').addEventListener('click', startGame);
 document.getElementById('restart-btn').addEventListener('click', startGame);
 document.getElementById('menu-btn').addEventListener('click', showMenu);
 document.getElementById('resume-btn').addEventListener('click', resumeGame);
