@@ -271,6 +271,16 @@
   }
   .hud-net.warn { color: #ff6b6b; border-color: rgba(255,107,107,.35); }
   .hud-net.high-ping { color: #ffb703; border-color: rgba(255,183,3,.4); }
+  .hud-fps {
+    position: fixed; bottom: 12px; right: 16px;
+    font-size: 12px; font-weight: 700; color: #9fb3c8;
+    background: rgba(13,27,42,.6);
+    border: 1px solid rgba(159,179,200,.25);
+    border-radius: 999px; padding: 4px 12px;
+    z-index: 5; pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .hud-fps.low { color: #ff6b6b; border-color: rgba(255,107,107,.35); }
 
   .final-score { font-size: 22px; color: #ffd166; margin: 14px 0 4px; font-weight: 700; }
   .final-stats { font-size: 14.5px; color: #9fb3c8; margin-bottom: 14px; }
@@ -488,6 +498,7 @@
   <div class="boss-track"><div id="boss-fill"></div></div>
 </div>
 <div class="hud-net" id="hud-net" style="display:none;"></div>
+<div class="hud-fps" id="hud-fps" style="display:none;">FPS --</div>
 
 <!-- Start overlay -->
 <div class="overlay" id="start-overlay">
@@ -658,7 +669,10 @@ let W = 0, H = 0;
 function resize() {
   W = window.innerWidth;
   H = window.innerHeight;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // 手机（粗指针设备）渲染分辨率上限 1.25：dpr=2 时全屏填充率过高，
+  // 光晕/粒子/弹幕一多就掉帧；略降分辨率换流畅度，画面动态元素多、锯齿不明显
+  const coarse = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false;
+  const dpr = Math.min(window.devicePixelRatio || 1, coarse ? 1.25 : 2);
   canvas.width = W * dpr;
   canvas.height = H * dpr;
   canvas.style.width = W + 'px';
@@ -2309,43 +2323,51 @@ function drawBoss() {
   ctx.restore();
 }
 
+// 光晕贴图缓存：每种颜色渲染一张 64px 离屏贴图，之后全部 drawImage。
+// 旧实现每帧每颗子弹 createRadialGradient —— 弹幕一多（几百颗）就是最大渲染热点，
+// 手机上直接掉帧；drawImage 走位图拷贝，快一个数量级。
+const glowCache = new Map();
+function glowSprite(color) {
+  let sp = glowCache.get(color);
+  if (!sp) {
+    const S = 64;
+    sp = document.createElement('canvas');
+    sp.width = S; sp.height = S;
+    const c = sp.getContext('2d');
+    const g = c.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)'); // alpha=0 时 RGB 不影响合成结果
+    c.fillStyle = g;
+    c.fillRect(0, 0, S, S);
+    glowCache.set(color, sp);
+  }
+  return sp;
+}
+
 function drawBullets() {
   for (const b of G.bullets) {
-    ctx.save();
-    const glow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 3);
-    glow.addColorStop(0, b.color);
-    glow.addColorStop(1, 'rgba(255,214,102,0)');
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r * 3, 0, TAU);
-    ctx.fill();
+    const R = b.r * 3;
+    ctx.drawImage(glowSprite(b.color), b.x - R, b.y - R, R * 2, R * 2);
     ctx.fillStyle = '#fff';
     ctx.beginPath();
     ctx.arc(b.x, b.y, b.r, 0, TAU);
     ctx.fill();
-    ctx.restore();
   }
 }
 
 function drawEnemyBullets() {
+  const sp = glowSprite('rgba(224,170,255,0.95)');
   for (const b of G.enemyBullets) {
-    ctx.save();
-    const glow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r * 2.6);
-    glow.addColorStop(0, 'rgba(224,170,255,0.95)');
-    glow.addColorStop(1, 'rgba(224,170,255,0)');
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r * 2.6, 0, TAU);
-    ctx.fill();
+    const R = b.r * 2.6;
+    ctx.drawImage(sp, b.x - R, b.y - R, R * 2, R * 2);
     ctx.fillStyle = '#e0aaff';
     ctx.beginPath();
     ctx.arc(b.x, b.y, b.r, 0, TAU);
     ctx.fill();
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(b.x - b.r*0.25, b.y - b.r*0.25, b.r*0.35, 0, TAU);
+    ctx.arc(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.35, 0, TAU);
     ctx.fill();
-    ctx.restore();
   }
 }
 
@@ -2967,6 +2989,7 @@ function netBroadcast() {
 }
 
 // ---------- guest：接收快照 ----------
+let heartsLastHtml = '';
 function renderHearts() {
   const hearts = document.getElementById('hearts-display');
   let h = '';
@@ -2979,13 +3002,24 @@ function renderHearts() {
     }
     h += '</div>';
   }
+  // 脏检查：联机时快照最高 25Hz，内容没变就绝不碰 DOM（innerHTML 重建会触发布局抖动=画面卡顿）
+  if (h === heartsLastHtml) return;
+  heartsLastHtml = h;
   hearts.innerHTML = h;
+}
+
+// guest 端 DOM 脏检查缓存 + HUD 同步限频（快照 25Hz，DOM 写入必须能省则省）
+const domCache = { score: null, wave: null, bossName: null, bossPct: null, barShown: null };
+let lastHudSync = 0;
+function resetDomCache() {
+  domCache.score = null; domCache.wave = null; domCache.bossName = null;
+  domCache.bossPct = null; domCache.barShown = null;
+  heartsLastHtml = null; // 强制下次重渲染血量
 }
 
 function applyNetState(s) {
   if (!s) return;
-  const prevState = G.state;
-  G.state = s.st;
+  const prevState = G.state;  G.state = s.st;
   G.netPing = s.ping || 0;               // host 测得的 RTT（ms），HUD 显示用
   G.mode = 'net';
   G.score = s.s; G.kills = s.k; G.wave = s.w; G.waveTimer = s.wt;
@@ -3016,52 +3050,51 @@ function applyNetState(s) {
   G.players.length = s.players.length;
   // 动态增删对象（敌人/子弹/弹幕）：按 id 匹配——快照间索引会错位，
   // 按索引复用会令客机端同一渲染对象在不同子弹间跳变（表现为"子弹卡"）
-  const syncById = (dst, src, create) => {
+  // O(n) 实现：Map 索引替代旧版 find/some 的 O(n²)（几百颗子弹时旧版每秒数百万次比较）
+  const syncById = (dst, src, create, apply) => {
     if (src.length && src[0].id === undefined) {
       // 旧版快照（无 id）：退化全量重建，避免对象身份错乱/累积（正常不会走到）
       dst.length = 0;
       for (const s of src) { const o = create(s); o.id = s.id; o._tx = s.x; o._ty = s.y; o.r = s.r; o.life = s.life; o.color = s.color; dst.push(o); }
       return;
     }
+    const byId = new Map();
+    for (const o of dst) byId.set(o.id, o);
+    const seen = new Set();
     for (const s of src) {
-      let o = dst.find(b => b.id === s.id);
+      seen.add(s.id);
+      let o = byId.get(s.id);
       if (!o) { o = create(s); o.id = s.id; dst.push(o); }
       o._tx = s.x; o._ty = s.y;
       o.r = s.r; o.life = s.life; o.color = s.color;
+      if (apply) apply(o, s);
     }
     for (let i = dst.length - 1; i >= 0; i--) {
-      let keep = false;
-      for (const s of src) { if (s.id === dst[i].id) { keep = true; break; } }
-      if (!keep) dst.splice(i, 1);
+      if (!seen.has(dst[i].id)) dst.splice(i, 1);
     }
   };
-  // 敌人
-  for (let i = 0; i < s.enemies.length; i++) {
-    const se = s.enemies[i];
-    let e = G.enemies.find(b => b.id === se.id);
-    if (!e) { e = { id: se.id, type: se.t, score: 10, name: '', x: se.x, y: se.y }; G.enemies.push(e); }
-    e._tx = se.x; e._ty = se.y;
-    e.type = se.t; e.r = se.r; e.hp = se.hp; e.maxHp = se.maxHp;
-    e.speed = se.speed; e.color = se.color;
-    e.angle = se.angle; e.anim = se.anim; e.flash = se.flash; e.damageCooldown = se.damageCooldown;
-  }
-  for (let i = G.enemies.length - 1; i >= 0; i--) {
-    if (!s.enemies.some(se => se.id === G.enemies[i].id)) G.enemies.splice(i, 1);
+  // 敌人（同样 Map 化）
+  {
+    const eById = new Map();
+    for (const e of G.enemies) eById.set(e.id, e);
+    const eSeen = new Set();
+    for (const se of s.enemies) {
+      eSeen.add(se.id);
+      let e = eById.get(se.id);
+      if (!e) { e = { id: se.id, type: se.t, score: 10, name: '', x: se.x, y: se.y }; G.enemies.push(e); }
+      e._tx = se.x; e._ty = se.y;
+      e.type = se.t; e.r = se.r; e.hp = se.hp; e.maxHp = se.maxHp;
+      e.speed = se.speed; e.color = se.color;
+      e.angle = se.angle; e.anim = se.anim; e.flash = se.flash; e.damageCooldown = se.damageCooldown;
+    }
+    for (let i = G.enemies.length - 1; i >= 0; i--) {
+      if (!eSeen.has(G.enemies[i].id)) G.enemies.splice(i, 1);
+    }
   }
   // 玩家子弹
-  syncById(G.bullets, s.bullets, sb => ({ x: sb.x, y: sb.y }));
-  for (let i = 0; i < s.bullets.length; i++) {
-    const sb = s.bullets[i];
-    const b = G.bullets.find(x => x.id === sb.id);
-    if (b) { b.vx = sb.vx; b.vy = sb.vy; b.damage = sb.damage; }
-  }
+  syncById(G.bullets, s.bullets, sb => ({ x: sb.x, y: sb.y }), (b, sb) => { b.vx = sb.vx; b.vy = sb.vy; b.damage = sb.damage; });
   // 敌方弹幕
-  syncById(G.enemyBullets, s.ebullets, sb => ({ x: sb.x, y: sb.y }));
-  for (let i = 0; i < s.ebullets.length; i++) {
-    const sb = s.ebullets[i];
-    const b = G.enemyBullets.find(x => x.id === sb.id);
-    if (b) { b.vx = sb.vx; b.vy = sb.vy; }
-  }
+  syncById(G.enemyBullets, s.ebullets, sb => ({ x: sb.x, y: sb.y }), (b, sb) => { b.vx = sb.vx; b.vy = sb.vy; });
   // 障碍物
   for (let i = 0; i < s.obstacles.length; i++) {
     const so = s.obstacles[i];
@@ -3103,19 +3136,35 @@ function applyNetState(s) {
   }
   // 粒子/飘字/震动不随快照覆盖：guest 端保留本地粒子并自行演化（见 stepFx）
 
-  // --- DOM 同步 ---
-  document.getElementById('score-display').textContent = G.score;
-  document.getElementById('wave-display').textContent = `第 ${G.wave} 波${G.boss ? ' · BOSS' : ''}`;
+  // --- DOM 同步（全部脏检查：内容没变不写 DOM，避免 25Hz 快照造成布局抖动卡顿） ---
+  if (domCache.score !== G.score) {
+    domCache.score = G.score;
+    document.getElementById('score-display').textContent = G.score;
+  }
+  const waveTxt = `第 ${G.wave} 波${G.boss ? ' · BOSS' : ''}`;
+  if (domCache.wave !== waveTxt) {
+    domCache.wave = waveTxt;
+    document.getElementById('wave-display').textContent = waveTxt;
+  }
   renderHearts();
   // Boss 血条
   const bar = document.getElementById('boss-bar');
   if (G.boss && G.boss.hp > 0) {
-    document.getElementById('boss-name').textContent = `BOSS · ${G.boss.name}${G.boss.enraged ? ' ⚡狂暴' : ''}`;
-    bar.style.display = 'block';
-    bar.classList.toggle('enraged', !!G.boss.enraged);
-    document.getElementById('boss-fill').classList.toggle('enraged', !!G.boss.enraged);
-    document.getElementById('boss-fill').style.width = `${clamp(G.boss.hp / G.boss.maxHp * 100, 0, 100)}%`;
-  } else {
+    const bossPct = Math.round(clamp(G.boss.hp / G.boss.maxHp * 100, 0, 100));
+    const nameTxt = `BOSS · ${G.boss.name}${G.boss.enraged ? ' ⚡狂暴' : ''}`;
+    if (domCache.bossName !== nameTxt) {
+      domCache.bossName = nameTxt;
+      document.getElementById('boss-name').textContent = nameTxt;
+      bar.classList.toggle('enraged', !!G.boss.enraged);
+      document.getElementById('boss-fill').classList.toggle('enraged', !!G.boss.enraged);
+    }
+    if (domCache.barShown !== 1) { domCache.barShown = 1; bar.style.display = 'block'; }
+    if (domCache.bossPct !== bossPct) {
+      domCache.bossPct = bossPct;
+      document.getElementById('boss-fill').style.width = `${bossPct}%`;
+    }
+  } else if (domCache.barShown !== 0) {
+    domCache.barShown = 0;
     bar.style.display = 'none';
   }
 
@@ -3148,7 +3197,12 @@ function applyNetState(s) {
   } else if (s.st === 'over') {
     if (prevState !== 'over') guestShowOver();
   }
-  updateNetHud();
+  // HUD 限频 4Hz（每个快照都刷会白白触发样式重算）
+  const nowMs = performance.now();
+  if (prevState !== s.st || nowMs - lastHudSync > 250) {
+    lastHudSync = nowMs;
+    updateNetHud();
+  }
 }
 
 function guestShowOver() {
@@ -3219,6 +3273,7 @@ function startGame() {
   ensureAudio();
   // 联机：仅房主可以开始游戏（guest 由快照驱动）
   if (G.mode === 'net' && NET.role !== 'host') return;
+  resetDomCache();
   G.state = 'playing';
   G.score = 0;
   G.wave = 0;
@@ -3323,10 +3378,26 @@ function gameOver() {
 
 // ======================= 主循环 =======================
 let lastTime = performance.now();
+// FPS 统计：每 500ms 刷新一次显示，用于区分「网络延迟高」和「帧率低（渲染卡）」
+let fpsFrames = 0, fpsAccum = 0, fpsShown = 0;
+const fpsEl = document.getElementById('hud-fps');
 function loop(now) {
   let dt = (now - lastTime) / 1000;
   lastTime = now;
   dt = Math.min(dt, 0.05);
+  // FPS 统计（游戏中才显示）
+  fpsFrames++; fpsAccum += dt;
+  if (fpsAccum >= 0.5) {
+    fpsShown = Math.round(fpsFrames / fpsAccum);
+    fpsFrames = 0; fpsAccum = 0;
+    if (G.state === 'playing') {
+      fpsEl.style.display = 'block';
+      fpsEl.textContent = `FPS ${fpsShown}`;
+      fpsEl.classList.toggle('low', fpsShown < 45);
+    } else {
+      fpsEl.style.display = 'none';
+    }
+  }
   // guest 不跑游戏逻辑（以房主快照为准），只渲染 + 发输入
   if (G.state === 'playing' && NET.role !== 'guest') {
     update(dt);
