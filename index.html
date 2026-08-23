@@ -940,7 +940,9 @@ document.getElementById('send-code-btn').addEventListener('click', async () => {
     document.getElementById('login-step-1').style.display = 'none';
     document.getElementById('login-step-2').style.display = 'block';
     document.getElementById('code-input').value = '';
-    document.getElementById('code-hint').innerHTML = `验证码已发送至 <b>${phone}</b><br>（测试模式验证码：<b>${r.code}</b>，接入短信渠道后自动隐藏）`;
+    document.getElementById('code-hint').innerHTML = r.sms
+      ? `验证码已发送至 <b>${phone}</b>，请查看短信`
+      : `验证码已发送至 <b>${phone}</b><br>（测试模式验证码：<b>${r.code}</b>，接入短信渠道后自动隐藏）`;
     document.getElementById('code-input').focus();
   } catch (e) {
     loginMsg('网络错误，请重试', true);

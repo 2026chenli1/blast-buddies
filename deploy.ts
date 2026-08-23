@@ -352,18 +352,104 @@ function pubUser(u: Record<string, any>) {
   };
 }
 
+// ======================= 腾讯云短信（可选，未配置环境变量时回退测试模式） =======================
+// 需要在 Deno Deploy 项目设置里配置 5 个环境变量：
+//   TENCENT_SECRET_ID / TENCENT_SECRET_KEY / SMS_SDK_APPID / SMS_SIGN_NAME / SMS_TEMPLATE_ID
+const SMS_CFG = {
+  secretId: Deno.env.get('TENCENT_SECRET_ID') || '',
+  secretKey: Deno.env.get('TENCENT_SECRET_KEY') || '',
+  sdkAppId: Deno.env.get('SMS_SDK_APPID') || '',
+  signName: Deno.env.get('SMS_SIGN_NAME') || '',
+  templateId: Deno.env.get('SMS_TEMPLATE_ID') || '',
+};
+const smsEnabled = !!(SMS_CFG.secretId && SMS_CFG.secretKey && SMS_CFG.sdkAppId && SMS_CFG.signName && SMS_CFG.templateId);
+
+const _enc = new TextEncoder();
+const _hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b: number) => b.toString(16).padStart(2, '0')).join('');
+async function _sha256Hex(data: string): Promise<string> {
+  return _hex(await crypto.subtle.digest('SHA-256', _enc.encode(data)));
+}
+async function _hmac(key: ArrayBuffer | Uint8Array, msg: string): Promise<ArrayBuffer> {
+  const k = key instanceof Uint8Array ? key : new Uint8Array(key);
+  const ck = await crypto.subtle.importKey('raw', k, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return await crypto.subtle.sign('HMAC', ck, _enc.encode(msg));
+}
+
+// 调用腾讯云 SendSms 发送验证码（TC3-HMAC-SHA256 签名）
+// 模板正文需为单参数：如「您的登录验证码为{1}，5分钟内有效，请勿泄露。」
+async function sendSmsCode(phone: string, code: string): Promise<{ ok: boolean; msg?: string }> {
+  const host = 'sms.tencentcloudapi.com';
+  const service = 'sms';
+  const ts = Math.floor(Date.now() / 1000);
+  const date = new Date(ts * 1000).toISOString().slice(0, 10);
+  const payload = JSON.stringify({
+    PhoneNumberSet: ['+86' + phone],
+    SmsSdkAppId: SMS_CFG.sdkAppId,
+    SignName: SMS_CFG.signName,
+    TemplateId: SMS_CFG.templateId,
+    TemplateParamSet: [code],
+  });
+  const canonicalRequest =
+    'POST\n/\n\ncontent-type:application/json; charset=utf-8\nhost:' + host +
+    '\n\ncontent-type;host\n' + (await _sha256Hex(payload));
+  const credentialScope = date + '/' + service + '/tc3_request';
+  const stringToSign =
+    'TC3-HMAC-SHA256\n' + ts + '\n' + credentialScope + '\n' + (await _sha256Hex(canonicalRequest));
+  const kDate = await _hmac(_enc.encode('TC3' + SMS_CFG.secretKey), date);
+  const kService = await _hmac(kDate, service);
+  const kCred = await _hmac(kService, 'tc3_request');
+  const signature = _hex(await _hmac(kCred, stringToSign));
+  const authorization =
+    'TC3-HMAC-SHA256 Credential=' + SMS_CFG.secretId + '/' + credentialScope +
+    ', SignedHeaders=content-type;host, Signature=' + signature;
+  let data: any = null;
+  try {
+    const resp = await fetch('https://' + host + '/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-TC-Action': 'SendSms',
+        'X-TC-Timestamp': String(ts),
+        'X-TC-Version': '2021-01-11',
+        'X-TC-Region': 'ap-guangzhou',
+        'Authorization': authorization,
+      },
+      body: payload,
+    });
+    data = await resp.json();
+  } catch (_e) {
+    return { ok: false, msg: '网络错误' };
+  }
+  if (data?.Response?.Error) {
+    return { ok: false, msg: data.Response.Error.Message || data.Response.Error.Code };
+  }
+  const st = data?.Response?.SendStatusSet?.[0];
+  if (st && st.Code === 'Ok') return { ok: true };
+  return { ok: false, msg: st?.Message || '未知错误' };
+}
+
 async function handleApi(req: Request, url: URL): Promise<Response> {
   const path = url.pathname;
 
-  // POST /api/auth/send-code { phone } —— 生成 10 位验证码
+  // POST /api/auth/send-code { phone } —— 生成 10 位验证码并（可选）发送短信
   if (path === '/api/auth/send-code' && req.method === 'POST') {
     const { phone } = await readBody(req);
     const p = String(phone || '').trim();
     if (!/^1\d{10}$/.test(p)) return jsonResp({ ok: false, msg: '请输入正确的 11 位手机号' }, 400);
+    // 频率限制：同一手机号 60 秒内只能发一次（真短信按条计费）
+    const cd = await kv.get(['codeCd', p]);
+    if (cd.value) return jsonResp({ ok: false, msg: '发送太频繁，请 1 分钟后再试' }, 429);
     const code = String(Math.floor(1e9 + Math.random() * 9e9)); // 10 位数字
     await kv.set(['code', p], code, { expireIn: 5 * 60 * 1000 }); // 5 分钟有效
-    // 没有短信通道：验证码直接返回页面显示（玩具级鉴权，够用）
-    return jsonResp({ ok: true, code });
+    if (smsEnabled) {
+      const r = await sendSmsCode(p, code);
+      if (!r.ok) return jsonResp({ ok: false, msg: '短信发送失败：' + (r.msg || '请稍后重试') }, 502);
+      await kv.set(['codeCd', p], 1, { expireIn: 60 * 1000 });
+      return jsonResp({ ok: true, sms: true });
+    }
+    // 未配置短信渠道：测试模式，验证码直接返回页面显示
+    await kv.set(['codeCd', p], 1, { expireIn: 60 * 1000 });
+    return jsonResp({ ok: true, sms: false, code });
   }
 
   // POST /api/auth/verify { phone, code } —— 校验并登录/注册
