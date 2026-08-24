@@ -44,6 +44,39 @@
   }
   body.mobile-mode #mobile-pause-btn.show { display: flex; }
 
+  /* 技能按钮（Q 释放） */
+  .skill-btn {
+    pointer-events: auto;
+    position: relative;
+    display: flex;
+    align-items: center; justify-content: center;
+    width: 52px; height: 52px;
+    flex: none;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.35);
+    background: rgba(13,27,42,.65);
+    color: #eef4ff;
+    font-size: 24px;
+    cursor: pointer;
+    backdrop-filter: blur(2px);
+    touch-action: manipulation;
+    transition: transform .08s ease;
+  }
+  .skill-btn:active { transform: scale(0.92); }
+  .skill-btn .skill-cd-num {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: rgba(10,20,35,.62);
+    color: #ffd166;
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: 0;
+  }
+  .skill-btn:not(.cooling) .skill-cd-num { display: none; }
+  .skill-btn.cooling { border-color: rgba(255,255,255,.14); opacity: .85; }
+  body.mobile-mode .skill-btn { width: 56px; height: 56px; font-size: 26px; }
+
   /* ---------- UI Overlays ---------- */
   .overlay {
     position: fixed; inset: 0;
@@ -582,6 +615,14 @@
   .shop-item.equipped { border-color: #ffd166; box-shadow: inset 0 0 0 1px rgba(255,209,102,.4); }
   .shop-item-name { font-weight: 800; color: #eef4ff; font-size: 13.5px; }
   .shop-item-desc { font-size: 11px; color: #9fb3c8; line-height: 1.5; text-align: center; min-height: 32px; }
+  .shop-item-skill {
+    font-size: 11px; line-height: 1.5; text-align: center;
+    color: #ffd166; background: rgba(255,209,102,.08);
+    border: 1px dashed rgba(255,209,102,.35);
+    border-radius: 8px; padding: 4px 8px; margin: 4px 0;
+  }
+  .shop-item-skill .skill-cd { color: #94a3b8; font-size: 10px; }
+  .shop-item-skill-desc { color: #cbd5e1; font-size: 10.5px; }
   .shop-item canvas { width: 72px; height: 72px; }
   .shop-buy {
     font-size: 12.5px; font-weight: 800;
@@ -638,6 +679,10 @@
   <div class="hud-right-wrap">
     <button id="mobile-pause-btn" aria-label="暂停">⏸</button>
     <div class="hud-right" id="hearts-display"></div>
+    <button class="skill-btn" id="skill-btn" aria-label="技能" title="按 Q 释放技能">
+      <span class="skill-icon" id="skill-icon">💨</span>
+      <span class="skill-cd-num" id="skill-cd-num"></span>
+    </button>
   </div>
 </div>
 <div id="wave-banner"></div>
@@ -688,12 +733,14 @@
       <div class="control-item"><span class="p-tag p2-tag">P2</span><span class="key">WASD</span> / <span class="key">方向键</span> 移动</div>
       <div class="control-item"><span class="p-tag p2-tag">P2</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
       <div class="control-item"><span class="key">P</span> / <span class="key">Esc</span> 暂停（仅房主）</div>
+      <div class="control-item"><span class="key">Q</span> 释放皮肤技能</div>
       <div class="control-item"><span class="key">Space</span> 重开（结束后）</div>
     </div>
     <div class="controls-grid" id="controls-mobile" style="display:none;">
       <div class="control-item"><span class="key">左半屏摇杆</span> 移动（任意位置按下即出现）</div>
       <div class="control-item"><span class="key">右下按钮</span> 开火 · 按偏左枪口逆时针转 · 按偏右顺时针转</div>
       <div class="control-item"><span class="key">点击屏幕</span> 朝点击方向开火</div>
+      <div class="control-item"><span class="key">右上技能按钮</span> 释放皮肤技能</div>
       <div class="control-item"><span class="key">⏸ 血量左边</span> 暂停（仅房主）</div>
     </div>
 
@@ -887,17 +934,18 @@ function escapeHtml(s) {
 
 // ======================= 用户系统 =======================
 // 皮肤目录（与服务器 SHOP_ITEMS 对应）：配色 = body1 亮色 / body2 主色 / gun1·gun2 枪色 / glow 弹色
+// skill = 皮肤专属主动技能：icon 按钮图标 / name 技能名 / cd 冷却秒数 / desc 描述（按 Q 或点技能按钮释放）
 const SKIN_DEFS = {
-  skin_default: { name: '蓝色战士', price: 0,   desc: '经典初始造型', body1: '#6ecbff', body2: '#2196f3', gun1: '#1565c0', gun2: '#0d47a1', glow: '#ffd166' },
-  skin_green:   { name: '翠绿战士', price: 200, desc: '森林迷彩配色', body1: '#86efac', body2: '#16a34a', gun1: '#15803d', gun2: '#14532d', glow: '#86efac' },
-  skin_pink:    { name: '樱花甜心', price: 200, desc: '甜美粉色系',   body1: '#f9a8d4', body2: '#db2777', gun1: '#9d174d', gun2: '#831843', glow: '#f9a8d4' },
-  skin_gold:    { name: '黄金武士', price: 500, desc: '闪亮土豪金',   body1: '#fde68a', body2: '#d97706', gun1: '#b45309', gun2: '#92400e', glow: '#fcd34d' },
-  skin_purple:  { name: '紫电幻影', price: 500, desc: '神秘紫电光',   body1: '#c4b5fd', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#c4b5fd' },
-  skin_dark:    { name: '暗夜行者', price: 1000, desc: '低调暗黑忍者', body1: '#64748b', body2: '#1e293b', gun1: '#0f172a', gun2: '#020617', glow: '#94a3b8' },
-  skin_fire:    { name: '烈焰战神', price: 1500, desc: '炽热红焰，所向披靡', body1: '#ffb347', body2: '#e63946', gun1: '#9b2226', gun2: '#6a040f', glow: '#ffb703' },
-  skin_ice:     { name: '寒冰射手', price: 1500, desc: '冰蓝冻结，冷静致命', body1: '#a5f3fc', body2: '#0ea5e9', gun1: '#075985', gun2: '#0c4a6e', glow: '#67e8f9' },
-  skin_mecha:   { name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc' },
-  skin_rainbow: { name: '彩虹独角兽', price: 5000, desc: '七彩祥云，至尊限定', body1: '#fda4af', body2: '#f472b6', gun1: '#c026d3', gun2: '#a21caf', glow: '#f0abfc' },
+  skin_default: { name: '蓝色战士', price: 0,   desc: '经典初始造型', body1: '#6ecbff', body2: '#2196f3', gun1: '#1565c0', gun2: '#0d47a1', glow: '#ffd166', skill: { icon: '💨', name: '战术冲刺', cd: 8,  desc: '瞬间高速冲刺，冲刺中无敌' } },
+  skin_green:   { name: '翠绿战士', price: 200, desc: '森林迷彩配色', body1: '#86efac', body2: '#16a34a', gun1: '#15803d', gun2: '#14532d', glow: '#86efac', skill: { icon: '💚', name: '生命绽放', cd: 20, desc: '立即恢复 2 点生命' } },
+  skin_pink:    { name: '樱花甜心', price: 200, desc: '甜美粉色系',   body1: '#f9a8d4', body2: '#db2777', gun1: '#9d174d', gun2: '#831843', glow: '#f9a8d4', skill: { icon: '🌸', name: '樱花弹幕', cd: 10, desc: '向四周迸发 16 发花瓣弹' } },
+  skin_gold:    { name: '黄金武士', price: 500, desc: '闪亮土豪金',   body1: '#fde68a', body2: '#d97706', gun1: '#b45309', gun2: '#92400e', glow: '#fcd34d', skill: { icon: '💰', name: '点石成金', cd: 25, desc: '天降金币，立即 +150 得分' } },
+  skin_purple:  { name: '紫电幻影', price: 500, desc: '神秘紫电光',   body1: '#c4b5fd', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#c4b5fd', skill: { icon: '⚡', name: '闪电链',   cd: 12, desc: '闪电劈向最近的 4 个敌人' } },
+  skin_dark:    { name: '暗夜行者', price: 1000, desc: '低调暗黑忍者', body1: '#64748b', body2: '#1e293b', gun1: '#0f172a', gun2: '#020617', glow: '#94a3b8', skill: { icon: '🌑', name: '暗影隐身', cd: 15, desc: '隐身 3 秒，敌人无法发现你' } },
+  skin_fire:    { name: '烈焰战神', price: 1500, desc: '炽热红焰，所向披靡', body1: '#ffb347', body2: '#e63946', gun1: '#9b2226', gun2: '#6a040f', glow: '#ffb703', skill: { icon: '🔥', name: '烈焰新星', cd: 12, desc: '火焰冲击波伤害并点燃周围敌人' } },
+  skin_ice:     { name: '寒冰射手', price: 1500, desc: '冰蓝冻结，冷静致命', body1: '#a5f3fc', body2: '#0ea5e9', gun1: '#075985', gun2: '#0c4a6e', glow: '#67e8f9', skill: { icon: '❄️', name: '冰霜新星', cd: 14, desc: '冻结周围敌人 2.5 秒' } },
+  skin_mecha:   { name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc', skill: { icon: '🛡️', name: '能量护盾', cd: 16, desc: '6 秒内抵挡 3 次伤害' } },
+  skin_rainbow: { name: '彩虹独角兽', price: 5000, desc: '七彩祥云，至尊限定', body1: '#fda4af', body2: '#f472b6', gun1: '#c026d3', gun2: '#a21caf', glow: '#f0abfc', skill: { icon: '🌈', name: '彩虹狂暴', cd: 18, desc: '5 秒射速翻倍，流光环绕' } },
 };
 // 枪械目录：fireRate 射击间隔(秒) / speed 弹速 / dmg 伤害 / r 弹径 / spread 散射数 / spreadAngle 散射角
 //          lv 解锁等级（武器选择界面按等级解锁）/ barrel 枪管长度（预览用）/ c1·c2 枪身颜色
@@ -1130,10 +1178,14 @@ function renderShop() {
     else if (isOwned) btn = `<button class="shop-buy own" data-eq="${id}">装备</button>`;
     else if (d.lv && d.lv > User.level) btn = `<button class="shop-buy locked" disabled>🔒 Lv.${d.lv} 解锁</button>`;
     else btn = `<button class="shop-buy" data-buy="${id}">💰 ${d.price}</button>`;
+    const skillLine = (shopTab === 'skin' && d.skill)
+      ? `<div class="shop-item-skill">${d.skill.icon} 技能 · ${d.skill.name} <span class="skill-cd">冷却 ${d.skill.cd}s</span><br><span class="shop-item-skill-desc">${d.skill.desc}</span></div>`
+      : '';
     h += `<div class="shop-item ${isEq ? 'equipped' : ''} ${!isOwned && d.lv && d.lv > User.level ? 'locked' : ''}">
       <canvas data-prev="${id}" width="72" height="72"></canvas>
       <div class="shop-item-name">${d.name}</div>
       <div class="shop-item-desc">${d.desc || ''}</div>
+      ${skillLine}
       ${btn}
     </div>`;
   }
@@ -1654,6 +1706,7 @@ const G = {
   rapidBoost: 0,
   boss: null,
   obstacles: [],
+  effects: [],          // 技能特效（闪电/冲击波）
   scoreSaved: false,
   reported: false,      // 本局是否已上报得分（登录用户局后结算金币/经验）
   bulletSeq: 0,          // 联机快照用的实体 id 递增计数器（子弹/弹幕/敌人共用）
@@ -1705,13 +1758,183 @@ function createPlayer(id, extra) {
     dead: false,
     respawnTimer: 0,
     fireCd: 0,
+    // ---- 皮肤技能状态 ----
+    skillCd: 0,           // 技能冷却剩余（秒）
+    dashT: 0, dashVx: 0, dashVy: 0,  // 战术冲刺
+    shield: 0, shieldCharges: 0,     // 能量护盾剩余时间 / 剩余抵挡次数
+    stealth: 0,                      // 暗影隐身剩余时间
+    rainbow: 0,                      // 彩虹狂暴剩余时间
+    skillFlash: 0,                   // 技能释放闪光（纯视觉）
   };
+}
+
+// ======================= 皮肤技能系统 =======================
+// 单人 / 房主：完整执行；联机 guest：本地仅视觉反馈（逻辑由房主执行，快照带回状态）
+function skinIdForPlayer(p) {
+  if (!p) return null;
+  const isMe = (G.mode === 'net' && NET.role === 'guest') ? (p.id === NET.slot) : (p.id === 1);
+  return isMe ? User.skin : (p.skin || null);
+}
+function skinForPlayer(p) {
+  const id = skinIdForPlayer(p);
+  return (id && SKIN_DEFS[id]) ? SKIN_DEFS[id] : null;
+}
+function skillFlashFx(p, sk, color) {
+  p.skillFlash = 0.4;
+  addRing(p.x, p.y, color, p.r + 8);
+  addRing(p.x, p.y, color, p.r + 24);
+  addParticles(p.x, p.y, color, 16, 260, 4, 0.5);
+  Sfx.powerup();
+  if (sk) addPopup(p.x, p.y - p.r - 24, sk.name, color);
+}
+function damageEnemyBySkill(e, n, flashColor) {
+  e.hp -= n;
+  e.flash = 0.12;
+  addParticles(e.x, e.y, flashColor || '#ffffff', 5, 160, 3, 0.3);
+  if (e.hp <= 0) { const i = G.enemies.indexOf(e); if (i >= 0) killEnemy(i); return true; }
+  return false;
+}
+// 释放技能（核心逻辑：所有效果在此执行；host 权威）
+function useSkill(p) {
+  if (!p || p.dead || p.skillCd > 0) return false;
+  const skId = skinIdForPlayer(p);
+  const def = skId && SKIN_DEFS[skId];
+  if (!def || !def.skill) return false;
+  p.skillCd = def.skill.cd;
+  const sk = def.skill;
+  const fx = (c) => skillFlashFx(p, sk, c);
+  switch (skId) {
+    case 'skin_default': { // 战术冲刺：朝面向方向高速突进，期间无敌
+      const a = p.angle;
+      p.dashVx = Math.cos(a) * CFG.playerSpeed * 5.2;
+      p.dashVy = Math.sin(a) * CFG.playerSpeed * 5.2;
+      p.dashT = 0.22;
+      p.invuln = Math.max(p.invuln, 0.22);
+      fx('#6ecbff');
+      break;
+    }
+    case 'skin_green': { // 生命绽放：恢复 2 点生命
+      const got = Math.min(p.maxHp, p.hp + 2) - p.hp;
+      p.hp += got;
+      if (got > 0) addPopup(p.x, p.y - p.r - 42, `+${got} ❤`, '#86efac');
+      fx('#86efac');
+      break;
+    }
+    case 'skin_pink': { // 樱花弹幕：16 发花瓣弹四散
+      const n = 16;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + rand(-0.06, 0.06);
+        G.bullets.push({
+          id: ++G.bulletSeq,
+          x: p.x + Math.cos(a) * (p.r + 10),
+          y: p.y + Math.sin(a) * (p.r + 10),
+          vx: Math.cos(a) * 520, vy: Math.sin(a) * 520,
+          r: 6, life: 1.1, damage: 1, color: '#f9a8d4',
+        });
+      }
+      Sfx.shoot();
+      fx('#f9a8d4');
+      break;
+    }
+    case 'skin_gold': { // 点石成金：+150 得分
+      G.score += 150;
+      addPopup(p.x, p.y - p.r - 42, '+150 💰', '#fcd34d');
+      addParticles(p.x, p.y, '#fcd34d', 22, 300, 5, 0.7);
+      fx('#fcd34d');
+      updateHUD();
+      break;
+    }
+    case 'skin_purple': { // 闪电链：劈向最近 4 个敌人
+      const targets = G.enemies.slice()
+        .sort((a, b) => dist2(p.x, p.y, a.x, a.y) - dist2(p.x, p.y, b.x, b.y))
+        .slice(0, 4);
+      for (const t of targets) {
+        G.effects.push({ type: 'lightning', x1: p.x, y1: p.y, x2: t.x, y2: t.y, life: 0.18, maxLife: 0.18, color: '#c4b5fd' });
+        damageEnemyBySkill(t, 2, '#c4b5fd');
+      }
+      fx('#c4b5fd');
+      break;
+    }
+    case 'skin_dark': { // 暗影隐身：3 秒不被敌人锁定
+      p.stealth = 3;
+      fx('#64748b');
+      break;
+    }
+    case 'skin_fire': { // 烈焰新星：冲击波伤害并点燃周围敌人
+      const R = 280;
+      for (const e of G.enemies) {
+        if (dist2(p.x, p.y, e.x, e.y) < R * R) {
+          e.burn = 3; e.burnTick = 0;
+          damageEnemyBySkill(e, 2, '#ff6b35');
+        }
+      }
+      if (G.boss && G.boss.hp > 0 && dist2(p.x, p.y, G.boss.x, G.boss.y) < R * R) {
+        G.boss.hp -= 2; G.boss.flash = 0.12;
+        addParticles(G.boss.x, G.boss.y, '#ff6b35', 8, 200, 4, 0.4);
+        updateBossBar();
+      }
+      G.effects.push({ type: 'nova', x: p.x, y: p.y, r: 0, maxR: R, life: 0.4, maxLife: 0.4, color: '#ff6b35' });
+      fx('#e63946');
+      break;
+    }
+    case 'skin_ice': { // 冰霜新星：冻结周围敌人 2.5 秒
+      const R = 280;
+      for (const e of G.enemies) {
+        if (dist2(p.x, p.y, e.x, e.y) < R * R) {
+          e.frozen = 2.5;
+          addParticles(e.x, e.y, '#a5f3fc', 6, 120, 3, 0.5);
+        }
+      }
+      if (G.boss && G.boss.hp > 0 && dist2(p.x, p.y, G.boss.x, G.boss.y) < R * R) {
+        addPopup(G.boss.x, G.boss.y - G.boss.r - 20, 'BOSS 免疫冻结', '#a5f3fc');
+      }
+      G.effects.push({ type: 'nova', x: p.x, y: p.y, r: 0, maxR: R, life: 0.4, maxLife: 0.4, color: '#67e8f9' });
+      fx('#0ea5e9');
+      break;
+    }
+    case 'skin_mecha': { // 能量护盾：6 秒抵挡 3 次伤害
+      p.shield = 6;
+      p.shieldCharges = 3;
+      fx('#e2e8f0');
+      break;
+    }
+    case 'skin_rainbow': { // 彩虹狂暴：5 秒射速翻倍
+      p.rainbow = 5;
+      fx('#f472b6');
+      break;
+    }
+    default: return false;
+  }
+  updateSkillBtn();
+  return true;
+}
+// 联机 guest 本地视觉反馈（逻辑由房主执行）
+function skillVisualOnly(p) {
+  if (!p) return;
+  const def = skinForPlayer(p);
+  if (!def || !def.skill) return;
+  p.skillCd = def.skill.cd; // 本地预测冷却，HUD 立即转
+  skillFlashFx(p, def.skill, def.body1);
+  updateSkillBtn();
+}
+// 玩家主动按键/点按钮触发
+let skillPressed = false;   // guest：netSendInput 携带的边沿触发标志
+function pressSkill() {
+  const p = localPlayer();
+  if (!p || G.state !== 'playing' || p.dead || p.skillCd > 0) return;
+  if (G.mode === 'net' && NET.role === 'guest') {
+    skillVisualOnly(p);
+    skillPressed = true; // 下个输入包带给房主执行
+    return;
+  }
+  useSkill(p);
 }
 
 function respawnPlayer(p) {
   p.dead = false;
   p.hp = p.maxHp;
   p.invuln = 2.5;
+  p.dashT = 0; p.shield = 0; p.shieldCharges = 0; p.stealth = 0; p.rainbow = 0; // 死亡清除持续效果
   const i = G.players.indexOf(p);
   const n = G.players.length;
   const spread = Math.min(130 * (n - 1), W * 0.7);
@@ -1745,6 +1968,9 @@ function createEnemy(type, x, y) {
     anim: rand(0, TAU),
     flash: 0,
     damageCooldown: 0,
+    frozen: 0,       // 冰冻剩余时间（期间无法移动）
+    burn: 0,         // 灼烧剩余时间（持续掉血）
+    burnTick: 0,     // 灼烧跳伤害计时
   };
 }
 
@@ -1942,10 +2168,11 @@ function nearestAlivePlayer(x, y) {
   let best = null, bd = Infinity;
   for (const p of G.players) {
     if (p.dead) continue;
+    if (p.stealth > 0) continue;  // 隐身玩家不被敌人锁定
     const d = dist2(x, y, p.x, p.y);
     if (d < bd) { bd = d; best = p; }
   }
-  return best || G.players[0];
+  return best || G.players.find(p => !p.dead) || null;
 }
 function nearestTarget(x, y) {
   let best = null, bd = Infinity;
@@ -1999,6 +2226,7 @@ function update(dt) {
         p.netAim = { x: inp.ax, y: inp.ay };
         p.netFire = !!inp.fire;
         if (inp.g && GUN_DEFS[inp.g]) p.netGun = inp.g; // guest 同步装备的枪
+        if (inp.sk) useSkill(p);                         // guest 释放技能（host 权威）
       }
     } else {
       if (keys.has('ArrowUp')) dy -= 1;
@@ -2008,7 +2236,14 @@ function update(dt) {
     }
     const len = Math.hypot(dx, dy);
     p.moving = len > 0;
-    if (len > 0) {
+    if (p.dashT > 0) {
+      // 战术冲刺：高速位移 + 拖尾
+      p.dashT -= dt;
+      p.x += p.dashVx * dt;
+      p.y += p.dashVy * dt;
+      const sdef = skinForPlayer(p);
+      addParticles(p.x, p.y, sdef ? sdef.body2 : p.colors.body2, 2, 60, 4, 0.22);
+    } else if (len > 0) {
       dx /= len; dy /= len;
       // 手机摇杆：速度带模拟量（键盘保持全速）
       const spd = (Mobile.active && p.id === 1 && Mobile.joy.id !== null) ? Math.max(0.3, len) : 1;
@@ -2032,6 +2267,12 @@ function update(dt) {
     p.invuln = Math.max(0, p.invuln - dt);
     p.flash = Math.max(0, p.flash - dt);
     p.fireCd -= dt;
+    p.skillCd = Math.max(0, p.skillCd - dt);
+    p.shield = Math.max(0, p.shield - dt);
+    p.stealth = Math.max(0, p.stealth - dt);
+    p.rainbow = Math.max(0, p.rainbow - dt);
+    p.skillFlash = Math.max(0, p.skillFlash - dt);
+    if (p.shield <= 0) p.shieldCharges = 0;
 
     // 瞄准：P1 鼠标（手机=自维护瞄准角）/ P2 网络瞄准（guest 未发输入时自动瞄准最近敌人）
     if (p.id === 1) {
@@ -2061,7 +2302,7 @@ function update(dt) {
     if (wantFire && p.fireCd <= 0) {
       // 装备的枪决定射速/弹速/伤害/弹形；联机时 guest 的枪通过输入包同步给 host
       const gd = (p.id === 1) ? gunDef() : (GUN_DEFS[p.netGun] || GUN_DEFS.gun_pistol);
-      p.fireCd = gd.fireRate * (G.rapidBoost > 0 ? 0.55 : 1);
+      p.fireCd = gd.fireRate * (G.rapidBoost > 0 ? 0.55 : 1) * (p.rainbow > 0 ? 0.5 : 1);
       const count = Math.max((G.spreadBoost > 0) ? CFG.spreadCount : 1, gd.spread || 1);
       // P1 桌面版朝鼠标；手机版/其余朝当前瞄准角（update 顶部已算好 p.angle）
       const baseAngle = (p.id === 1 && !Mobile.active) ? Math.atan2(mouse.y - p.y, mouse.x - p.x) : p.angle;
@@ -2175,11 +2416,27 @@ function update(dt) {
   // --- 敌人 ---
   for (let i = G.enemies.length - 1; i >= 0; i--) {
     const e = G.enemies[i];
+    // 灼烧：持续掉血
+    e.burn = Math.max(0, e.burn - dt);
+    e.burnTick -= dt;
+    if (e.burn > 0 && e.burnTick <= 0) {
+      e.burnTick = 0.5;
+      e.hp -= 1;
+      e.flash = 0.1;
+      addParticles(e.x, e.y, '#ff6b35', 3, 110, 3, 0.3);
+      if (e.hp <= 0) { killEnemy(i); continue; }
+    }
+    // 冰冻：无法移动
+    e.frozen = Math.max(0, e.frozen - dt);
     const t = nearestAlivePlayer(e.x, e.y);
-    const a = Math.atan2(t.y - e.y, t.x - e.x);
-    e.angle = a;
-    e.x += Math.cos(a) * e.speed * dt;
-    e.y += Math.sin(a) * e.speed * dt;
+    if (t) {
+      const a = Math.atan2(t.y - e.y, t.x - e.x);
+      e.angle = a;
+      if (e.frozen <= 0) {
+        e.x += Math.cos(a) * e.speed * dt;
+        e.y += Math.sin(a) * e.speed * dt;
+      }
+    }
     // 障碍推挤（敌人会被箱子挡住）
     for (const ob of G.obstacles) {
       const d2 = dist2(e.x, e.y, ob.x, ob.y);
@@ -2255,6 +2512,13 @@ function update(dt) {
     if (pp.life <= 0) G.popups.splice(i, 1);
   }
 
+  // --- 技能特效（闪电/冲击波） ---
+  for (let i = G.effects.length - 1; i >= 0; i--) {
+    const f = G.effects[i];
+    f.life -= dt;
+    if (f.life <= 0) G.effects.splice(i, 1);
+  }
+
   // --- 波次生成 ---
   if (G.spawnQueue > 0) {
     if (G.spawnTimer <= 0) {
@@ -2270,6 +2534,8 @@ function update(dt) {
 
   G.shake *= CFG.shakeDecay;
   if (G.shake < 0.1) G.shake = 0;
+
+  updateSkillBtn();
 }
 
 function updateBoss(dt) {
@@ -2472,6 +2738,16 @@ function killBoss() {
 
 function damagePlayer(p, n) {
   if (p.invuln > 0) return;
+  // 能量护盾：抵挡一次伤害
+  if (p.shield > 0 && p.shieldCharges > 0) {
+    p.shieldCharges--;
+    addRing(p.x, p.y, '#e2e8f0', p.r + 10);
+    addParticles(p.x, p.y, '#e2e8f0', 10, 200, 4, 0.35);
+    addPopup(p.x, p.y - p.r - 16, `护盾抵挡（剩 ${p.shieldCharges}）`, '#e2e8f0');
+    Sfx.hit();
+    if (p.shieldCharges <= 0) p.shield = 0;
+    return;
+  }
   p.hp -= n;
   p.invuln = 1.2;
   p.flash = 0.3;
@@ -2550,6 +2826,7 @@ function draw() {
   drawEnemyBullets();
   drawParticles();
   drawPopups();
+  drawEffects();
 
   // 受击红晕
   for (const p of G.players) {
@@ -2707,6 +2984,7 @@ function drawPlayer(p) {
   ctx.save();
   ctx.translate(p.x, p.y);
   if (p.invuln > 0 && Math.floor(G.time * 20) % 2 === 0) ctx.globalAlpha = 0.45;
+  if (p.stealth > 0) ctx.globalAlpha *= 0.32;  // 暗影隐身：几乎透明
   ctx.rotate(p.angle);
 
   // 阴影
@@ -2754,7 +3032,50 @@ function drawPlayer(p) {
   ctx.fillStyle = c.gun2;
   ctx.fillRect(p.r * 0.5 + p.r * 0.6, -3.5, 4, 7);
 
+  // 彩虹狂暴：流光环绕
+  if (p.rainbow > 0) {
+    const cols = ['#ff6b6b', '#ffd166', '#67e8f9', '#c4b5fd', '#86efac'];
+    for (let i = 0; i < 5; i++) {
+      const a0 = G.time * 5 + i * TAU / 5;
+      ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = cols[i];
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, p.r + 7 + i * 2.6, a0, a0 + 1.1);
+      ctx.stroke();
+    }
+  }
+
   ctx.restore();
+
+  // 能量护盾光环（在角色外层，不随枪口旋转）
+  if (p.shield > 0 && !p.dead) {
+    ctx.save();
+    const pulse = 0.78 + Math.sin(G.time * 10) * 0.08;
+    ctx.globalAlpha = 0.85;
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#e2e8f0';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, (p.r + 9) * pulse, 0, TAU);
+    ctx.stroke();
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 技能释放闪光
+  if (p.skillFlash > 0 && !p.dead) {
+    ctx.save();
+    ctx.globalAlpha = p.skillFlash * 1.6;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r + 4, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
 
   // P 标签（单人模式不显示；联机显示玩家昵称，未命名时退回 P 编号）
   if (G.mode !== 'single') {
@@ -2889,6 +3210,30 @@ function drawEnemies() {
       ctx.arc(0, 0, e.r, 0, TAU);
       ctx.fill();
       ctx.globalAlpha = 1;
+    }
+
+    // 冰冻：冰蓝覆盖 + 冰晶
+    if (e.frozen > 0) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#a5f3fc';
+      ctx.beginPath();
+      ctx.arc(0, 0, e.r, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#e0f2fe';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let k = 0; k < 4; k++) {
+        const a = e.anim * 2 + k * TAU / 4;
+        const x1 = Math.cos(a) * e.r * 0.45, y1 = Math.sin(a) * e.r * 0.45;
+        const x2 = Math.cos(a) * e.r * 1.2, y2 = Math.sin(a) * e.r * 1.2;
+        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      }
+      ctx.stroke();
+    }
+    // 灼烧：火星飞溅
+    if (e.burn > 0 && Math.random() < 0.4) {
+      addParticles(e.x, e.y, '#ff6b35', 1, 90, 3, 0.3);
     }
 
     if (e.type === 'tank' && e.hp < e.maxHp) {
@@ -3149,12 +3494,79 @@ function drawPopups() {
   }
 }
 
+// 技能特效渲染：闪电链（折线）+ 冲击波（扩散环）
+function drawEffects() {
+  for (const f of G.effects) {
+    const t = f.maxLife > 0 ? f.life / f.maxLife : 0;
+    if (f.type === 'lightning') {
+      ctx.save();
+      ctx.globalAlpha = t;
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = f.color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.moveTo(f.x1, f.y1);
+      const segs = 5;
+      let px = f.x1, py = f.y1;
+      for (let i = 1; i <= segs; i++) {
+        const nx = f.x1 + (f.x2 - f.x1) * (i / segs) + (i < segs ? rand(-14, 14) : 0);
+        const ny = f.y1 + (f.y2 - f.y1) * (i / segs) + (i < segs ? rand(-14, 14) : 0);
+        ctx.lineTo(nx, ny);
+        px = nx; py = ny;
+      }
+      ctx.stroke();
+      ctx.restore();
+    } else if (f.type === 'nova') {
+      const prog = 1 - t;
+      const r = Math.max(1, f.maxR * (0.15 + prog * 0.85));
+      ctx.save();
+      ctx.globalAlpha = t * 0.9;
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 6 * (1 - prog) + 2;
+      ctx.shadowColor = f.color;
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
 // ======================= HUD =======================
 function updateHUD() {
   document.getElementById('score-display').textContent = G.score;
   renderHearts();
   updateChallengeHUD();
 }
+
+// 技能按钮刷新（带脏检查：内容没变不碰 DOM）
+let skillBtnCache = '';
+function updateSkillBtn() {
+  const btn = document.getElementById('skill-btn');
+  if (!btn) return;
+  const playing = G.state === 'playing' || G.state === 'paused';
+  if (!playing) {
+    if (skillBtnCache !== 'x') { skillBtnCache = 'x'; btn.style.display = 'none'; }
+    return;
+  }
+  const sdef = skinDef();
+  const p = localPlayer();
+  const icon = (sdef && sdef.skill) ? sdef.skill.icon : '';
+  const cd = p ? Math.max(0, Math.ceil(p.skillCd)) : 0;
+  const key = `${icon}|${cd}|${sdef && sdef.skill ? 1 : 0}`;
+  if (key === skillBtnCache) return;
+  skillBtnCache = key;
+  if (!sdef || !sdef.skill) { btn.style.display = 'none'; return; }
+  btn.style.display = 'flex';
+  document.getElementById('skill-icon').textContent = icon;
+  const cdNum = document.getElementById('skill-cd-num');
+  cdNum.textContent = cd > 0 ? cd : '';
+  btn.classList.toggle('cooling', cd > 0);
+  btn.title = `技能：${sdef.skill.name}（冷却 ${sdef.skill.cd}s）\n${sdef.skill.desc}\n按 Q 或点此释放`;
+}
+document.getElementById('skill-btn').addEventListener('click', () => pressSkill());
 
 function showBossBar() {
   const b = G.boss;
@@ -3242,6 +3654,7 @@ window.addEventListener('keydown', (e) => {
     else if (G.state === 'paused') resumeGame();
   }
   if (NET.role !== 'guest' && e.code === 'Space' && G.state === 'over') startGame();
+  if (e.code === 'KeyQ' && !e.repeat) pressSkill();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
@@ -3656,12 +4069,15 @@ function snapshotState() {
       angle: A(p.angle), aimAngle: A(p.aimAngle), invuln: A(p.invuln), anim: A(p.anim),
       moving: p.moving, flash: A(p.flash), dead: p.dead,
       respawnTimer: A(p.respawnTimer), fireCd: A(p.fireCd),
+      skillCd: A(p.skillCd), shield: A(p.shield), shieldCharges: p.shieldCharges || 0,
+      stealth: A(p.stealth), rainbow: A(p.rainbow), dashT: A(p.dashT),
       skin: p.skin || null, name: p.name || '',
     })),
     enemies: G.enemies.map(e => ({
       id: e.id, t: e.type, x: R(e.x), y: R(e.y), r: R(e.r), hp: e.hp, maxHp: e.maxHp,
       speed: R(e.speed), color: e.color,
       angle: A(e.angle), anim: A(e.anim), flash: A(e.flash), damageCooldown: A(e.damageCooldown),
+      frozen: A(e.frozen), burn: A(e.burn),
     })),
     bullets: G.bullets.map(b => ({ id: b.id, x: R(b.x), y: R(b.y), vx: R(b.vx), vy: R(b.vy), r: b.r, life: A(b.life), damage: b.damage, color: b.color })),
     ebullets: G.enemyBullets.map(b => ({ id: b.id, x: R(b.x), y: R(b.y), vx: R(b.vx), vy: R(b.vy), r: b.r, life: A(b.life), color: b.color })),
@@ -3763,6 +4179,8 @@ function applyNetState(s) {
     if (!isMe) { p.angle = sp.angle; p.anim = sp.anim; p.moving = sp.moving; }
     p.flash = sp.flash; p.dead = sp.dead;
     p.respawnTimer = sp.respawnTimer; p.fireCd = sp.fireCd;
+    p.skillCd = sp.skillCd || 0; p.shield = sp.shield || 0; p.shieldCharges = sp.shieldCharges || 0;
+    p.stealth = sp.stealth || 0; p.rainbow = sp.rainbow || 0; p.dashT = sp.dashT || 0;
     // 皮肤/昵称：自己用本地装备的数据，其他人用快照里房主记下的数据
     if (isMe) { p.skin = User.skin; p.name = User.name; }
     else { p.skin = sp.skin || null; p.name = sp.name || ''; }
@@ -3806,6 +4224,7 @@ function applyNetState(s) {
       e.type = se.t; e.r = se.r; e.hp = se.hp; e.maxHp = se.maxHp;
       e.speed = se.speed; e.color = se.color;
       e.angle = se.angle; e.anim = se.anim; e.flash = se.flash; e.damageCooldown = se.damageCooldown;
+      e.frozen = se.frozen || 0; e.burn = se.burn || 0;
     }
     for (let i = G.enemies.length - 1; i >= 0; i--) {
       if (!eSeen.has(G.enemies[i].id)) G.enemies.splice(i, 1);
@@ -3964,7 +4383,8 @@ function netSendInput() {
     ay = Math.round(by + Math.sin(Mobile.aim) * 120);
   }
   const fire = Mobile.active ? mobileFiring() : mouse.down;
-  netSend({ t: 'input', d: { dx: dx / len, dy: dy / len, ax, ay, fire, g: User.gun } });
+  netSend({ t: 'input', d: { dx: dx / len, dy: dy / len, ax, ay, fire, g: User.gun, sk: skillPressed ? 1 : 0 } });
+  skillPressed = false;
 }
 
 // ======================= 游戏流程 =======================
@@ -3986,6 +4406,7 @@ function showMenu() {
   document.getElementById('mode-modal').style.display = 'none';
   renderHomeUser();
   document.getElementById('hud').style.display = 'none';
+  updateSkillBtn();  // 隐藏技能按钮
   // 回到菜单时结束联机房间
   netClose();
   updateNetHud();
@@ -4019,8 +4440,10 @@ function startGame() {
   G.rapidBoost = 0;
   G.boss = null;
   G.obstacles = [];
+  G.effects = [];
   G.scoreSaved = false;
   G.reported = false;
+  skillBtnCache = '';
   lastSavedEntry = null;
   G.players = [createPlayer(1)];
   G.players[0].skin = User.skin;   // 房主（P1）用自己装备的皮肤/昵称
