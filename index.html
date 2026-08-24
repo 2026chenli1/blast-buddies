@@ -587,6 +587,33 @@
   .shop-buy.equipped { background: rgba(46,196,182,.22); color: #2ec4b6; border: 1px solid rgba(46,196,182,.5); }
   .shop-msg { font-size: 12.5px; color: #ff6b6b; text-align: center; min-height: 16px; }
   .final-reward { font-size: 14px; color: #ffd166; margin: 4px 0 10px; font-weight: 700; }
+  /* 等级锁定按钮 */
+  .shop-buy.locked { background: rgba(51,65,85,.7); color: #94a3b8; cursor: not-allowed; border: 1px dashed rgba(148,163,184,.4); }
+  /* ---------- 武器选择 ---------- */
+  .weapon-box { width: min(94vw, 620px); }
+  .weapon-hint { font-size: 12.5px; color: #9fb3c8; text-align: center; margin-bottom: 10px; }
+  .weapon-hint b { color: #ffd166; }
+  .weapon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; max-height: 56vh; overflow-y: auto; padding: 4px; }
+  .weapon-item {
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px;
+    padding: 10px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    font-size: 13px; color: #cfe0f0;
+  }
+  .weapon-item.equipped { border-color: #ffd166; box-shadow: inset 0 0 0 1px rgba(255,209,102,.4); }
+  .weapon-item.locked { opacity: .72; }
+  .weapon-item canvas { width: 84px; height: 84px; }
+  .weapon-stat { font-size: 11px; color: #9fb3c8; line-height: 1.5; text-align: center; }
+  /* ---------- 排行榜 tab（本地 / 线上） ---------- */
+  .lb-tabs { float: right; display: inline-flex; gap: 6px; }
+  .lb-tab {
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
+    color: #cbd5e1; border-radius: 999px; padding: 2px 12px; cursor: pointer;
+    font-size: 11.5px; font-family: inherit; letter-spacing: 1px;
+  }
+  .lb-tab.active { background: #ffd166; color: #0f172a; font-weight: 800; border-color: #ffd166; }
 </style>
 </head>
 <body>
@@ -625,6 +652,7 @@
         <div class="home-login-hint" id="hu-hint">未登录 · 点击登录保存进度</div>
       </div>
       <div class="home-top-right">
+        <button class="icon-btn" id="weapon-btn">🔫 武器</button>
         <button class="icon-btn" id="shop-btn">🛒 商城</button>
         <button class="icon-btn sound-btn" id="sound-menu-btn">🔊 音效：开</button>
         <button class="icon-btn" id="mode-switch-btn">📱 切换手机版</button>
@@ -662,7 +690,10 @@
     </div>
 
     <div class="lb-wrap">
-      <div class="lb-title">🏆 排行榜</div>
+      <div class="lb-title">🏆 排行榜<span class="lb-tabs">
+        <button class="lb-tab active" id="lb-tab-local">本地</button>
+        <button class="lb-tab" id="lb-tab-online">线上</button>
+      </span></div>
       <div class="lb-list" id="lb-list-start"></div>
     </div>
   </div>
@@ -742,6 +773,17 @@
       </div>
       <div class="login-hint" id="login-hint"></div>
       <button class="btn btn-secondary btn-small" id="login-cancel" style="margin-top:0;">取消</button>
+    </div>
+  </div>
+
+  <!-- 武器选择弹窗：按等级解锁 -->
+  <div class="modal-mask" id="weapon-modal" style="display:none;">
+    <div class="modal-box weapon-box">
+      <div class="modal-title">🔫 武器选择<span class="shop-coins" id="weapon-coins">💰 0</span></div>
+      <div class="weapon-hint">升级解锁更多武器 · 当前经验 <b id="weapon-exp">0</b> · 可在商城购买</div>
+      <div class="weapon-grid" id="weapon-list"></div>
+      <div class="shop-msg" id="weapon-msg"></div>
+      <button class="btn btn-secondary btn-small" id="weapon-close" style="margin-top:0;">关闭</button>
     </div>
   </div>
 
@@ -839,13 +881,22 @@ const SKIN_DEFS = {
   skin_gold:    { name: '黄金武士', price: 500, desc: '闪亮土豪金',   body1: '#fde68a', body2: '#d97706', gun1: '#b45309', gun2: '#92400e', glow: '#fcd34d' },
   skin_purple:  { name: '紫电幻影', price: 500, desc: '神秘紫电光',   body1: '#c4b5fd', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#c4b5fd' },
   skin_dark:    { name: '暗夜行者', price: 1000, desc: '低调暗黑忍者', body1: '#64748b', body2: '#1e293b', gun1: '#0f172a', gun2: '#020617', glow: '#94a3b8' },
+  skin_fire:    { name: '烈焰战神', price: 1500, desc: '炽热红焰，所向披靡', body1: '#ffb347', body2: '#e63946', gun1: '#9b2226', gun2: '#6a040f', glow: '#ffb703' },
+  skin_ice:     { name: '寒冰射手', price: 1500, desc: '冰蓝冻结，冷静致命', body1: '#a5f3fc', body2: '#0ea5e9', gun1: '#075985', gun2: '#0c4a6e', glow: '#67e8f9' },
+  skin_mecha:   { name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc' },
+  skin_rainbow: { name: '彩虹独角兽', price: 5000, desc: '七彩祥云，至尊限定', body1: '#fda4af', body2: '#f472b6', gun1: '#c026d3', gun2: '#a21caf', glow: '#f0abfc' },
 };
 // 枪械目录：fireRate 射击间隔(秒) / speed 弹速 / dmg 伤害 / r 弹径 / spread 散射数 / spreadAngle 散射角
+//          lv 解锁等级（武器选择界面按等级解锁）/ barrel 枪管长度（预览用）/ c1·c2 枪身颜色
 const GUN_DEFS = {
-  gun_pistol:  { name: '标准手枪', price: 0,   desc: '均衡可靠<br>射速·弹速·伤害 标准', fireRate: 0.13, speed: 640,  dmg: 1, r: 5, spread: 1, spreadAngle: 0 },
-  gun_rapid:   { name: '冲锋枪',   price: 300, desc: '超高射速<br>火力压制小怪群',     fireRate: 0.08, speed: 700,  dmg: 1, r: 4, spread: 1, spreadAngle: 0 },
-  gun_shotgun: { name: '散弹枪',   price: 600, desc: '一次 3 发扇形<br>近距离爆发',     fireRate: 0.42, speed: 560,  dmg: 1, r: 4, spread: 3, spreadAngle: 0.3 },
-  gun_sniper:  { name: '狙击枪',   price: 800, desc: '3 倍伤害·超快弹速<br>一发入魂',   fireRate: 0.6,  speed: 1100, dmg: 3, r: 6, spread: 1, spreadAngle: 0 },
+  gun_pistol:  { name: '标准手枪', price: 0,   lv: 1,  desc: '均衡可靠<br>射速·弹速·伤害 标准', fireRate: 0.13, speed: 640,  dmg: 1, r: 5, spread: 1, spreadAngle: 0, barrel: 16, c1: '#334155', c2: '#0f172a' },
+  gun_rapid:   { name: '冲锋枪',   price: 300, lv: 2,  desc: '超高射速<br>火力压制小怪群',     fireRate: 0.08, speed: 700,  dmg: 1, r: 4, spread: 1, spreadAngle: 0, barrel: 14, c1: '#334155', c2: '#0f172a' },
+  gun_shotgun: { name: '散弹枪',   price: 600, lv: 4,  desc: '一次 3 发扇形<br>近距离爆发',     fireRate: 0.42, speed: 560,  dmg: 1, r: 4, spread: 3, spreadAngle: 0.3, barrel: 15, c1: '#7c2d12', c2: '#0f172a' },
+  gun_sniper:  { name: '狙击枪',   price: 800, lv: 6,  desc: '3 倍伤害·超快弹速<br>一发入魂',   fireRate: 0.38, speed: 1100, dmg: 3, r: 6, spread: 1, spreadAngle: 0, barrel: 26, c1: '#451a03', c2: '#0f172a' },
+  gun_laser:   { name: '激光枪',   price: 1200, lv: 8, desc: '极速连发<br>弹速如光',           fireRate: 0.1,  speed: 950,  dmg: 1, r: 4, spread: 1, spreadAngle: 0, barrel: 22, c1: '#dc2626', c2: '#7f1d1d' },
+  gun_cannon:  { name: '榴弹炮',   price: 1800, lv: 10, desc: '重炮轰击<br>高伤慢速',          fireRate: 0.55, speed: 430,  dmg: 3, r: 8, spread: 1, spreadAngle: 0, barrel: 18, c1: '#3f6212', c2: '#1a2e05' },
+  gun_dual:    { name: '双管机枪', price: 2500, lv: 12, desc: '双管齐射<br>终极火力',          fireRate: 0.055, speed: 780, dmg: 1, r: 4, spread: 2, spreadAngle: 0.12, barrel: 12, c1: '#0e7490', c2: '#164e63' },
+  gun_plasma:  { name: '等离子炮', price: 4000, lv: 15, desc: '双发高伤<br>毁天灭地',          fireRate: 0.3,  speed: 820,  dmg: 4, r: 7, spread: 2, spreadAngle: 0.16, barrel: 20, c1: '#7c3aed', c2: '#4c1d95' },
 };
 
 const User = {
@@ -861,7 +912,7 @@ const User = {
   gun: 'gun_pistol',
 };
 
-function userLevel(exp) { return 1 + Math.floor(exp / 100); }
+function userLevel(exp) { return 1 + Math.floor(exp / 180); } // 升级放缓：180 经验/级（与服务器一致）
 function skinDef() { return SKIN_DEFS[User.skin] || SKIN_DEFS.skin_default; }
 function gunDef() { return GUN_DEFS[User.gun] || GUN_DEFS.gun_pistol; }
 
@@ -901,7 +952,7 @@ function renderHomeUser() {
   document.getElementById('home-lv').textContent = 'Lv.' + User.level;
   document.getElementById('hu-coins').textContent = User.coins;
   document.getElementById('hu-exp').textContent = User.exp;
-  document.getElementById('hu-exp-fill').style.width = (User.exp % 100) + '%';
+  document.getElementById('hu-exp-fill').style.width = Math.min(100, (User.exp % 180) / 180 * 100) + '%';
   document.getElementById('hu-hint').textContent = User.logged ? '已登录 · 点击可修改用户名' : '未登录 · 点击登录保存进度';
 }
 
@@ -961,6 +1012,7 @@ document.getElementById('verify-btn').addEventListener('click', async () => {
     document.getElementById('login-modal').style.display = 'none';
     Sfx.powerup();
     renderShop(); // 商城若开着则刷新
+    renderWeaponSelect(); // 武器选择若开着则刷新
   } catch (e) {
     loginMsg('网络错误，请重试', true);
   }
@@ -978,8 +1030,8 @@ function drawMiniPlayer(cv, def, isGun) {
   const cx = w / 2, cy = h / 2 + 4;
   const r = isGun ? 20 : 24;
   const col = isGun ? skinDef() : def;
-  // 枪械预览：用当前皮肤的小人 + 该枪的炮管（长/粗随枪变化）
-  const gunLen = isGun ? (def === GUN_DEFS.gun_sniper ? 26 : def === GUN_DEFS.gun_shotgun ? 16 : 20) : 18;
+  // 枪械预览：用当前皮肤的小人 + 该枪的炮管（长度/颜色随枪变化）
+  const gunLen = isGun ? ((def.barrel || 16) / 16) * 20 : 18;
   const gunW = isGun ? (def === GUN_DEFS.gun_sniper ? 5 : 7) : 7;
   // 阴影
   x.fillStyle = 'rgba(0,0,0,.3)';
@@ -1003,9 +1055,9 @@ function drawMiniPlayer(cv, def, isGun) {
   x.fillStyle = '#fff';
   x.beginPath(); x.arc(r * .34 + 1, -r * .28 - 1, .9, 0, TAU); x.arc(r * .34 + 1, r * .28 - 1, .9, 0, TAU); x.fill();
   // 炮口
-  x.fillStyle = isGun ? (def === GUN_DEFS.gun_sniper ? '#451a03' : def === GUN_DEFS.gun_shotgun ? '#7c2d12' : '#334155') : col.gun1;
+  x.fillStyle = isGun ? (def.c1 || '#334155') : col.gun1;
   x.beginPath(); x.roundRect(r * .5, -gunW / 2, gunLen, gunW, 3); x.fill();
-  x.fillStyle = isGun ? '#0f172a' : col.gun2;
+  x.fillStyle = isGun ? (def.c2 || '#0f172a') : col.gun2;
   x.fillRect(r * .5 + gunLen - 4, -gunW / 2 + 1.2, 4, gunW - 2.4);
   x.restore();
 }
@@ -1026,8 +1078,9 @@ function renderShop() {
     let btn;
     if (isEq) btn = `<button class="shop-buy equipped" disabled>装备中</button>`;
     else if (isOwned) btn = `<button class="shop-buy own" data-eq="${id}">装备</button>`;
+    else if (d.lv && d.lv > User.level) btn = `<button class="shop-buy locked" disabled>🔒 Lv.${d.lv} 解锁</button>`;
     else btn = `<button class="shop-buy" data-buy="${id}">💰 ${d.price}</button>`;
-    h += `<div class="shop-item ${isEq ? 'equipped' : ''}">
+    h += `<div class="shop-item ${isEq ? 'equipped' : ''} ${!isOwned && d.lv && d.lv > User.level ? 'locked' : ''}">
       <canvas data-prev="${id}" width="72" height="72"></canvas>
       <div class="shop-item-name">${d.name}</div>
       <div class="shop-item-desc">${d.desc || ''}</div>
@@ -1072,6 +1125,112 @@ document.getElementById('shop-close').addEventListener('click', () => {
 });
 document.getElementById('shop-tab-skin').addEventListener('click', () => { shopTab = 'skin'; renderShop(); });
 document.getElementById('shop-tab-gun').addEventListener('click', () => { shopTab = 'gun'; renderShop(); });
+
+// ======================= 武器选择（等级解锁） =======================
+function gunStatLine(d) {
+  const rate = d.fireRate ? Math.round(1 / d.fireRate) : '?';
+  return `射速 ${rate}/s · 伤害 ${d.dmg ?? 1} · 弹速 ${d.speed ?? '?'}`;
+}
+function weaponMsg(text) {
+  const el = document.getElementById('weapon-msg');
+  if (el) { el.textContent = text || ''; setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 2500); }
+}
+function renderWeaponSelect() {
+  const listEl = document.getElementById('weapon-list');
+  if (!listEl) return;
+  document.getElementById('weapon-coins').textContent = '💰 ' + User.coins;
+  document.getElementById('weapon-exp').textContent = User.exp;
+  let h = '';
+  for (const id of Object.keys(GUN_DEFS)) {
+    const d = GUN_DEFS[id];
+    const owned = User.ownedGuns.includes(id);
+    const isEq = User.gun === id;
+    const locked = !owned && (d.lv || 1) > User.level;
+    let btn;
+    if (isEq) btn = `<button class="shop-buy equipped" disabled>装备中</button>`;
+    else if (owned) btn = `<button class="shop-buy own" data-wq="${id}">装备</button>`;
+    else if (locked) btn = `<button class="shop-buy locked" disabled>🔒 Lv.${d.lv} 解锁</button>`;
+    else btn = `<button class="shop-buy" data-wbuy="${id}">💰 ${d.price}</button>`;
+    h += `<div class="weapon-item ${isEq ? 'equipped' : ''} ${locked ? 'locked' : ''}">
+      <canvas data-wprev="${id}" width="96" height="96"></canvas>
+      <div class="shop-item-name">${d.name}</div>
+      <div class="weapon-stat">${gunStatLine(d)}</div>
+      <div class="shop-item-desc">${d.desc || ''}</div>
+      ${btn}
+    </div>`;
+  }
+  listEl.innerHTML = h;
+  for (const cv of listEl.querySelectorAll('canvas[data-wprev]')) {
+    drawMiniPlayer(cv, GUN_DEFS[cv.dataset.wprev], true);
+  }
+  for (const b of listEl.querySelectorAll('[data-wq]')) b.addEventListener('click', () => weaponEquip(b.dataset.wq));
+  for (const b of listEl.querySelectorAll('[data-wbuy]')) b.addEventListener('click', () => weaponBuy(b.dataset.wbuy));
+}
+async function weaponBuy(item) {
+  if (!User.logged) { openLogin(); weaponMsg('登录后即可购买'); return; }
+  try {
+    const r = await api('/api/user/buy', { item });
+    if (r.ok) { applyUser(r.user); renderWeaponSelect(); renderShop(); Sfx.powerup(); }
+    else weaponMsg(r.msg || '购买失败');
+  } catch (e) { weaponMsg('网络错误'); }
+}
+async function weaponEquip(item) {
+  if (!User.logged) { openLogin(); return; }
+  try {
+    const r = await api('/api/user/equip', { item });
+    if (r.ok) { applyUser(r.user); renderWeaponSelect(); renderShop(); Sfx.powerup(); }
+    else weaponMsg(r.msg || '装备失败');
+  } catch (e) { weaponMsg('网络错误'); }
+}
+document.getElementById('weapon-btn').addEventListener('click', () => {
+  document.getElementById('weapon-modal').style.display = 'flex';
+  weaponMsg('');
+  renderWeaponSelect();
+});
+document.getElementById('weapon-close').addEventListener('click', () => {
+  document.getElementById('weapon-modal').style.display = 'none';
+});
+
+// ======================= 线上排名 =======================
+let lbOnline = false;
+async function loadOnlineRank() {
+  const el = document.getElementById('lb-list-start');
+  if (!el) return;
+  el.innerHTML = '<div class="lb-empty">正在获取线上排名…</div>';
+  try {
+    const r = await api('/api/rank');
+    if (!r.ok || !Array.isArray(r.list)) throw new Error('bad');
+    if (!r.list.length) { el.innerHTML = '<div class="lb-empty">暂无线上玩家，快来抢占第一！</div>'; return; }
+    const meName = User.logged ? User.name : (localStorage.getItem('bb_name') || '');
+    let h = '';
+    r.list.slice(0, 20).forEach((u, i) => {
+      const lv = u.level ?? (1 + Math.floor((u.exp || 0) / 180));
+      const isMe = meName && u.name === meName;
+      h += `<div class="lb-row ${isMe ? 'lb-highlight' : ''}">
+        <span class="lb-rank">${i + 1}</span>
+        <span class="lb-name">${escapeHtml(u.name || '玩家')}</span>
+        <span class="lb-wave">Lv.${lv}</span>
+        <span class="lb-mode">💰${u.coins || 0}</span>
+        <span class="lb-score">${u.exp || 0} 经验</span>
+      </div>`;
+    });
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div class="lb-empty">线上排名加载失败，请检查网络后重试</div>';
+  }
+}
+document.getElementById('lb-tab-local').addEventListener('click', () => {
+  lbOnline = false;
+  document.getElementById('lb-tab-local').classList.add('active');
+  document.getElementById('lb-tab-online').classList.remove('active');
+  renderLeaderboard(document.getElementById('lb-list-start'));
+});
+document.getElementById('lb-tab-online').addEventListener('click', () => {
+  lbOnline = true;
+  document.getElementById('lb-tab-local').classList.remove('active');
+  document.getElementById('lb-tab-online').classList.add('active');
+  loadOnlineRank();
+});
 
 // ---------- 局后结算：上报得分，发金币/经验 ----------
 async function reportResult() {
@@ -1475,11 +1634,13 @@ function layoutPlayers() {
   });
 }
 
-function createPlayer(id) {
+function createPlayer(id, extra) {
   const c = playerColors(id);
   return {
     id,
     colors: c,
+    skin: (extra && extra.skin) || null,   // 联机：该玩家的皮肤（他人视角渲染用）
+    name: (extra && extra.name) || '',     // 联机：该玩家的昵称（头顶标签显示）
     x: clamp(W / 2, 60, W - 60),
     y: H / 2,
     r: CFG.playerSize,
@@ -1508,7 +1669,7 @@ function respawnPlayer(p) {
   p.y = H / 2;
   addParticles(p.x, p.y, p.colors.body2, 14, 200, 4, 0.5);
   addRing(p.x, p.y, p.colors.body2, p.r);
-  addPopup(p.x, p.y - 30, `P${p.id} 重生！`, p.colors.body1);
+  addPopup(p.x, p.y - 30, `${(p.name && String(p.name).trim()) ? p.name : 'P' + p.id} 重生！`, p.colors.body1);
   Sfx.powerup();
   updateHUD();
 }
@@ -2463,6 +2624,7 @@ function drawMobileControls() {
 }
 
 function drawPlayer(p) {
+  const labelOf = (q) => (q.name && String(q.name).trim()) ? q.name : `P${q.id}`;
   // 阵亡重生倒计时（双人模式）
   // 阵亡重生倒计时（联机/双人模式）
   if (p.dead && G.mode !== 'single') {
@@ -2483,14 +2645,15 @@ function drawPlayer(p) {
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0,0,0,0.7)';
     ctx.shadowBlur = 4;
-    ctx.fillText(`P${p.id} 重生中`, p.x, p.y + p.r + 18);
+    ctx.fillText(`${labelOf(p)} 重生中`, p.x, p.y + p.r + 18);
     ctx.restore();
     return;
   }
   if (p.dead) return;
-  // 自己的角色使用已装备皮肤（单人=P1；联机 guest=自己的 slot）
+  // 自己的角色使用已装备皮肤（单人=P1；联机 guest=自己的 slot）；
+  // 他人角色：优先用快照带过来的皮肤（不再是清一色的 P 系配色），没有则退回 slot 配色
   const isMe = (G.mode === 'net' && NET.role === 'guest') ? (p.id === NET.slot) : (p.id === 1);
-  const c = isMe ? skinDef() : p.colors;
+  const c = isMe ? skinDef() : (p.skin && SKIN_DEFS[p.skin] ? SKIN_DEFS[p.skin] : p.colors);
   ctx.save();
   ctx.translate(p.x, p.y);
   if (p.invuln > 0 && Math.floor(G.time * 20) % 2 === 0) ctx.globalAlpha = 0.45;
@@ -2543,15 +2706,17 @@ function drawPlayer(p) {
 
   ctx.restore();
 
-  // P 标签（单人模式不显示）
+  // P 标签（单人模式不显示；联机显示玩家昵称，未命名时退回 P 编号）
   if (G.mode !== 'single') {
     ctx.save();
-    ctx.fillStyle = isMe ? c.body1 : p.colors.body1;
+    const otherSkin = (p.skin && SKIN_DEFS[p.skin]) ? SKIN_DEFS[p.skin] : null;
+    ctx.fillStyle = isMe ? c.body1 : (otherSkin ? otherSkin.body1 : p.colors.body1);
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0,0,0,0.7)';
     ctx.shadowBlur = 4;
-    ctx.fillText(`P${p.id}`, p.x, p.y - p.r - 8);
+    const tag = labelOf(p);
+    ctx.fillText(tag, p.x, p.y - p.r - 8);
     ctx.restore();
   }
 }
@@ -3251,7 +3416,7 @@ function updateNetHud() {
     } else {
       el.textContent = `房间 ${NET.room} · 已加入，等待房主…`;
       el.classList.toggle('warn', G.state === 'playing' ? false : true);
-      if (G.state === 'playing') el.textContent = `房间 ${NET.room} · P${NET.slot} 联机中${pingTag}`;
+      if (G.state === 'playing') el.textContent = `房间 ${NET.room} · ${User.name || ('P' + NET.slot)} 联机中${pingTag}`;
     }
     el.classList.toggle('high-ping', ping > 300);
     if (NET.role === 'host' && NET.peers.size === 0) el.classList.remove('high-ping');
@@ -3296,23 +3461,25 @@ function netCreate(max, mode) {
     } else if (m.t === 'peer') {
       const slot = m.slot || 2;
       if (m.state === 'connected') {
-        NET.peers.set(slot, { input: null });
-        setNetStatus('create', `✅ P${slot} 已加入！（当前 ${NET.peers.size + 1} 人）点击「开始联机」`, 'ok');
+        NET.peers.set(slot, { input: null, name: m.name || '', skin: m.skin || '' });
+        setNetStatus('create', `✅ ${m.name || ('P' + slot)} 已加入！（当前 ${NET.peers.size + 1} 人）点击「开始联机」`, 'ok');
         document.getElementById('net-start-btn').style.display = 'inline-block';
         Sfx.powerup();
         // 好友中途加入：直接为其创建角色参战
         if (G.state === 'playing' && !G.players.some(p => p.id === slot)) {
-          G.players.push(createPlayer(slot));
+          G.players.push(createPlayer(slot, { skin: m.skin || '', name: m.name || '' }));
           layoutPlayers();
-          addPopup(W / 2, H * 0.3, `P${slot} 加入了战斗！`, '#4ade80');
+          addPopup(W / 2, H * 0.3, `${m.name || ('P' + slot)} 加入了战斗！`, '#4ade80');
           updateHUD();
         }
       } else {
+        const gi = NET.peers.get(slot);
+        const gname = (gi && gi.name) || ('P' + slot);
         NET.peers.delete(slot);
         const idx = G.players.findIndex(p => p.id === slot);
         if (idx >= 0 && G.state !== 'menu') {
           const pp = G.players[idx];
-          addPopup(pp.x, pp.y - 30, `P${slot} 已断开`, '#ff6b6b');
+          addPopup(pp.x, pp.y - 30, `${gname} 已断开`, '#ff6b6b');
           addParticles(pp.x, pp.y, '#ff6b6b', 20, 250, 5, 0.6);
           G.players.splice(idx, 1);
           updateHUD();
@@ -3322,7 +3489,7 @@ function netCreate(max, mode) {
           document.getElementById('net-start-btn').style.display = 'none';
           if (G.state === 'playing') addPopup(W / 2, H * 0.3, '好友已断开', '#ff6b6b');
         } else {
-          setNetStatus('create', `P${slot} 已断开（剩 ${NET.peers.size + 1} 人）`, 'err');
+          setNetStatus('create', `${gname} 已断开（剩 ${NET.peers.size + 1} 人）`, 'err');
         }
       }
       updateNetHud();
@@ -3368,7 +3535,7 @@ function netJoin(room) {
   ws.onerror = () => {
     setNetStatus('join', '❌ 连不上服务器：' + wsURL() + '。常见原因：浏览器开了代理/VPN、或页面在受限的预览面板中。请用 Chrome/Edge 直接打开地址重试。', 'err');
   };
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', room }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', room, name: User.name, skin: User.skin }));
   ws.onmessage = (e) => {
     let m;
     try { m = JSON.parse(e.data); } catch (err) { return; }
@@ -3439,6 +3606,7 @@ function snapshotState() {
       angle: A(p.angle), aimAngle: A(p.aimAngle), invuln: A(p.invuln), anim: A(p.anim),
       moving: p.moving, flash: A(p.flash), dead: p.dead,
       respawnTimer: A(p.respawnTimer), fireCd: A(p.fireCd),
+      skin: p.skin || null, name: p.name || '',
     })),
     enemies: G.enemies.map(e => ({
       id: e.id, t: e.type, x: R(e.x), y: R(e.y), r: R(e.r), hp: e.hp, maxHp: e.maxHp,
@@ -3493,7 +3661,8 @@ function renderHearts() {
   let h = '';
   for (const p of G.players) {
     const c = playerColors(p.id);
-    h += `<div class="hearts-row"><span class="p-tag" style="background:${c.body2}55;color:${c.body1};">P${p.id}</span>`;
+    const tag = (p.name && String(p.name).trim()) ? p.name : `P${p.id}`;
+    h += `<div class="hearts-row"><span class="p-tag" style="background:${c.body2}55;color:${c.body1};">${tag}</span>`;
     for (let i = 0; i < p.maxHp; i++) {
       if (p.dead) h += '<span style="color:rgba(255,255,255,0.12);">✕</span>';
       else h += i < p.hp ? '<span style="color:#ff6b6b;">♥</span>' : '<span style="color:rgba(255,255,255,0.18);">♥</span>';
@@ -3530,7 +3699,7 @@ function applyNetState(s) {
     const sp = s.players[i];
     let p = G.players[i];
     if (!p) {
-      p = G.players[i] = { colors: playerColors(sp.id), netAim: null, netFire: false, x: sp.x, y: sp.y, aimAngle: sp.aimAngle };
+      p = G.players[i] = { colors: playerColors(sp.id), netAim: null, netFire: false, x: sp.x, y: sp.y, aimAngle: sp.aimAngle, skin: sp.skin || null, name: sp.name || '' };
     } else {
       p.colors = playerColors(sp.id);
     }
@@ -3544,6 +3713,9 @@ function applyNetState(s) {
     if (!isMe) { p.angle = sp.angle; p.anim = sp.anim; p.moving = sp.moving; }
     p.flash = sp.flash; p.dead = sp.dead;
     p.respawnTimer = sp.respawnTimer; p.fireCd = sp.fireCd;
+    // 皮肤/昵称：自己用本地装备的数据，其他人用快照里房主记下的数据
+    if (isMe) { p.skin = User.skin; p.name = User.name; }
+    else { p.skin = sp.skin || null; p.name = sp.name || ''; }
   }
   G.players.length = s.players.length;
   // 动态增删对象（敌人/子弹/弹幕）：按 id 匹配——快照间索引会错位，
@@ -3801,10 +3973,15 @@ function startGame() {
   G.reported = false;
   lastSavedEntry = null;
   G.players = [createPlayer(1)];
+  G.players[0].skin = User.skin;   // 房主（P1）用自己装备的皮肤/昵称
+  G.players[0].name = User.name;
   if (G.mode === 'net' && NET.role === 'host') {
-    // 按当前在线的 guest 创建对应角色（P2..Pn，slot 递增）
+    // 按当前在线的 guest 创建对应角色（P2..Pn，slot 递增），带各自皮肤/昵称
     const slots = [...NET.peers.keys()].sort((a, b) => a - b);
-    for (const s of slots) G.players.push(createPlayer(s));
+    for (const s of slots) {
+      const pi = NET.peers.get(s);
+      G.players.push(createPlayer(s, { skin: pi && pi.skin, name: pi && pi.name }));
+    }
   }
   layoutPlayers();
   mouse.down = false;

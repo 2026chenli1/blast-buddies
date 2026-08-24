@@ -60,11 +60,13 @@ function dispatch(m) {
         rooms.set(m.room, { host: m.host, guests: [], created: m.created, cap: m.cap || 0, mode: m.mode || 'public' });
         r = rooms.get(m.room);
       }
-      if (!r.guests.some(g => g.id === m.guest)) r.guests.push({ slot: m.slot, id: m.guest });
-      // 通知 host：某 slot 的玩家加入
+      if (!r.guests.some(g => g.id === m.guest)) {
+        r.guests.push({ slot: m.slot, id: m.guest, name: m.name || '', skin: m.skin || '' });
+      }
+      // 通知 host：某 slot 的玩家加入（带昵称/皮肤，开局即显示）
       const h = m.host ? conns.get(m.host) : null;
       if (h && h.role === 'host' && h.room === m.room) {
-        send(h.ws, { t: 'peer', state: 'connected', slot: m.slot });
+        send(h.ws, { t: 'peer', state: 'connected', slot: m.slot, name: m.name || '', skin: m.skin || '' });
       }
       break;
     }
@@ -105,41 +107,88 @@ function broadcast(m) {
 
 bc.onmessage = (ev) => dispatch(ev.data);
 
-// ---------- 房间管理 ----------
+// ---------- 房间管理（KV 持久化注册表 + 内存镜像） ----------
+// Deno Deploy 的 isolate 会被回收/重建：仅靠进程内 rooms Map 时，新 isolate 里
+// 看不到已存在的公开房间、也加不进跨 isolate 的房间（表现为「公开房间列表为空」
+// 「不限人数也最多进 2 人」）。方案：KV ['room', code] 存房间注册表（跨 isolate
+// 持久可见），内存 rooms 仅作同 isolate 快速转发与 host 查找的镜像。
+const KV_ROOM_TTL = 30 * 60 * 1000; // 房间 30 分钟无活动视为废弃
+const roomLastTouch = new Map();    // room -> 上次活跃时间（限频 KV 写）
+
+async function roomReg(room: string) {
+  const r = await kv.get(['room', room]);
+  return (r.value as any) || null;
+}
+async function setRoomReg(reg: any) {
+  await kv.set(['room', reg.room], reg);
+}
+async function delRoomReg(room: string) {
+  await kv.delete(['room', room]);
+}
+
+// 活跃房间防过期：有输入/快照流转时调用（每分钟最多写一次 KV）
+async function touchRoom(room: string) {
+  const now = Date.now();
+  if (now - (roomLastTouch.get(room) || 0) < 60 * 1000) return;
+  roomLastTouch.set(room, now);
+  const reg = await roomReg(room);
+  if (reg) {
+    reg.ts = now;
+    await setRoomReg(reg);
+  }
+}
+
 function genRoomCode() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
-function createRoom(connId, cap, mode) {
+async function createRoom(connId: string, cap: number, mode: string) {
   let room = genRoomCode();
   let tries = 0;
-  while (rooms.has(room) && tries < 50) {
+  while ((rooms.has(room) || await roomReg(room)) && tries < 50) {
     room = genRoomCode();
     tries++;
   }
-  const created = Date.now();
-  rooms.set(room, { host: connId, guests: [], created, cap, mode });
+  const now = Date.now();
+  await setRoomReg({ room, host: connId, cap, mode, created: now, ts: now, guests: [] });
+  rooms.set(room, { host: connId, guests: [], created: now, cap, mode });
   const c = conns.get(connId);
   if (c) {
     c.room = room;
     c.role = 'host';
     c.slot = 1;
   }
-  broadcast({ type: 'room', action: 'created', room, host: connId, created, cap, mode });
+  broadcast({ type: 'room', action: 'created', room, host: connId, created: now, cap, mode });
   return room;
 }
 
-function joinRoom(connId, room) {
-  const r = rooms.get(room);
-  if (!r) return { ok: false, msg: '房间不存在，请检查房间号' };
-  if (r.cap > 0 && r.guests.length >= r.cap - 1) {
-    return { ok: false, msg: `房间已满（${r.guests.length + 1}/${r.cap} 人）` };
+async function joinRoom(connId: string, room: string, name: string, skin: string) {
+  const reg = await roomReg(room);
+  if (!reg) return { ok: false, msg: '房间不存在，请检查房间号' };
+  if (Date.now() - reg.ts > KV_ROOM_TTL) {
+    await delRoomReg(room);
+    rooms.delete(room);
+    return { ok: false, msg: '房间已过期，请房主重新创建' };
+  }
+  if (reg.cap > 0 && reg.guests.length >= reg.cap - 1) {
+    return { ok: false, msg: `房间已满（${reg.guests.length + 1}/${reg.cap} 人）` };
   }
   // 分配最小可用玩家位（P2 起）
-  const used = new Set(r.guests.map(g => g.slot));
+  const used = new Set(reg.guests.map((g: any) => g.slot));
   let slot = 2;
   while (used.has(slot)) slot++;
-  r.guests.push({ slot, id: connId });
+  reg.guests.push({ slot, id: connId, name: name || '', skin: skin || '' });
+  reg.ts = Date.now();
+  await setRoomReg(reg);
+  // 本 isolate 同步内存镜像（保证消息转发与 host 查询一致）
+  let lr = rooms.get(room);
+  if (!lr) {
+    lr = { host: reg.host, guests: [], created: reg.created, cap: reg.cap, mode: reg.mode };
+    rooms.set(room, lr);
+  }
+  if (!lr.guests.some((g: any) => g.id === connId)) {
+    lr.guests.push({ slot, id: connId, name: name || '', skin: skin || '' });
+  }
   const c = conns.get(connId);
   if (c) {
     c.room = room;
@@ -150,42 +199,43 @@ function joinRoom(connId, room) {
     type: 'room',
     action: 'joined',
     room,
-    host: r.host,
+    host: reg.host,
     guest: connId,
     slot,
-    created: r.created,
-    cap: r.cap,
-    mode: r.mode,
+    name: name || '',
+    skin: skin || '',
+    created: reg.created,
+    cap: reg.cap,
+    mode: reg.mode,
   });
   return { ok: true, slot };
 }
 
-function leaveRoom(connId) {
+async function leaveRoom(connId: string) {
   const c = conns.get(connId);
   if (!c || !c.room) return;
   const room = c.room;
-  const r = rooms.get(room);
   const wasHost = c.role === 'host';
   const slot = c.slot;
+  const lr = rooms.get(room);
+  const reg = await roomReg(room);
 
-  if (r) {
-    if (wasHost) {
-      rooms.delete(room);
-      broadcast({ type: 'room', action: 'destroyed', room });
-    } else {
-      r.guests = r.guests.filter(g => g.id !== connId);
-      broadcast({
-        type: 'room',
-        action: 'left',
-        room,
-        host: r.host,
-        guest: connId,
-        slot,
-        created: r.created,
-        cap: r.cap,
-        mode: r.mode,
-      });
+  if (wasHost) {
+    rooms.delete(room);
+    await delRoomReg(room);
+    broadcast({ type: 'room', action: 'destroyed', room });
+  } else {
+    if (lr) lr.guests = lr.guests.filter((g: any) => g.id !== connId);
+    if (reg) {
+      reg.guests = reg.guests.filter((g: any) => g.id !== connId);
+      reg.ts = Date.now();
+      await setRoomReg(reg);
     }
+    const host = lr ? lr.host : (reg ? reg.host : '');
+    const created = lr ? lr.created : (reg ? reg.created : Date.now());
+    const cap = lr ? lr.cap : (reg ? reg.cap : 0);
+    const mode = lr ? lr.mode : (reg ? reg.mode : 'public');
+    broadcast({ type: 'room', action: 'left', room, host, guest: connId, slot, created, cap, mode });
   }
   c.room = null;
   c.role = null;
@@ -193,7 +243,7 @@ function leaveRoom(connId) {
 }
 
 // ---------- 消息处理 ----------
-function handleWsMessage(ws, connId, raw) {
+async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
   let msg;
   try {
     msg = JSON.parse(raw);
@@ -214,7 +264,7 @@ function handleWsMessage(ws, connId, raw) {
       if (!isFinite(cap) || cap < 0) cap = 0;
       if (cap > 99) cap = 99;
       const mode = msg.mode === 'private' ? 'private' : 'public';
-      const room = createRoom(connId, cap, mode);
+      const room = await createRoom(connId, cap, mode);
       send(ws, { t: 'created', room, cap, mode });
       break;
     }
@@ -224,7 +274,12 @@ function handleWsMessage(ws, connId, raw) {
         return;
       }
       const room = String(msg.room || '').trim();
-      const res = joinRoom(connId, room);
+      const res = await joinRoom(
+        connId,
+        room,
+        String(msg.name || '').slice(0, 12),
+        String(msg.skin || ''),
+      );
       if (!res.ok) {
         send(ws, { t: 'error', msg: res.msg });
         return;
@@ -233,12 +288,20 @@ function handleWsMessage(ws, connId, raw) {
       break;
     }
     case 'list': {
-      // 房间大厅：返回所有公开且未满员的房间
+      // 房间大厅：遍历 KV 注册表（跨 isolate 持久），返回公开且未满员的房间
       const list = [];
-      for (const [room, r] of rooms) {
-        if (r.mode !== 'public') continue;
-        if (r.cap > 0 && r.guests.length >= r.cap - 1) continue; // 满员不再展示
-        list.push({ room, n: r.guests.length + 1, cap: r.cap });
+      const now = Date.now();
+      const iter = kv.list({ prefix: ['room'] });
+      for await (const e of iter) {
+        const reg = e.value as any;
+        if (!reg || reg.mode !== 'public') continue;
+        if (reg.cap > 0 && reg.guests.length >= reg.cap - 1) continue; // 满员不再展示
+        if (now - reg.ts > KV_ROOM_TTL) {
+          await kv.delete(e.key);
+          rooms.delete(reg.room);
+          continue;
+        }
+        list.push({ room: reg.room, n: reg.guests.length + 1, cap: reg.cap });
       }
       list.sort((a, b) => (a.room < b.room ? -1 : 1));
       send(ws, { t: 'rooms', d: list });
@@ -246,6 +309,7 @@ function handleWsMessage(ws, connId, raw) {
     }
     case 'input': {
       if (c && c.role === 'guest' && c.room) {
+        void touchRoom(c.room);
         broadcast({
           type: 'relay',
           room: c.room,
@@ -257,6 +321,7 @@ function handleWsMessage(ws, connId, raw) {
     }
     case 'state': {
       if (c && c.role === 'host' && c.room) {
+        void touchRoom(c.room);
         broadcast({
           type: 'relay',
           room: c.room,
@@ -279,13 +344,15 @@ function handleWsMessage(ws, connId, raw) {
   }
 }
 
-function setupSocket(ws) {
+function setupSocket(ws: WebSocket) {
   const connId = 'c' + (++connSeq) + '-' + Math.random().toString(36).slice(2, 8);
   conns.set(connId, { ws, room: null, role: null, slot: null });
 
-  ws.onmessage = (ev) => handleWsMessage(ws, connId, ev.data);
+  ws.onmessage = (ev: MessageEvent) => {
+    handleWsMessage(ws, connId, String(ev.data)).catch((e) => console.error('ws msg err', e));
+  };
   ws.onclose = () => {
-    leaveRoom(connId);
+    void leaveRoom(connId);
     conns.delete(connId);
   };
   ws.onerror = () => {
@@ -298,18 +365,26 @@ function setupSocket(ws) {
 // ---------- 用户系统（Deno KV 持久化） ----------
 const kv = await Deno.openKv();
 
-// 商城目录：皮肤 + 枪（价格单位：金币；price=0 为初始赠送）
-const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: number }> = {
+// 商城目录：皮肤 + 枪（价格单位：金币；price=0 为初始赠送；lv 为枪械解锁等级）
+const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: number; lv?: number }> = {
   skin_default: { type: 'skin', name: '蓝色战士', price: 0 },
   skin_green:   { type: 'skin', name: '翠绿战士', price: 200 },
   skin_pink:    { type: 'skin', name: '樱花甜心', price: 200 },
   skin_gold:    { type: 'skin', name: '黄金武士', price: 500 },
   skin_purple:  { type: 'skin', name: '紫电幻影', price: 500 },
   skin_dark:    { type: 'skin', name: '暗夜行者', price: 1000 },
-  gun_pistol:   { type: 'gun', name: '标准手枪', price: 0 },
-  gun_rapid:    { type: 'gun', name: '冲锋枪', price: 300 },
-  gun_shotgun:  { type: 'gun', name: '散弹枪', price: 600 },
-  gun_sniper:   { type: 'gun', name: '狙击枪', price: 800 },
+  skin_fire:    { type: 'skin', name: '烈焰战神', price: 1500 },
+  skin_ice:     { type: 'skin', name: '寒冰射手', price: 1500 },
+  skin_mecha:   { type: 'skin', name: '机甲武装', price: 3000 },
+  skin_rainbow: { type: 'skin', name: '彩虹独角兽', price: 5000 },
+  gun_pistol:   { type: 'gun', name: '标准手枪', price: 0,   lv: 1 },
+  gun_rapid:    { type: 'gun', name: '冲锋枪',   price: 300, lv: 2 },
+  gun_shotgun:  { type: 'gun', name: '散弹枪',   price: 600, lv: 4 },
+  gun_sniper:   { type: 'gun', name: '狙击枪',   price: 800, lv: 6 },
+  gun_laser:    { type: 'gun', name: '激光枪',   price: 1200, lv: 8 },
+  gun_cannon:   { type: 'gun', name: '榴弹炮',   price: 1800, lv: 10 },
+  gun_dual:     { type: 'gun', name: '双管机枪', price: 2500, lv: 12 },
+  gun_plasma:   { type: 'gun', name: '等离子炮', price: 4000, lv: 15 },
 };
 
 function jsonResp(data: unknown, status = 200) {
@@ -338,13 +413,13 @@ async function authUser(req: Request) {
   return u.value ? { phone: phone.value as string, user: u.value as Record<string, any> } : null;
 }
 
-// 下发给前端的用户数据（不含手机号）
+// 下发给前端的用户数据（不含手机号）；等级由经验实时计算（升级曲线放缓：180 经验/级）
 function pubUser(u: Record<string, any>) {
   return {
     name: u.name,
     coins: u.coins,
     exp: u.exp,
-    level: u.level,
+    level: 1 + Math.floor((u.exp || 0) / 180),
     ownedSkins: u.ownedSkins,
     ownedGuns: u.ownedGuns,
     skin: u.skin,
@@ -482,6 +557,23 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     return jsonResp({ ok: true, token, user: pubUser(u.value as Record<string, any>) });
   }
 
+  // GET /api/rank —— 线上排行（公开，按经验值降序，Top 50）
+  if (path === '/api/rank' && req.method === 'GET') {
+    const list = [];
+    for await (const e of kv.list({ prefix: ['user'] })) {
+      const u = e.value as Record<string, any>;
+      if (!u) continue;
+      list.push({
+        name: u.name || '玩家',
+        level: 1 + Math.floor((u.exp || 0) / 180),
+        exp: u.exp || 0,
+        coins: u.coins || 0,
+      });
+    }
+    list.sort((a, b) => (b.exp || 0) - (a.exp || 0) || (b.coins || 0) - (a.coins || 0));
+    return jsonResp({ ok: true, list: list.slice(0, 50) });
+  }
+
   // 以下接口均需登录
   const auth = await authUser(req);
   if (!auth) return jsonResp({ ok: false, msg: '请先登录' }, 401);
@@ -502,11 +594,14 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     return jsonResp({ ok: true, user: pubUser(u) });
   }
 
-  // POST /api/user/buy { item } —— 购买皮肤/枪
+  // POST /api/user/buy { item } —— 购买皮肤/枪（枪械需达到解锁等级）
   if (path === '/api/user/buy' && req.method === 'POST') {
     const { item } = await readBody(req);
     const def = SHOP_ITEMS[String(item || '')];
     if (!def) return jsonResp({ ok: false, msg: '商品不存在' }, 400);
+    if ((def.lv || 1) > (u.level as number)) {
+      return jsonResp({ ok: false, msg: `需要 Lv.${def.lv} 才能解锁该武器` }, 400);
+    }
     const owned: string[] = def.type === 'skin' ? u.ownedSkins : u.ownedGuns;
     if (owned.includes(item as string)) return jsonResp({ ok: false, msg: '已拥有该物品' }, 400);
     if ((u.coins as number) < def.price) return jsonResp({ ok: false, msg: '金币不足' }, 400);
@@ -538,7 +633,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     const gainedExp = Math.floor(s / 2);
     u.coins = (u.coins as number) + gainedCoins;
     u.exp = (u.exp as number) + gainedExp;
-    u.level = 1 + Math.floor((u.exp as number) / 100);
+    u.level = 1 + Math.floor((u.exp as number) / 180); // 升级放缓：180 经验/级
     await kv.set(['user', auth.phone], u);
     return jsonResp({ ok: true, user: pubUser(u), gainedCoins, gainedExp });
   }
