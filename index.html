@@ -500,6 +500,15 @@
   .exp-track { height: 6px; background: rgba(255,255,255,.12); border-radius: 999px; overflow: hidden; margin-top: 6px; }
   .exp-fill { height: 100%; background: linear-gradient(90deg,#4cc9f0,#06d6a0); border-radius: 999px; transition: width .3s ease; }
   .home-login-hint { font-size: 11.5px; color: #7d93a8; margin-top: 5px; }
+  .home-user-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .home-user-actions button {
+    flex: 1; font-size: 11.5px; font-weight: 700; color: #bcd4ea;
+    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
+    border-radius: 8px; padding: 5px 8px; cursor: pointer; transition: all .15s ease;
+  }
+  .home-user-actions button:hover { background: rgba(255,255,255,.15); }
+  .home-user-actions .danger { color: #ffb4b4; border-color: rgba(255,107,107,.4); }
+  .home-user-actions .danger:hover { background: rgba(255,107,107,.15); }
   .home-top-right { display: flex; gap: 8px; flex-wrap: wrap; }
   .icon-btn {
     border: 1px solid rgba(255,255,255,.18);
@@ -650,6 +659,10 @@
         <div class="home-user-sub"><span>💰 <b id="hu-coins">0</b></span><span>经验 <b id="hu-exp">0</b></span></div>
         <div class="exp-track"><div class="exp-fill" id="hu-exp-fill" style="width:0%"></div></div>
         <div class="home-login-hint" id="hu-hint">未登录 · 点击登录保存进度</div>
+        <div class="home-user-actions" id="hu-actions" style="display:none;">
+          <button id="switch-account-btn">🔄 切换账号</button>
+          <button class="danger" id="delete-account-btn">🗑 注销账号</button>
+        </div>
       </div>
       <div class="home-top-right">
         <button class="icon-btn" id="weapon-btn">🔫 武器</button>
@@ -943,6 +956,20 @@ function applyUser(u) {
 }
 
 // ---------- 主界面用户卡片 ----------
+function resetUser() {
+  User.logged = false;
+  User.token = null;
+  User.name = '游客';
+  User.coins = 0;
+  User.exp = 0;
+  User.level = 1;
+  User.ownedSkins = ['skin_default'];
+  User.ownedGuns = ['gun_pistol'];
+  User.skin = 'skin_default';
+  User.gun = 'gun_pistol';
+  try { localStorage.removeItem('bb_token'); } catch (e) {}
+  renderHomeUser();
+}
 function renderHomeUser() {
   User.level = userLevel(User.exp);
   const name = User.logged ? User.name : (localStorage.getItem('bb_name') || '游客');
@@ -954,6 +981,7 @@ function renderHomeUser() {
   document.getElementById('hu-exp').textContent = User.exp;
   document.getElementById('hu-exp-fill').style.width = Math.min(100, (User.exp % 180) / 180 * 100) + '%';
   document.getElementById('hu-hint').textContent = User.logged ? '已登录 · 点击可修改用户名' : '未登录 · 点击登录保存进度';
+  document.getElementById('hu-actions').style.display = User.logged ? 'flex' : 'none';
 }
 
 // ---------- 登录弹窗 ----------
@@ -1019,6 +1047,28 @@ document.getElementById('verify-btn').addEventListener('click', async () => {
 });
 document.getElementById('login-cancel').addEventListener('click', () => {
   document.getElementById('login-modal').style.display = 'none';
+});
+
+// ---------- 切换账号 / 注销账号 ----------
+document.getElementById('switch-account-btn').addEventListener('click', async (ev) => {
+  ev.stopPropagation(); // 不触发卡片改名
+  if (!User.logged) return;
+  if (!confirm('退出当前账号？\n进度已保存在服务器，下次用同一手机号登录即可找回。')) return;
+  try { await api('/api/auth/logout', {}); } catch (e) {}
+  resetUser();
+  openLogin();
+});
+document.getElementById('delete-account-btn').addEventListener('click', async (ev) => {
+  ev.stopPropagation(); // 不触发卡片改名
+  if (!User.logged) return;
+  if (!confirm(`确定注销账号「${User.name}」？\n⚠️ 等级、经验、金币、皮肤和武器将全部删除且无法恢复！`)) return;
+  if (!confirm('再次确认：真的要注销吗？此操作不可撤销。')) return;
+  try {
+    const r = await api('/api/user/delete', {});
+    if (!r.ok) { alert(r.msg || '注销失败，请重试'); return; }
+  } catch (e) { alert('网络错误，请重试'); return; }
+  resetUser();
+  openLogin();
 });
 
 // ---------- 商城 ----------

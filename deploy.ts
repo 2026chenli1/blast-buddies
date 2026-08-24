@@ -579,6 +579,23 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
   if (!auth) return jsonResp({ ok: false, msg: '请先登录' }, 401);
   const u = auth.user;
 
+  // POST /api/auth/logout —— 退出登录（仅删除服务端会话，保留账号数据）
+  if (path === '/api/auth/logout' && req.method === 'POST') {
+    const h = req.headers.get('authorization') || '';
+    const token = h.replace(/^Bearer\s+/i, '').trim();
+    if (token) await kv.delete(['session', token]);
+    return jsonResp({ ok: true });
+  }
+
+  // POST /api/user/delete —— 注销账号（删除用户数据 + 会话，不可恢复）
+  if (path === '/api/user/delete' && req.method === 'POST') {
+    await kv.delete(['user', auth.phone]);
+    const h = req.headers.get('authorization') || '';
+    const token = h.replace(/^Bearer\s+/i, '').trim();
+    if (token) await kv.delete(['session', token]);
+    return jsonResp({ ok: true });
+  }
+
   // GET /api/user/me
   if (path === '/api/user/me' && req.method === 'GET') {
     return jsonResp({ ok: true, user: pubUser(u) });
