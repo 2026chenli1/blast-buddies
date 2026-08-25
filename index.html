@@ -613,6 +613,7 @@
   .wx-divider span { font-size: 12px; color: #8b93a7; }
   .wx-login-btn { background: #07c160 !important; color: #fff !important; border: none !important; width: 100%; display: flex; align-items: center; justify-content: center; }
   .wx-login-btn:active { filter: brightness(.9); }
+  .qr-login-btn { width: 100%; border: 1px dashed rgba(255,183,3,.5) !important; color: #ffb703 !important; background: rgba(255,183,3,.06) !important; }
   .mode-big-btn {
     width: 100%; font-size: 17px; font-weight: 800;
     color: #cfe0f0; background: rgba(255,255,255,.07);
@@ -917,6 +918,16 @@
       <button class="btn btn-small wx-login-btn" id="wx-login-btn">
         <svg viewBox="0 0 24 24" width="18" height="18" style="flex:none;vertical-align:-4px;margin-right:6px;" fill="#fff"><path d="M9.5 4C5.36 4 2 6.69 2 10.02c0 1.89 1.08 3.58 2.78 4.72l-.7 2.1 2.45-1.23c.63.18 1.3.3 1.97.33a5.9 5.9 0 0 1-.25-1.68c0-3.09 2.91-5.6 6.5-5.6.23 0 .45.01.67.03C15.02 6.06 12.5 4 9.5 4zm-2.6 3.3a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm4.8 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zM15 9.9c-3.17 0-5.75 2.1-5.75 4.68 0 2.59 2.58 4.68 5.75 4.68.57 0 1.12-.07 1.64-.2l2.2 1.1-.62-1.87C20.06 17.28 20.75 15.75 20.75 14.58 20.75 12 18.17 9.9 15 9.9zm-1.9 2.66a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5zm3.8 0a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z"/></svg>微信扫码登录
       </button>
+      <button class="btn btn-small qr-login-btn" id="qr-login-btn">扫码登录（手机确认）</button>
+      <div id="login-qr-area" style="display:none;flex-direction:column;align-items:center;gap:8px;">
+        <canvas id="login-qr" width="200" height="200" style="background:#fff;border-radius:10px;padding:6px;width:200px;height:200px;"></canvas>
+        <div class="login-hint" id="login-qr-tip">用微信扫一扫，在手机上确认登录</div>
+        <div class="login-hint" id="login-qr-fallback" style="word-break:break-all;display:none;"></div>
+        <div style="display:flex;gap:8px;width:100%;">
+          <button class="btn btn-small btn-secondary" id="qr-refresh-btn" style="flex:1;">刷新二维码</button>
+          <button class="btn btn-small btn-secondary" id="qr-back-btn" style="flex:1;">返回手机号</button>
+        </div>
+      </div>
       <button class="btn btn-secondary btn-small" id="login-cancel" style="margin-top:0;">取消</button>
     </div>
   </div>
@@ -1152,9 +1163,15 @@ function renderHomeUser() {
 // ---------- 登录弹窗 ----------
 let loginPhone = '';
 function openLogin() {
+  stopQrPoll();
   document.getElementById('login-modal').style.display = 'flex';
+  document.getElementById('login-qr-area').style.display = 'none';
   document.getElementById('login-step-1').style.display = 'block';
   document.getElementById('login-step-2').style.display = 'none';
+  document.getElementById('wx-login-btn').style.display = '';
+  document.getElementById('qr-login-btn').style.display = '';
+  const wd = document.querySelector('.wx-divider');
+  if (wd) wd.style.display = '';
   document.getElementById('login-hint').textContent = '';
   document.getElementById('login-hint').classList.remove('err');
 }
@@ -1171,7 +1188,8 @@ document.getElementById('home-user-card').addEventListener('click', async () => 
   try {
     const r = await api('/api/user/name', { name });
     if (r.ok) { applyUser(r.user); loginMsg(''); }
-  } catch (e) {}
+    else { alert(r.msg || '修改失败，请重试'); }
+  } catch (e) { alert('网络错误，请重试'); }
 });
 document.getElementById('send-code-btn').addEventListener('click', async () => {
   const phone = document.getElementById('phone-input').value.trim();
@@ -1225,6 +1243,111 @@ document.getElementById('wx-login-btn').addEventListener('click', async () => {
     loginMsg('网络错误，请重试', true);
   }
 });
+
+// ---------- 自建扫码登录：电脑出码，手机扫后确认 ----------
+let qrTimer = null, qrTicket = '', qrSecret = '';
+// 加载二维码生成库（多 CDN 兜底；加载失败则降级为显示链接）
+function loadQrLib() {
+  return new Promise((resolve) => {
+    if (window.qrcode) return resolve(true);
+    const urls = [
+      'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js',
+      'https://unpkg.com/qrcode-generator@1.4.4/qrcode.js',
+    ];
+    let i = 0;
+    (function tryNext() {
+      if (i >= urls.length) return resolve(false);
+      const s = document.createElement('script');
+      s.src = urls[i++];
+      s.onload = () => resolve(!!window.qrcode);
+      s.onerror = tryNext;
+      document.head.appendChild(s);
+    })();
+  });
+}
+function stopQrPoll() { if (qrTimer) { clearInterval(qrTimer); qrTimer = null; } }
+async function newQr() {
+  stopQrPoll();
+  const tip = document.getElementById('login-qr-tip');
+  const fb = document.getElementById('login-qr-fallback');
+  tip.textContent = '正在生成二维码…';
+  fb.style.display = 'none';
+  try {
+    const r = await fetch('/api/auth/qr', { method: 'POST' }).then((r) => r.json());
+    if (!r.ok) { tip.textContent = r.msg || '获取二维码失败'; return; }
+    qrTicket = r.ticket;
+    qrSecret = r.secret;
+    const cv = document.getElementById('login-qr');
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, 200, 200);
+    if (window.qrcode) {
+      const qr = window.qrcode(0, 'M');
+      qr.addData(r.url);
+      qr.make();
+      const cells = qr.getModuleCount();
+      const cell = 200 / cells;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, 200, 200);
+      ctx.fillStyle = '#0d1b2a';
+      for (let row = 0; row < cells; row++) {
+        for (let col = 0; col < cells; col++) {
+          if (qr.isDark(row, col)) ctx.fillRect(col * cell, row * cell, Math.ceil(cell), Math.ceil(cell));
+        }
+      }
+      tip.textContent = '用微信扫一扫，在手机上确认登录（5 分钟内有效）';
+    } else {
+      // 库加载失败：降级显示链接，手机浏览器打开同样能确认
+      fb.textContent = r.url;
+      fb.style.display = 'block';
+      tip.textContent = '二维码库加载失败，请复制链接用手机浏览器打开';
+    }
+    qrTimer = setInterval(pollQr, 2000);
+  } catch (e) {
+    tip.textContent = '网络错误，请重试';
+  }
+}
+async function pollQr() {
+  try {
+    const r = await fetch('/api/auth/qr/status?ticket=' + encodeURIComponent(qrTicket) + '&s=' + encodeURIComponent(qrSecret)).then((r) => r.json());
+    if (r.state === 1) {
+      stopQrPoll();
+      User.token = r.token;
+      try { localStorage.setItem('bb_token', r.token); } catch (e) {}
+      document.getElementById('login-modal').style.display = 'none';
+      Sfx.powerup();
+      const me = await api('/api/user/me');
+      if (me.ok) applyUser(me.user);
+      renderShop();
+      renderWeaponSelect();
+    } else if (r.state === -1) {
+      stopQrPoll();
+      document.getElementById('login-qr-tip').textContent = '二维码已过期，点「刷新二维码」';
+    }
+  } catch (e) { /* 网络抖动忽略，下轮再试 */ }
+}
+function openQrView() {
+  document.getElementById('login-step-1').style.display = 'none';
+  document.getElementById('login-step-2').style.display = 'none';
+  document.getElementById('wx-login-btn').style.display = 'none';
+  document.getElementById('qr-login-btn').style.display = 'none';
+  document.querySelector('.wx-divider').style.display = 'none';
+  document.getElementById('login-hint').textContent = '';
+  const area = document.getElementById('login-qr-area');
+  area.style.display = 'flex';
+  loadQrLib().then(() => newQr());
+}
+function backToPhoneView() {
+  stopQrPoll();
+  document.getElementById('login-qr-area').style.display = 'none';
+  document.getElementById('login-step-1').style.display = 'block';
+  document.getElementById('wx-login-btn').style.display = '';
+  document.getElementById('qr-login-btn').style.display = '';
+  document.querySelector('.wx-divider').style.display = '';
+  loginMsg('');
+}
+document.getElementById('qr-login-btn').addEventListener('click', openQrView);
+document.getElementById('qr-refresh-btn').addEventListener('click', () => { loadQrLib().then(() => newQr()); });
+document.getElementById('qr-back-btn').addEventListener('click', backToPhoneView);
 
 // ---------- 切换账号 / 注销账号 ----------
 document.getElementById('switch-account-btn').addEventListener('click', async (ev) => {
