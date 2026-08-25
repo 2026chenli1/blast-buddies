@@ -608,6 +608,11 @@
   .login-hint { font-size: 12.5px; color: #9fb3c8; line-height: 1.7; text-align: center; }
   .login-hint b { color: #ffd166; font-size: 16px; letter-spacing: 2px; }
   .login-hint.err { color: #ff6b6b; }
+  .wx-divider { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
+  .wx-divider::before, .wx-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.15); }
+  .wx-divider span { font-size: 12px; color: #8b93a7; }
+  .wx-login-btn { background: #07c160 !important; color: #fff !important; border: none !important; width: 100%; display: flex; align-items: center; justify-content: center; }
+  .wx-login-btn:active { filter: brightness(.9); }
   .mode-big-btn {
     width: 100%; font-size: 17px; font-weight: 800;
     color: #cfe0f0; background: rgba(255,255,255,.07);
@@ -908,6 +913,10 @@
         <button class="btn btn-small" id="verify-btn">登 录</button>
       </div>
       <div class="login-hint" id="login-hint"></div>
+      <div class="wx-divider"><span>或</span></div>
+      <button class="btn btn-small wx-login-btn" id="wx-login-btn">
+        <svg viewBox="0 0 24 24" width="18" height="18" style="flex:none;vertical-align:-4px;margin-right:6px;" fill="#fff"><path d="M9.5 4C5.36 4 2 6.69 2 10.02c0 1.89 1.08 3.58 2.78 4.72l-.7 2.1 2.45-1.23c.63.18 1.3.3 1.97.33a5.9 5.9 0 0 1-.25-1.68c0-3.09 2.91-5.6 6.5-5.6.23 0 .45.01.67.03C15.02 6.06 12.5 4 9.5 4zm-2.6 3.3a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm4.8 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zM15 9.9c-3.17 0-5.75 2.1-5.75 4.68 0 2.59 2.58 4.68 5.75 4.68.57 0 1.12-.07 1.64-.2l2.2 1.1-.62-1.87C20.06 17.28 20.75 15.75 20.75 14.58 20.75 12 18.17 9.9 15 9.9zm-1.9 2.66a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5zm3.8 0a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z"/></svg>微信扫码登录
+      </button>
       <button class="btn btn-secondary btn-small" id="login-cancel" style="margin-top:0;">取消</button>
     </div>
   </div>
@@ -1205,11 +1214,23 @@ document.getElementById('login-cancel').addEventListener('click', () => {
   document.getElementById('login-modal').style.display = 'none';
 });
 
+// ---------- 微信扫码登录：跳转微信授权页（PC 显示二维码） ----------
+document.getElementById('wx-login-btn').addEventListener('click', async () => {
+  loginMsg('正在跳转微信授权页…');
+  try {
+    const r = await fetch('/api/auth/wechat/url').then((r) => r.json());
+    if (r.ok) { location.href = r.url; return; }
+    loginMsg(r.msg || '微信登录暂不可用', true);
+  } catch (e) {
+    loginMsg('网络错误，请重试', true);
+  }
+});
+
 // ---------- 切换账号 / 注销账号 ----------
 document.getElementById('switch-account-btn').addEventListener('click', async (ev) => {
   ev.stopPropagation(); // 不触发卡片改名
   if (!User.logged) return;
-  if (!confirm('退出当前账号？\n进度已保存在服务器，下次用同一手机号登录即可找回。')) return;
+  if (!confirm('退出当前账号？\n进度已保存在服务器，下次用同一手机号或微信登录即可找回。')) return;
   try { await api('/api/auth/logout', {}); } catch (e) {}
   resetUser();
   openLogin();
@@ -1529,10 +1550,26 @@ async function reportResult() {
   } catch (e) {}
 }
 
-// ---------- 自动登录（同设备 token 直接拉用户数据） ----------
+// ---------- 自动登录（同设备 token 直接拉用户数据；处理微信扫码回调） ----------
 (async () => {
+  const qs = new URLSearchParams(location.search);
   let tok = null;
-  try { tok = localStorage.getItem('bb_token'); } catch (e) {}
+  // 微信扫码成功回调：/?wxtoken=xxx（存入后立即从地址栏清除）
+  const wxt = qs.get('wxtoken');
+  if (wxt) {
+    tok = wxt;
+    try { localStorage.setItem('bb_token', wxt); } catch (e) {}
+    history.replaceState(null, '', location.pathname);
+  } else {
+    try { tok = localStorage.getItem('bb_token'); } catch (e) {}
+  }
+  // 微信扫码失败回调：/?wxerr=xxx（弹登录框显示错误）
+  const wxerr = qs.get('wxerr');
+  if (wxerr) {
+    history.replaceState(null, '', location.pathname);
+    openLogin();
+    loginMsg(wxerr, true);
+  }
   if (tok) {
     User.token = tok;
     try {
