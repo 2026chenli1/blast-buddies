@@ -77,6 +77,26 @@
   .skill-btn.cooling { border-color: rgba(255,255,255,.14); opacity: .85; }
   body.mobile-mode .skill-btn { width: 56px; height: 56px; font-size: 26px; }
 
+  /* ---------- 装备选择弹窗 ---------- */
+  .loadout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+  .loadout-slot {
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 10px; padding: 10px;
+  }
+  .loadout-slot-label { font-size: 12px; color: #7d93a8; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
+  .loadout-key {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; background: rgba(255,209,102,.2); border: 1px solid #ffd166;
+    border-radius: 4px; color: #ffd166; font-size: 11px; font-weight: 800;
+  }
+  .loadout-select {
+    width: 100%; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.18);
+    border-radius: 6px; color: #fff; font-size: 13px; padding: 6px 8px; outline: none;
+  }
+  .loadout-skill-display { font-size: 13px; color: #cfe0f0; padding: 6px 0; }
+  .loadout-skill-display b { color: #ffd166; }
+  .loadout-hint { font-size: 11px; color: #7d93a8; margin: 8px 0 12px; line-height: 1.6; }
+
   /* ---------- UI Overlays ---------- */
   .overlay {
     position: fixed; inset: 0;
@@ -636,6 +656,22 @@
   .shop-buy.own { background: rgba(255,255,255,.14); color: #cfe0f0; }
   .shop-buy.equipped { background: rgba(46,196,182,.22); color: #2ec4b6; border: 1px solid rgba(46,196,182,.5); }
   .shop-msg { font-size: 12.5px; color: #ff6b6b; text-align: center; min-height: 16px; }
+  /* ---------- 升级页 ---------- */
+  .upg-list { display: flex; flex-direction: column; gap: 8px; max-height: 56vh; overflow-y: auto; padding: 4px; }
+  .upg-row {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px; padding: 8px 12px;
+  }
+  .upg-row .upg-name { font-weight: 800; color: #eef4ff; font-size: 13.5px; min-width: 84px; }
+  .upg-row .upg-cat { font-size: 10px; color: #7d93a8; display: block; font-weight: 400; }
+  .upg-row .upg-info { flex: 1; font-size: 11.5px; color: #9fb3c8; line-height: 1.5; }
+  .upg-row .upg-info b { color: #2ec4b6; }
+  .upg-pips { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+  .upg-pip { width: 10px; height: 10px; border-radius: 3px; background: rgba(255,255,255,.12); }
+  .upg-pip.on { background: linear-gradient(180deg,#ffe066,#ffb703); }
+  .shop-buy.upg { background: linear-gradient(180deg,#7ef0e2,#2ec4b6); font-size: 11.5px; padding: 6px 12px; white-space: nowrap; }
   .final-reward { font-size: 14px; color: #ffd166; margin: 4px 0 10px; font-weight: 700; }
   /* 等级锁定按钮 */
   .shop-buy.locked { background: rgba(51,65,85,.7); color: #94a3b8; cursor: not-allowed; border: 1px dashed rgba(148,163,184,.4); }
@@ -679,7 +715,11 @@
   <div class="hud-right-wrap">
     <button id="mobile-pause-btn" aria-label="暂停">⏸</button>
     <div class="hud-right" id="hearts-display"></div>
-    <button class="skill-btn" id="skill-btn" aria-label="技能" title="按 Q 释放技能">
+    <button class="skill-btn" id="grenade-btn" aria-label="手榴弹" title="按 3 扔手榴弹" style="font-size:18px;">
+      <span class="skill-icon">💣</span>
+      <span class="skill-cd-num" id="grenade-cd-num"></span>
+    </button>
+    <button class="skill-btn" id="skill-btn" aria-label="技能" title="按 Q/4 释放技能">
       <span class="skill-icon" id="skill-icon">💨</span>
       <span class="skill-cd-num" id="skill-cd-num"></span>
     </button>
@@ -732,15 +772,16 @@
       <div class="control-item"><span class="p-tag p1-tag">P1</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
       <div class="control-item"><span class="p-tag p2-tag">P2</span><span class="key">WASD</span> / <span class="key">方向键</span> 移动</div>
       <div class="control-item"><span class="p-tag p2-tag">P2</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
+      <div class="control-item"><span class="key">1</span>/<span class="key">2</span> 切换主/副武器</div>
+      <div class="control-item"><span class="key">3</span> 扔手榴弹 · <span class="key">4</span>/<span class="key">Q</span> 释放技能</div>
       <div class="control-item"><span class="key">P</span> / <span class="key">Esc</span> 暂停（仅房主）</div>
-      <div class="control-item"><span class="key">Q</span> 释放皮肤技能</div>
       <div class="control-item"><span class="key">Space</span> 重开（结束后）</div>
     </div>
     <div class="controls-grid" id="controls-mobile" style="display:none;">
       <div class="control-item"><span class="key">左半屏摇杆</span> 移动（任意位置按下即出现）</div>
       <div class="control-item"><span class="key">右下按钮</span> 开火 · 按偏左枪口逆时针转 · 按偏右顺时针转</div>
       <div class="control-item"><span class="key">点击屏幕</span> 朝点击方向开火</div>
-      <div class="control-item"><span class="key">右上技能按钮</span> 释放皮肤技能</div>
+      <div class="control-item"><span class="key">右上技能按钮</span> 释放技能 / 扔手榴弹</div>
       <div class="control-item"><span class="key">⏸ 血量左边</span> 暂停（仅房主）</div>
     </div>
 
@@ -796,7 +837,7 @@
     </div>
   </div>
 
-  <!-- 建房设置弹窗：最多人数 + 公开/私有 -->
+  <!-- 建房设置弹窗：最多人数 + 公开/私有 + 游戏模式 -->
   <div id="room-setup-modal" style="display:none;">
     <div class="room-setup-box">
       <div class="room-setup-title">创建房间</div>
@@ -805,16 +846,51 @@
         <input id="net-max-input" type="number" min="1" max="99" inputmode="numeric" placeholder="不限">
       </div>
       <div class="room-setup-row" style="align-items:flex-start;">
-        <span class="room-setup-label">模式</span>
+        <span class="room-setup-label">可见性</span>
         <div class="room-mode-opts">
           <label class="room-mode-opt"><input type="radio" name="net-mode" value="public" checked><span>公开 · 房间列表可见，点击即进</span></label>
           <label class="room-mode-opt"><input type="radio" name="net-mode" value="private"><span>私有 · 凭房间号加入</span></label>
+        </div>
+      </div>
+      <div class="room-setup-row" style="align-items:flex-start;">
+        <span class="room-setup-label">游戏模式</span>
+        <div class="room-mode-opts">
+          <label class="room-mode-opt"><input type="radio" name="game-mode" value="coop" checked><span>协作 · 共同对抗无尽敌人波次</span></label>
+          <label class="room-mode-opt"><input type="radio" name="game-mode" value="stronghold"><span>据点 · 占领中心区域，据守得分</span></label>
+          <label class="room-mode-opt"><input type="radio" name="game-mode" value="tdm"><span>团队死斗 · 红蓝对抗，击杀计分</span></label>
         </div>
       </div>
       <div class="room-setup-btns">
         <button class="btn btn-small btn-secondary" id="room-setup-cancel">取消</button>
         <button class="btn btn-small" id="room-setup-ok">创建</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 装备选择弹窗：主武器/副武器/手榴弹/技能 -->
+  <div class="modal-mask" id="loadout-modal" style="display:none;">
+    <div class="modal-box" style="max-width:420px;">
+      <div class="modal-title">装备选择</div>
+      <div class="loadout-grid">
+        <div class="loadout-slot" data-slot="1">
+          <div class="loadout-slot-label"><span class="loadout-key">1</span> 主武器</div>
+          <select id="loadout-primary" class="loadout-select"></select>
+        </div>
+        <div class="loadout-slot" data-slot="2">
+          <div class="loadout-slot-label"><span class="loadout-key">2</span> 副武器</div>
+          <select id="loadout-secondary" class="loadout-select"></select>
+        </div>
+        <div class="loadout-slot" data-slot="3">
+          <div class="loadout-slot-label"><span class="loadout-key">3</span> 手榴弹</div>
+          <select id="loadout-grenade" class="loadout-select"></select>
+        </div>
+        <div class="loadout-slot" data-slot="4">
+          <div class="loadout-slot-label"><span class="loadout-key">4</span> 技能</div>
+          <div id="loadout-skill" class="loadout-skill-display"></div>
+        </div>
+      </div>
+      <div class="loadout-hint">游戏中按 <b>1</b>/<b>2</b> 切换武器，按 <b>3</b> 扔手榴弹，按 <b>4</b> 或 <b>Q</b> 释放技能</div>
+      <button class="btn btn-small" id="loadout-start-btn">开始游戏</button>
     </div>
   </div>
 
@@ -854,6 +930,7 @@
       <div class="shop-tabs">
         <button class="mode-btn active" id="shop-tab-skin">皮肤</button>
         <button class="mode-btn" id="shop-tab-gun">枪械</button>
+        <button class="mode-btn" id="shop-tab-upg">升级</button>
       </div>
       <div class="shop-grid" id="shop-list"></div>
       <div class="shop-msg" id="shop-msg"></div>
@@ -960,20 +1037,47 @@ const GUN_DEFS = {
   gun_plasma:  { name: '等离子炮', price: 4000, lv: 15, desc: '双发高伤<br>毁天灭地',          fireRate: 0.3,  speed: 820,  dmg: 4, r: 7, spread: 2, spreadAngle: 0.16, barrel: 20, c1: '#7c3aed', c2: '#4c1d95' },
 };
 
+// ---------- 手榴弹定义 ----------
+const GRENADE_DEFS = {
+  grenade_frag:       { name: '破片雷',   desc: '范围爆炸伤害',   cd: 8,  radius: 90,  dmg: 4, color: '#ff6b35' },
+  grenade_freeze:     { name: '冰冻雷',   desc: '冻结范围内敌人', cd: 10, radius: 80,  dmg: 1, color: '#6ecbff', freeze: 3 },
+  grenade_incendiary: { name: '燃烧雷',   desc: '灼烧持续伤害',   cd: 12, radius: 75,  dmg: 2, color: '#ff4444', burn: 4 },
+  grenade_cluster:    { name: '集束雷',   desc: '分裂为多枚小雷', cd: 14, radius: 70,  dmg: 3, color: '#fcd34d', cluster: 4 },
+};
+
 const User = {
   logged: false,
   token: null,
   name: '游客',
   coins: 0,
   exp: 0,
+  expSpent: 0,             // 已消耗经验（升级用）；等级/排行按累计 exp
+  upgrades: {},            // { 物品id: 升级等级 1-5 }
   level: 1,
   ownedSkins: ['skin_default'],
   ownedGuns: ['gun_pistol'],
   skin: 'skin_default',
-  gun: 'gun_pistol',
+  gun: 'gun_pistol',       // 主武器
+  gun2: 'gun_pistol',      // 副武器
+  grenade: 'grenade_frag',  // 手榴弹
+  activeSlot: 1,            // 当前激活槽位 1=主武器 2=副武器
+  grenadeCd: 0,             // 手榴弹冷却
 };
 
 function userLevel(exp) { return 1 + Math.floor(exp / 180); } // 升级放缓：180 经验/级（与服务器一致）
+// ---------- 经验升级系统 ----------
+const UPG_MAX_LV = 5;
+function upgLv(id) { return (User.upgrades && User.upgrades[id]) || 0; }
+function upgCost(id) { return 100 + upgLv(id) * 100; }
+function spendableExp() { return Math.max(0, User.exp - (User.expSpent || 0)); }
+function gunUpg(id) { const l = upgLv(id); return { dmg: 1 + l * 0.1, rate: 1 - l * 0.04 }; }        // 伤害+10%/级 射速+4%/级
+function skillUpg(id) { const l = upgLv(id); return { cd: 1 - l * 0.08 }; }                           // 冷却-8%/级
+function grenadeUpg(id) { const l = upgLv(id); return { dmg: 1 + l * 0.15, radius: 1 + l * 0.06, cd: 1 - l * 0.06 }; }
+// 装备选择（副武器/手榴弹）本地持久化
+try {
+  const _g2 = localStorage.getItem('bb_gun2'); if (_g2 && GUN_DEFS[_g2]) User.gun2 = _g2;
+  const _gr = localStorage.getItem('bb_grenade'); if (_gr && GRENADE_DEFS[_gr]) User.grenade = _gr;
+} catch (e) {}
 function skinDef() { return SKIN_DEFS[User.skin] || SKIN_DEFS.skin_default; }
 function gunDef() { return GUN_DEFS[User.gun] || GUN_DEFS.gun_pistol; }
 
@@ -994,6 +1098,8 @@ function applyUser(u) {
   User.name = u.name || User.name;
   User.coins = u.coins ?? User.coins;
   User.exp = u.exp ?? User.exp;
+  User.expSpent = u.expSpent ?? (User.expSpent || 0);
+  User.upgrades = u.upgrades || {};
   User.level = u.level ?? userLevel(User.exp);
   User.ownedSkins = u.ownedSkins || ['skin_default'];
   User.ownedGuns = u.ownedGuns || ['gun_pistol'];
@@ -1010,6 +1116,8 @@ function resetUser() {
   User.name = '游客';
   User.coins = 0;
   User.exp = 0;
+  User.expSpent = 0;
+  User.upgrades = {};
   User.level = 1;
   User.ownedSkins = ['skin_default'];
   User.ownedGuns = ['gun_pistol'];
@@ -1162,9 +1270,13 @@ function drawMiniPlayer(cv, def, isGun) {
 function renderShop() {
   const listEl = document.getElementById('shop-list');
   if (!listEl) return;
-  document.getElementById('shop-coins').textContent = '💰 ' + User.coins;
+  document.getElementById('shop-coins').textContent = '💰 ' + User.coins + ' · 可花经验 ' + spendableExp();
   document.getElementById('shop-tab-skin').classList.toggle('active', shopTab === 'skin');
   document.getElementById('shop-tab-gun').classList.toggle('active', shopTab === 'gun');
+  document.getElementById('shop-tab-upg').classList.toggle('active', shopTab === 'upg');
+  if (shopTab === 'upg') { renderUpgradeTab(); return; }
+  listEl.classList.remove('upg-list');
+  listEl.classList.add('shop-grid');
   const defs = shopTab === 'skin' ? SKIN_DEFS : GUN_DEFS;
   const owned = shopTab === 'skin' ? User.ownedSkins : User.ownedGuns;
   const equipped = shopTab === 'skin' ? User.skin : User.gun;
@@ -1217,6 +1329,72 @@ async function shopEquip(item) {
     else shopMsg(r.msg || '装备失败');
   } catch (e) { shopMsg('网络错误'); }
 }
+// ---------- 经验升级页 ----------
+function upgPips(lv) {
+  let h = '<span class="upg-pips">';
+  for (let i = 0; i < UPG_MAX_LV; i++) h += `<span class="upg-pip ${i < lv ? 'on' : ''}"></span>`;
+  return h + '</span>';
+}
+function upgEffectText(id) {
+  if (GUN_DEFS[id]) {
+    const g = gunUpg(id), d = GUN_DEFS[id];
+    return `伤害 ${d.dmg} → <b>${(d.dmg * g.dmg).toFixed(1)}</b> · 射速 ${Math.round(1 / d.fireRate)}/s → <b>${Math.round(1 / (d.fireRate * g.rate))}/s</b>`;
+  }
+  if (GRENADE_DEFS[id]) {
+    const g = grenadeUpg(id), d = GRENADE_DEFS[id];
+    let s = `伤害 ${d.dmg} → <b>${(d.dmg * g.dmg).toFixed(1)}</b> · 半径 ${Math.round(d.radius)} → <b>${Math.round(d.radius * g.radius)}</b>`;
+    if (d.freeze) s += ` · 冰冻 ${d.freeze}s → <b>${(d.freeze * g.radius).toFixed(1)}s</b>`;
+    if (d.burn) s += ` · 燃烧 ${d.burn}s → <b>${(d.burn * g.radius).toFixed(1)}s</b>`;
+    if (d.cluster) s += ` · 分裂 ${d.cluster} → <b>${Math.round(d.cluster * g.radius)}</b>`;
+    s += ` · 冷却 ${Math.round(d.cd * g.cd)}s`;
+    return s;
+  }
+  // 皮肤技能
+  const d = SKIN_DEFS[id];
+  if (d && d.skill) {
+    const g = skillUpg(id);
+    return `技能冷却 ${d.skill.cd}s → <b>${(d.skill.cd * g.cd).toFixed(1)}s</b>`;
+  }
+  return '';
+}
+function renderUpgradeTab() {
+  const listEl = document.getElementById('shop-list');
+  const rows = [];
+  // 分组：已拥有的武器 → 已拥有皮肤的技能 → 全部手榴弹
+  const groups = [
+    { cat: '武器', ids: Object.keys(GUN_DEFS).filter(id => User.ownedGuns.includes(id)) },
+    { cat: '技能', ids: Object.keys(SKIN_DEFS).filter(id => User.ownedSkins.includes(id)) },
+    { cat: '手榴弹', ids: Object.keys(GRENADE_DEFS) },
+  ];
+  for (const grp of groups) {
+    for (const id of grp.ids) {
+      const name = GUN_DEFS[id] ? GUN_DEFS[id].name : (GRENADE_DEFS[id] ? GRENADE_DEFS[id].name : (SKIN_DEFS[id] ? SKIN_DEFS[id].skill.name : id));
+      const lv = upgLv(id);
+      const cost = upgCost(id);
+      const can = lv < UPG_MAX_LV && spendableExp() >= cost;
+      const btn = lv >= UPG_MAX_LV
+        ? `<button class="shop-buy own" disabled>已满级</button>`
+        : `<button class="shop-buy upg" data-upg="${id}" ${can ? '' : 'disabled style="opacity:.45;cursor:not-allowed;"'}>${cost} 经验</button>`;
+      rows.push(`<div class="upg-row">
+        <div class="upg-name">${name}<span class="upg-cat">${grp.cat} · Lv.${lv}</span>${upgPips(lv)}</div>
+        <div class="upg-info">${upgEffectText(id)}</div>
+        ${btn}
+      </div>`);
+    }
+  }
+  listEl.classList.add('upg-list');
+  listEl.classList.remove('shop-grid');
+  listEl.innerHTML = rows.join('');
+  for (const b of listEl.querySelectorAll('[data-upg]')) b.addEventListener('click', () => shopUpgrade(b.dataset.upg));
+}
+async function shopUpgrade(item) {
+  if (!User.logged) { openLogin(); shopMsg('登录后即可升级'); return; }
+  try {
+    const r = await api('/api/user/upgrade', { item });
+    if (r.ok) { applyUser(r.user); renderShop(); Sfx.powerup(); shopMsg('升级成功'); }
+    else shopMsg(r.msg || '升级失败');
+  } catch (e) { shopMsg('网络错误'); }
+}
 document.getElementById('shop-btn').addEventListener('click', () => {
   document.getElementById('shop-modal').style.display = 'flex';
   document.getElementById('shop-msg').textContent = '';
@@ -1227,11 +1405,13 @@ document.getElementById('shop-close').addEventListener('click', () => {
 });
 document.getElementById('shop-tab-skin').addEventListener('click', () => { shopTab = 'skin'; renderShop(); });
 document.getElementById('shop-tab-gun').addEventListener('click', () => { shopTab = 'gun'; renderShop(); });
+document.getElementById('shop-tab-upg').addEventListener('click', () => { shopTab = 'upg'; renderShop(); });
 
 // ======================= 武器选择（等级解锁） =======================
-function gunStatLine(d) {
-  const rate = d.fireRate ? Math.round(1 / d.fireRate) : '?';
-  return `射速 ${rate}/s · 伤害 ${d.dmg ?? 1} · 弹速 ${d.speed ?? '?'}`;
+function gunStatLine(d, id) {
+  const ug = id ? gunUpg(id) : { dmg: 1, rate: 1 };
+  const rate = d.fireRate ? Math.round(1 / (d.fireRate * ug.rate)) : '?';
+  return `射速 ${rate}/s · 伤害 ${(d.dmg ?? 1) * ug.dmg % 1 === 0 ? (d.dmg ?? 1) * ug.dmg : ((d.dmg ?? 1) * ug.dmg).toFixed(1)} · 弹速 ${d.speed ?? '?'}`;
 }
 function weaponMsg(text) {
   const el = document.getElementById('weapon-msg');
@@ -1255,8 +1435,8 @@ function renderWeaponSelect() {
     else btn = `<button class="shop-buy" data-wbuy="${id}">💰 ${d.price}</button>`;
     h += `<div class="weapon-item ${isEq ? 'equipped' : ''} ${locked ? 'locked' : ''}">
       <canvas data-wprev="${id}" width="96" height="96"></canvas>
-      <div class="shop-item-name">${d.name}</div>
-      <div class="weapon-stat">${gunStatLine(d)}</div>
+      <div class="shop-item-name">${d.name}${upgLv(id) > 0 ? ` <span style="color:#2ec4b6">+${upgLv(id)}</span>` : ''}</div>
+      <div class="weapon-stat">${gunStatLine(d, id)}</div>
       <div class="shop-item-desc">${d.desc || ''}</div>
       ${btn}
     </div>`;
@@ -1684,6 +1864,7 @@ function renderChallengeSummary() {
 const G = {
   state: 'menu',        // menu | playing | paused | over
   mode: 'single',       // single | net
+  gm: 'coop',           // 游戏模式：coop | stronghold | tdm
   score: 0,
   wave: 0,
   time: 0,
@@ -1710,6 +1891,11 @@ const G = {
   scoreSaved: false,
   reported: false,      // 本局是否已上报得分（登录用户局后结算金币/经验）
   bulletSeq: 0,          // 联机快照用的实体 id 递增计数器（子弹/弹幕/敌人共用）
+  // --- 据点模式 ---
+  capZone: null,         // { x, y, r, progress, holdTime } 据点圆
+  // --- 团队死斗 ---
+  teamScore: [0, 0],      // [红队, 蓝队] 击杀数
+  tdmTarget: 20,         // 先到 20 杀获胜
 };
 
 // ======================= 实体 =======================
@@ -1742,6 +1928,7 @@ function createPlayer(id, extra) {
   return {
     id,
     colors: c,
+    team: (id - 1) % 2,     // TDM：奇数 id=红队(0)，偶数 id=蓝队(1)
     skin: (extra && extra.skin) || null,   // 联机：该玩家的皮肤（他人视角渲染用）
     name: (extra && extra.name) || '',     // 联机：该玩家的昵称（头顶标签显示）
     x: clamp(W / 2, 60, W - 60),
@@ -1800,7 +1987,8 @@ function useSkill(p) {
   const skId = skinIdForPlayer(p);
   const def = skId && SKIN_DEFS[skId];
   if (!def || !def.skill) return false;
-  p.skillCd = def.skill.cd;
+  // 技能升级：P1 用本地升级倍率；guest 的倍率随输入包同步（sc）
+  p.skillCd = def.skill.cd * (p.id === 1 ? skillUpg(skId).cd : (p.netSkillCdMul || 1));
   const sk = def.skill;
   const fx = (c) => skillFlashFx(p, sk, c);
   switch (skId) {
@@ -1826,6 +2014,7 @@ function useSkill(p) {
         const a = (i / n) * TAU + rand(-0.06, 0.06);
         G.bullets.push({
           id: ++G.bulletSeq,
+          ownerId: p.id, team: p.team,
           x: p.x + Math.cos(a) * (p.r + 10),
           y: p.y + Math.sin(a) * (p.r + 10),
           vx: Math.cos(a) * 520, vy: Math.sin(a) * 520,
@@ -1913,7 +2102,7 @@ function skillVisualOnly(p) {
   if (!p) return;
   const def = skinForPlayer(p);
   if (!def || !def.skill) return;
-  p.skillCd = def.skill.cd; // 本地预测冷却，HUD 立即转
+  p.skillCd = def.skill.cd * skillUpg(User.skin).cd; // 本地预测冷却（含升级），HUD 立即转
   skillFlashFx(p, def.skill, def.body1);
   updateSkillBtn();
 }
@@ -2226,6 +2415,9 @@ function update(dt) {
         p.netAim = { x: inp.ax, y: inp.ay };
         p.netFire = !!inp.fire;
         if (inp.g && GUN_DEFS[inp.g]) p.netGun = inp.g; // guest 同步装备的枪
+        if (inp.gm) p.netGunDmg = inp.gm / 100;          // guest 武器升级伤害倍率
+        if (inp.rr) p.netGunRate = inp.rr / 100;         // guest 武器升级射速倍率
+        if (inp.sc) p.netSkillCdMul = inp.sc / 100;      // guest 技能升级冷却倍率
         if (inp.sk) useSkill(p);                         // guest 释放技能（host 权威）
       }
     } else {
@@ -2301,8 +2493,18 @@ function update(dt) {
       : (p.netFire || keys.has('Enter') || keys.has('ShiftRight') || keys.has('Numpad0'));
     if (wantFire && p.fireCd <= 0) {
       // 装备的枪决定射速/弹速/伤害/弹形；联机时 guest 的枪通过输入包同步给 host
-      const gd = (p.id === 1) ? gunDef() : (GUN_DEFS[p.netGun] || GUN_DEFS.gun_pistol);
-      p.fireCd = gd.fireRate * (G.rapidBoost > 0 ? 0.55 : 1) * (p.rainbow > 0 ? 0.5 : 1);
+      // 武器升级：P1 用本地升级倍率；guest 的升级倍率随输入包同步（gm/rr）
+      let gd, dmgMul = 1, rateMul = 1;
+      if (p.id === 1) {
+        gd = getActiveGun();
+        const ug = gunUpg(User.activeSlot === 2 ? User.gun2 : User.gun);
+        dmgMul = ug.dmg; rateMul = ug.rate;
+      } else {
+        gd = GUN_DEFS[p.netGun] || GUN_DEFS.gun_pistol;
+        dmgMul = p.netGunDmg || 1;
+        rateMul = p.netGunRate || 1;
+      }
+      p.fireCd = gd.fireRate * rateMul * (G.rapidBoost > 0 ? 0.55 : 1) * (p.rainbow > 0 ? 0.5 : 1);
       const count = Math.max((G.spreadBoost > 0) ? CFG.spreadCount : 1, gd.spread || 1);
       // P1 桌面版朝鼠标；手机版/其余朝当前瞄准角（update 顶部已算好 p.angle）
       const baseAngle = (p.id === 1 && !Mobile.active) ? Math.atan2(mouse.y - p.y, mouse.x - p.x) : p.angle;
@@ -2311,13 +2513,14 @@ function update(dt) {
         const a = baseAngle + (count > 1 ? (i - (count - 1) / 2) * spreadAngle : 0);
         G.bullets.push({
           id: ++G.bulletSeq,   // 联机快照按 id 匹配，保证客机端对象身份稳定
+          ownerId: p.id, team: p.team,
           x: p.x + Math.cos(a) * (p.r + 8),
           y: p.y + Math.sin(a) * (p.r + 8),
           vx: Math.cos(a) * gd.speed,
           vy: Math.sin(a) * gd.speed,
           r: gd.r,
           life: 1.4,
-          damage: gd.dmg,
+          damage: gd.dmg * dmgMul,
           color: p.colors.glow,
         });
       }
@@ -2374,6 +2577,32 @@ function update(dt) {
         if (dist2(b.x, b.y, ob.x, ob.y) < (b.r + ob.r) ** 2) {
           used = true;
           hitObstacle(ob, b.damage);
+          break;
+        }
+      }
+    }
+    // TDM 模式：子弹打敌方玩家
+    if (!used && G.gm === 'tdm') {
+      for (const tp of G.players) {
+        if (tp.dead || tp.invuln > 0 || tp.id === b.ownerId) continue;
+        if (tp.team === b.team) continue; // 同队免伤
+        if (dist2(b.x, b.y, tp.x, tp.y) < (b.r + tp.r) ** 2) {
+          used = true;
+          tp.hp -= b.damage;
+          tp.flash = 0.15;
+          tp.invuln = 0.3;
+          G.hits++;
+          addParticles(b.x, b.y, '#ff6b6b', 5, 180, 3, 0.3);
+          if (tp.hp <= 0) {
+            tp.dead = true;
+            tp.respawnTimer = 3;
+            G.teamScore[b.team] = (G.teamScore[b.team] || 0) + 1;
+            addPopup(tp.x, tp.y - 30, '击杀！', '#ffd166');
+            Sfx.gameover();
+            G.shake = Math.max(G.shake, 8);
+          } else {
+            Sfx.hit();
+          }
           break;
         }
       }
@@ -2453,10 +2682,20 @@ function update(dt) {
     e.damageCooldown = Math.max(0, e.damageCooldown - dt);
 
     for (const p of G.players) {
-      if (p.dead || p.invuln > 0 || e.damageCooldown > 0) continue;
-      if (dist2(e.x, e.y, p.x, p.y) < (e.r + p.r - 4) ** 2) {
-        damagePlayer(p, 1);
-        e.damageCooldown = 0.8;
+      if (p.dead) continue;
+      const minD = e.r + p.r;
+      const d2 = dist2(e.x, e.y, p.x, p.y);
+      if (d2 < minD * minD && d2 > 0.01) {
+        const d = Math.sqrt(d2);
+        const push = (minD - d) / d;
+        // 推开敌人，不让其与玩家重叠
+        e.x += (e.x - p.x) * push;
+        e.y += (e.y - p.y) * push;
+        // 造成伤害（有冷却）
+        if (p.invuln <= 0 && e.damageCooldown <= 0) {
+          damagePlayer(p, 1);
+          e.damageCooldown = 0.8;
+        }
       }
     }
     for (let j = i + 1; j < G.enemies.length; j++) {
@@ -2519,21 +2758,52 @@ function update(dt) {
     if (f.life <= 0) G.effects.splice(i, 1);
   }
 
-  // --- 波次生成 ---
-  if (G.spawnQueue > 0) {
-    if (G.spawnTimer <= 0) {
-      spawnEnemy();
-      G.spawnQueue--;
-      G.spawnTimer = Math.max(0.25, 0.9 - G.wave * 0.03);
+  // --- 波次生成（TDM 模式不刷怪，据点模式减半）---
+  if (G.gm !== 'tdm') {
+    const spawnScale = G.gm === 'stronghold' ? 0.5 : 1;
+    if (G.spawnQueue > 0) {
+      if (G.spawnTimer <= 0) {
+        spawnEnemy();
+        G.spawnQueue--;
+        G.spawnTimer = Math.max(0.25, 0.9 - G.wave * 0.03);
+      }
+      G.spawnTimer -= dt;
+    } else if (G.enemies.length === 0 && !G.boss && G.spawnQueue === 0) {
+      G.waveTimer -= dt;
+      if (G.waveTimer <= 0) startWave();
     }
-    G.spawnTimer -= dt;
-  } else if (G.enemies.length === 0 && !G.boss && G.spawnQueue === 0) {
-    G.waveTimer -= dt;
-    if (G.waveTimer <= 0) startWave();
+  }
+  // TDM：检查击杀目标
+  if (G.gm === 'tdm') {
+    if (G.teamScore[0] >= G.tdmTarget || G.teamScore[1] >= G.tdmTarget) {
+      gameOver();
+    }
+  }
+  // 据点：占领区域计分
+  if (G.gm === 'stronghold' && G.capZone) {
+    let inZone = 0;
+    for (const p of G.players) {
+      if (p.dead) continue;
+      const d = dist2(p.x, p.y, G.capZone.x, G.capZone.y);
+      if (d < G.capZone.r * G.capZone.r) inZone++;
+    }
+    if (inZone > 0) {
+      G.capZone.holdTime += dt;
+      G.score += Math.round(inZone * dt * 10);
+      if (G.capZone.holdTime >= 1) {
+        G.capZone.progress = Math.min(100, G.capZone.progress + inZone * 5);
+        G.capZone.holdTime = 0;
+      }
+    } else {
+      G.capZone.holdTime = 0;
+    }
   }
 
   G.shake *= CFG.shakeDecay;
   if (G.shake < 0.1) G.shake = 0;
+
+  // 手榴弹冷却
+  if (User.grenadeCd > 0) User.grenadeCd -= dt;
 
   updateSkillBtn();
 }
@@ -2667,6 +2937,8 @@ function updateBoss(dt) {
 
 // ======================= 波次 =======================
 function startWave() {
+  // TDM 模式不刷怪
+  if (G.gm === 'tdm') return;
   G.wave++;
   const banner = document.getElementById('wave-banner');
   const isBoss = G.wave % CFG.bossEvery === 0;
@@ -2816,6 +3088,44 @@ function draw() {
   for (let x = (G.time * 8) % grid; x < W; x += grid) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
   for (let y = (G.time * 8) % grid; y < H; y += grid) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
   ctx.stroke();
+
+  // 据点模式：占领区域
+  if (G.gm === 'stronghold' && G.capZone) {
+    const cz = G.capZone;
+    const pulse = 0.3 + Math.sin(G.time * 3) * 0.1;
+    ctx.fillStyle = `rgba(255,209,102,${pulse * 0.15})`;
+    ctx.beginPath(); ctx.arc(cz.x, cz.y, cz.r, 0, TAU); ctx.fill();
+    ctx.strokeStyle = `rgba(255,209,102,${pulse})`;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 8]);
+    ctx.lineDashOffset = -G.time * 30;
+    ctx.beginPath(); ctx.arc(cz.x, cz.y, cz.r, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+    // 进度环
+    if (cz.progress > 0) {
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.arc(cz.x, cz.y, cz.r - 12, -Math.PI / 2, -Math.PI / 2 + (cz.progress / 100) * TAU); ctx.stroke();
+    }
+  }
+
+  // TDM 模式：中心比分显示
+  if (G.gm === 'tdm' && G.state === 'playing') {
+    ctx.save();
+    ctx.font = 'bold 28px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillText(`${G.teamScore[0] || 0}`, W / 2 - 40, 50);
+    ctx.fillStyle = '#6ecbff';
+    ctx.fillText(`${G.teamScore[1] || 0}`, W / 2 + 40, 50);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '16px sans-serif';
+    ctx.fillText('vs', W / 2, 46);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(`目标 ${G.tdmTarget} 杀`, W / 2, 66);
+    ctx.restore();
+  }
 
   drawPowerups();
   drawObstacles();
@@ -3549,8 +3859,15 @@ function updateSkillBtn() {
   const playing = G.state === 'playing' || G.state === 'paused';
   if (!playing) {
     if (skillBtnCache !== 'x') { skillBtnCache = 'x'; btn.style.display = 'none'; }
+    document.getElementById('grenade-btn').style.display = 'none';
     return;
   }
+  // 手榴弹按钮
+  const gBtn = document.getElementById('grenade-btn');
+  gBtn.style.display = 'flex';
+  const gCd = Math.max(0, Math.ceil(User.grenadeCd));
+  document.getElementById('grenade-cd-num').textContent = gCd > 0 ? gCd : '';
+  gBtn.classList.toggle('cooling', gCd > 0);
   const sdef = skinDef();
   const p = localPlayer();
   const icon = (sdef && sdef.skill) ? sdef.skill.icon : '';
@@ -3564,9 +3881,10 @@ function updateSkillBtn() {
   const cdNum = document.getElementById('skill-cd-num');
   cdNum.textContent = cd > 0 ? cd : '';
   btn.classList.toggle('cooling', cd > 0);
-  btn.title = `技能：${sdef.skill.name}（冷却 ${sdef.skill.cd}s）\n${sdef.skill.desc}\n按 Q 或点此释放`;
+  btn.title = `技能：${sdef.skill.name}（冷却 ${(sdef.skill.cd * skillUpg(User.skin).cd).toFixed(1)}s）\n${sdef.skill.desc}\n按 Q 或点此释放`;
 }
 document.getElementById('skill-btn').addEventListener('click', () => pressSkill());
+document.getElementById('grenade-btn').addEventListener('click', () => throwGrenade());
 
 function showBossBar() {
   const b = G.boss;
@@ -3655,6 +3973,13 @@ window.addEventListener('keydown', (e) => {
   }
   if (NET.role !== 'guest' && e.code === 'Space' && G.state === 'over') startGame();
   if (e.code === 'KeyQ' && !e.repeat) pressSkill();
+  // 1/2 切换武器，3 扔手榴弹，4 释放技能
+  if (G.state === 'playing' && !e.repeat) {
+    if (e.code === 'Digit1') { User.activeSlot = 1; addPopup(G.players[0].x, G.players[0].y - 40, '主武器', '#6ecbff'); }
+    if (e.code === 'Digit2') { User.activeSlot = 2; addPopup(G.players[0].x, G.players[0].y - 40, '副武器', '#6ecbff'); }
+    if (e.code === 'Digit3') throwGrenade();
+    if (e.code === 'Digit4') pressSkill();
+  }
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
@@ -3797,6 +4122,7 @@ const NET = {
   peers: new Map(),// host：slot -> { input }（在线的 guest）
   cap: 0,          // 房间人数上限（0 = 不限）
   mode: 'public',  // 'public' | 'private'
+  gm: 'coop',      // 游戏模式：'coop' | 'stronghold' | 'tdm'
   rtt: 0,          // 客户端↔服务器往返延迟（ms），ping/pong 测得
 };
 
@@ -3889,7 +4215,7 @@ function updateNetHud() {
 }
 
 // ---------- host：创建房间（max：人数上限 0=不限；mode：public/private） ----------
-function netCreate(max, mode) {
+function netCreate(max, mode, gm) {
   if (NET.ws) return;
   closeLobby();
   setNetStatus('create', '正在连接服务器 (' + wsURL() + ') …');
@@ -3907,7 +4233,7 @@ function netCreate(max, mode) {
     setNetStatus('create', '❌ 连不上服务器：' + wsURL() + '。常见原因：浏览器开了代理/VPN、或页面在受限的预览面板中。请用 Chrome/Edge 直接打开地址重试。', 'err');
     document.getElementById('net-create-btn').style.display = 'inline-block';
   };
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'create', max: max || 0, mode: mode || 'public' }));
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'create', max: max || 0, mode: mode || 'public', gm: gm || 'coop' }));
   ws.onmessage = (e) => {
     let m;
     try { m = JSON.parse(e.data); } catch (err) { return; }
@@ -3915,10 +4241,12 @@ function netCreate(max, mode) {
       clearTimeout(NET.createTimer);
       NET.role = 'host'; NET.room = m.room; NET.connected = true;
       NET.cap = m.cap || 0; NET.mode = m.mode || 'public';
+      NET.gm = m.gm || 'coop';
       document.getElementById('net-room-code').textContent = m.room;
+      const gmLabel = { coop: '协作', stronghold: '据点', tdm: '团队死斗' }[NET.gm] || '协作';
       const modeLabel = NET.mode === 'private' ? '私有 · 凭房间号加入' : '公开 · 房间列表可见';
       const capLabel = NET.cap > 0 ? `人数上限 ${NET.cap}` : '人数不限';
-      setNetStatus('create', `房间已创建 · ${modeLabel} · ${capLabel}，等待好友加入…`, 'ok');
+      setNetStatus('create', `${gmLabel} · ${modeLabel} · ${capLabel}，等待好友加入…`, 'ok');
       document.getElementById('net-create-btn').style.display = 'none';
       updateNetHud();
     } else if (m.t === 'peer') {
@@ -4006,7 +4334,9 @@ function netJoin(room) {
       clearTimeout(NET.joinTimer);
       NET.role = 'guest'; NET.room = m.room; NET.connected = true;
       NET.slot = m.slot || 2; // 服务器分配的玩家编号（P2..Pn）
-      setNetStatus('join', `✅ 已加入房间 ${m.room}，你是 P${NET.slot}，等待房主开始…`, 'ok');
+      NET.gm = m.gm || 'coop'; // 游戏模式由服务器返回
+      const gmLabel = { coop: '协作', stronghold: '据点', tdm: '团队死斗' }[NET.gm] || '协作';
+      setNetStatus('join', `✅ 已加入房间 ${m.room}（${gmLabel}），你是 P${NET.slot}，等待房主开始…`, 'ok');
       updateNetHud();
     } else if (m.t === 'state') {
       applyNetState(m.d);
@@ -4063,6 +4393,9 @@ function snapshotState() {
     st: G.state,                       // menu | playing | paused | over
     s: G.score, k: G.kills, w: G.wave, wt: A(G.waveTimer),
     time: G.time, sb: G.spreadBoost, rb: G.rapidBoost,
+    gm: G.gm,                           // 游戏模式 coop|stronghold|tdm
+    cz: G.capZone ? { x: R(G.capZone.x), y: R(G.capZone.y), r: G.capZone.r, p: R(G.capZone.progress) } : null,
+    ts: G.teamScore,                    // TDM 比分 [红,蓝]
     ping: NET.rtt || 0,                // 房主测得的 RTT，guest 用于 HUD 显示
     players: G.players.map(p => ({
       id: p.id, x: R(p.x), y: R(p.y), r: p.r, hp: p.hp, maxHp: p.maxHp,
@@ -4111,10 +4444,10 @@ function netBroadcast() {
   // 动态广播频率：场上对象越多（弹幕密集），单帧快照越大，自动降低频率
   const objCount = G.enemies.length + G.bullets.length + G.enemyBullets.length
                  + G.obstacles.length + G.powerups.length;
-  let interval = 40;                   // 空闲 ~25Hz
-  if (objCount > 60) interval = 50;    // ~20Hz
-  if (objCount > 120) interval = 66;   // ~15Hz
-  if (objCount > 200) interval = 80;   // ~12.5Hz
+  let interval = 33;                   // 空闲 ~30Hz
+  if (objCount > 80) interval = 44;    // ~23Hz
+  if (objCount > 150) interval = 55;   // ~18Hz
+  if (objCount > 250) interval = 70;   // ~14Hz
   if (now - netLastSnap < interval) return;
   netLastSnap = now;
   netSend({ t: 'state', d: snapshotState() });
@@ -4157,6 +4490,12 @@ function applyNetState(s) {
   G.mode = 'net';
   G.score = s.s; G.kills = s.k; G.wave = s.w; G.waveTimer = s.wt;
   G.time = s.time; G.spreadBoost = s.sb; G.rapidBoost = s.rb;
+  if (s.gm) G.gm = s.gm;
+  if (s.cz) {
+    if (!G.capZone) G.capZone = { x: s.cz.x, y: s.cz.y, r: s.cz.r, progress: 0, holdTime: 0, team: 0 };
+    G.capZone.x = s.cz.x; G.capZone.y = s.cz.y; G.capZone.r = s.cz.r; G.capZone.progress = s.cz.p;
+  } else G.capZone = null;
+  if (s.ts) G.teamScore = s.ts;
   // G.shake 不随快照更新：guest 端保持稳定画面（震动是纯视觉）
 
   // --- 对象应用：原地更新 + 记录目标位置（guest 渲染时平滑插值，避免跳变） ---
@@ -4383,7 +4722,14 @@ function netSendInput() {
     ay = Math.round(by + Math.sin(Mobile.aim) * 120);
   }
   const fire = Mobile.active ? mobileFiring() : mouse.down;
-  netSend({ t: 'input', d: { dx: dx / len, dy: dy / len, ax, ay, fire, g: User.gun, sk: skillPressed ? 1 : 0 } });
+  const activeGun = User.activeSlot === 2 ? User.gun2 : User.gun;
+  // 升级倍率随输入包同步给 host（取整百分比，host 侧 /100）
+  const gu = gunUpg(activeGun);
+  const su = skillUpg(User.skin);
+  netSend({ t: 'input', d: {
+    dx: dx / len, dy: dy / len, ax, ay, fire, g: activeGun, sk: skillPressed ? 1 : 0,
+    gm: Math.round(gu.dmg * 100), rr: Math.round(gu.rate * 100), sc: Math.round(su.cd * 100),
+  } });
   skillPressed = false;
 }
 
@@ -4396,6 +4742,24 @@ function showMenu() {
   G.players = [];
   G.boss = null;
   G.obstacles = [];
+  G.enemies = [];
+  G.bullets = [];
+  G.enemyBullets = [];
+  G.particles = [];
+  G.popups = [];
+  G.powerups = [];
+  G.effects = [];
+  G.spawnQueue = 0;
+  G.spawnTimer = 0;
+  G.spreadBoost = 0;
+  G.rapidBoost = 0;
+  G.shake = 0;
+  G.waveTimer = 0;
+  G.scoreSaved = false;
+  G.reported = false;
+  G.gm = 'coop';
+  G.capZone = null;
+  G.teamScore = [0, 0];
   hideBossBar();
   hide(document.getElementById('over-overlay'));
   hide(document.getElementById('pause-overlay'));
@@ -4420,6 +4784,8 @@ function startGame() {
   ensureAudio();
   // 联机：仅房主可以开始游戏（guest 由快照驱动）
   if (G.mode === 'net' && NET.role !== 'host') return;
+  // 游戏模式：联机用 NET.gm，单人默认 coop
+  G.gm = (G.mode === 'net' && NET.gm) ? NET.gm : 'coop';
   resetDomCache();
   G.state = 'playing';
   G.score = 0;
@@ -4445,6 +4811,12 @@ function startGame() {
   G.reported = false;
   skillBtnCache = '';
   lastSavedEntry = null;
+  G.teamScore = [0, 0];   // TDM 重置
+  G.capZone = null;         // 据点重置
+  // 据点模式：创建中心占领区域
+  if (G.gm === 'stronghold') {
+    G.capZone = { x: W / 2, y: H / 2, r: 80, progress: 0, holdTime: 0, team: 0 };
+  }
   G.players = [createPlayer(1)];
   G.players[0].skin = User.skin;   // 房主（P1）用自己装备的皮肤/昵称
   G.players[0].name = User.name;
@@ -4509,10 +4881,22 @@ function gameOver() {
   addRing(W / 2, H / 2, '#ff6b6b', 30);
 
   setTimeout(() => {
-    document.getElementById('final-score').textContent = `最终得分 ${G.score}`;
-    const modeTxt = G.mode === 'net' ? '联机模式' : '单人模式';
-    document.getElementById('final-stats').innerHTML =
-      `${modeTxt} · 消灭敌人 <b>${G.kills}</b> 只 · 命中 <b>${G.hits}</b> 次 · 闯过 <b>${G.wave}</b> 波`;
+    let scoreText, statsHtml;
+    if (G.gm === 'tdm') {
+      const winner = G.teamScore[0] >= G.tdmTarget ? '红队' : '蓝队';
+      scoreText = `${winner} 获胜！`;
+      statsHtml = `团队死斗 · 红队 <b>${G.teamScore[0]||0}</b> : <b>${G.teamScore[1]||0}</b> 蓝队 · 命中 <b>${G.hits}</b> 次`;
+    } else if (G.gm === 'stronghold') {
+      scoreText = `最终得分 ${G.score}`;
+      const gmTxt = G.mode === 'net' ? '据点模式 · 联机' : '据点模式';
+      statsHtml = `${gmTxt} · 占领进度 <b>${G.capZone ? G.capZone.progress : 0}%</b> · 消灭敌人 <b>${G.kills}</b> 只`;
+    } else {
+      scoreText = `最终得分 ${G.score}`;
+      const modeTxt = G.mode === 'net' ? '联机模式' : '单人模式';
+      statsHtml = `${modeTxt} · 消灭敌人 <b>${G.kills}</b> 只 · 命中 <b>${G.hits}</b> 次 · 闯过 <b>${G.wave}</b> 波`;
+    }
+    document.getElementById('final-score').textContent = scoreText;
+    document.getElementById('final-stats').innerHTML = statsHtml;
     reportResult();
     let name = '玩家';
     try { name = localStorage.getItem('bb_name') || '玩家'; } catch (e) {}
@@ -4650,14 +5034,14 @@ function guestPredictSelf(dt) {
 
 // ---------- guest 平滑插值：物体向最新快照目标位置滑动，消除跳变 ----------
 function smoothNetState(dt) {
-  const k = Math.min(1, dt * 18);
+  const k = Math.min(1, dt * 25);
   for (const p of G.players) {
     if (p._tx === undefined) continue;
     // guest 自己的角色：移动由本地预测负责（guestPredictSelf），
     // 这里只做轻校正消除预测误差；大误差（被击退/重生/传送）时快速收敛
     if (NET.role === 'guest' && p.id === NET.slot) {
       const err = Math.hypot(p._tx - p.x, p._ty - p.y);
-      const kk = Math.min(1, dt * (err > 80 ? 20 : 8));
+      const kk = Math.min(1, dt * (err > 80 ? 25 : 10));
       p.x += (p._tx - p.x) * kk;
       p.y += (p._ty - p.y) * kk;
       continue;
@@ -4679,14 +5063,23 @@ function smoothNetState(dt) {
       if (o._tx === undefined) continue;
       o.x += o.vx * dt;
       o.y += o.vy * dt;
-      const k2 = Math.min(1, dt * 8);
+      const k2 = Math.min(1, dt * 12);
       o.x += (o._tx - o.x) * k2;
       o.y += (o._ty - o.y) * k2;
     }
   };
   smoothProj(G.bullets);
   smoothProj(G.enemyBullets);
-  smoothArr(G.enemies);
+  // 敌人：先用速度+朝向外推（快照间隔内的运动预测），再轻校正到快照位置
+  for (const e of G.enemies) {
+    if (e._tx === undefined) continue;
+    if (e.frozen <= 0 && e.speed && e.angle !== undefined) {
+      e.x += Math.cos(e.angle) * e.speed * dt;
+      e.y += Math.sin(e.angle) * e.speed * dt;
+    }
+    e.x += (e._tx - e.x) * k;
+    e.y += (e._ty - e.y) * k;
+  }
   smoothArr(G.obstacles);
   smoothArr(G.powerups);
   if (G.boss && G.boss._tx !== undefined) {
@@ -4711,7 +5104,7 @@ document.getElementById('pick-single').addEventListener('click', () => {
   modeModal.style.display = 'none';
   G.mode = 'single';
   netClose();
-  startGame();
+  showLoadout();
 });
 document.getElementById('pick-net').addEventListener('click', () => {
   modeModal.style.display = 'none';
@@ -4765,8 +5158,10 @@ document.getElementById('room-setup-ok').addEventListener('click', () => {
   const max = (isFinite(maxVal) && maxVal >= 1) ? Math.min(maxVal, 99) : 0; // 不填 = 不限
   const modeEl = document.querySelector('input[name="net-mode"]:checked');
   const mode = modeEl ? modeEl.value : 'public';
+  const gmEl = document.querySelector('input[name="game-mode"]:checked');
+  const gm = gmEl ? gmEl.value : 'coop';
   roomSetupModal.style.display = 'none';
-  netCreate(max, mode);
+  netCreate(max, mode, gm);
 });
 
 // ---------- 房间大厅：拉取公开房间列表 ----------
@@ -4821,7 +5216,7 @@ function renderRoomList(list) {
     });
   }
 }
-netStartBtn.addEventListener('click', startGame);
+netStartBtn.addEventListener('click', () => { showLoadout(); });
 netJoinBtn.addEventListener('click', () => {
   const room = netRoomInput.value.trim();
   if (!/^\d{4}$/.test(room)) {
@@ -4852,6 +5247,142 @@ document.getElementById('name-input').addEventListener('keydown', (e) => {
 const soundBtns = document.querySelectorAll('.sound-btn');
 for (const b of soundBtns) b.addEventListener('click', toggleSound);
 setSound(SOUND_ON, true);
+
+// ======================= 装备选择弹窗 =======================
+const loadoutModal = document.getElementById('loadout-modal');
+function showLoadout() {
+  // 填充主武器
+  const primarySel = document.getElementById('loadout-primary');
+  const secondarySel = document.getElementById('loadout-secondary');
+  primarySel.innerHTML = '';
+  secondarySel.innerHTML = '';
+  for (const id of Object.keys(GUN_DEFS)) {
+    const d = GUN_DEFS[id];
+    if (User.ownedGuns.includes(id) || d.price === 0) {
+      const lv = upgLv(id);
+      const o = document.createElement('option');
+      o.value = id; o.textContent = d.name + (lv > 0 ? ` Lv.${lv}` : '');
+      primarySel.appendChild(o);
+      secondarySel.appendChild(o.cloneNode(true));
+    }
+  }
+  primarySel.value = User.gun;
+  secondarySel.value = User.gun2 || User.ownedGuns[0] || 'gun_pistol';
+  // 填充手榴弹
+  const grenadeSel = document.getElementById('loadout-grenade');
+  grenadeSel.innerHTML = '';
+  for (const id of Object.keys(GRENADE_DEFS)) {
+    const lv = upgLv(id);
+    const o = document.createElement('option');
+    o.value = id; o.textContent = GRENADE_DEFS[id].name + (lv > 0 ? ` Lv.${lv}` : '') + ' · ' + GRENADE_DEFS[id].desc;
+    grenadeSel.appendChild(o);
+  }
+  grenadeSel.value = User.grenade || 'grenade_frag';
+  // 显示技能（来自装备的皮肤），冷却按升级后显示
+  const sk = (SKIN_DEFS[User.skin] || SKIN_DEFS.skin_default);
+  const skData = sk.skill;
+  const skLv = upgLv(User.skin);
+  const skCd = skData ? (skData.cd * skillUpg(User.skin).cd).toFixed(1) : 0;
+  document.getElementById('loadout-skill').innerHTML = skData
+    ? `<b>${skData.name}</b>${skLv > 0 ? ` <span style="color:#ffd166">Lv.${skLv}</span>` : ''}<br>${skData.desc}<br>冷却 ${skCd}s`
+    : '无技能';
+  loadoutModal.style.display = 'flex';
+}
+document.getElementById('loadout-start-btn').addEventListener('click', () => {
+  User.gun = document.getElementById('loadout-primary').value;
+  User.gun2 = document.getElementById('loadout-secondary').value;
+  User.grenade = document.getElementById('loadout-grenade').value;
+  User.activeSlot = 1;
+  User.grenadeCd = 0;
+  try { localStorage.setItem('bb_gun2', User.gun2); localStorage.setItem('bb_grenade', User.grenade); } catch (e) {}
+  loadoutModal.style.display = 'none';
+  startGame();
+});
+
+// ======================= 游戏内 1/2/3/4 切换 =======================
+function getActiveGun() {
+  return User.activeSlot === 2 ? (GUN_DEFS[User.gun2] || GUN_DEFS.gun_pistol) : gunDef();
+}
+function throwGrenade() {
+  if (User.grenadeCd > 0 || G.state !== 'playing') return;
+  const gd = GRENADE_DEFS[User.grenade] || GRENADE_DEFS.grenade_frag;
+  // 手榴弹升级：伤害/半径提升（半径同时增幅冰冻·燃烧·分裂数量），冷却缩短
+  const gu = grenadeUpg(User.grenade);
+  const gdUp = {
+    ...gd,
+    dmg: gd.dmg * gu.dmg,
+    radius: gd.radius * gu.radius,
+    freeze: gd.freeze ? gd.freeze * gu.radius : undefined,
+    burn: gd.burn ? gd.burn * gu.radius : undefined,
+    cluster: gd.cluster ? Math.round(gd.cluster * gu.radius) : undefined,
+  };
+  const me = G.players[0];
+  if (!me || me.dead) return;
+  // 朝瞄准方向扔
+  const a = me.aimAngle;
+  const gx = me.x + Math.cos(a) * 20;
+  const gy = me.y + Math.sin(a) * 20;
+  // 直接在目标位置爆炸（简化：不模拟抛物线）
+  setTimeout(() => {
+    if (G.state !== 'playing') return;
+    const tx = me.x + Math.cos(a) * 150;
+    const ty = me.y + Math.sin(a) * 150;
+    grenadeExplode(tx, ty, gdUp);
+  }, 300);
+  // 飞行特效
+  for (let i = 0; i < 5; i++) {
+    G.particles.push({ x: gx + i * Math.cos(a) * 30, y: gy + i * Math.sin(a) * 30, vx: 0, vy: 0, life: 0.3, maxLife: 0.3, size: 4, color: gd.color, fade: true });
+  }
+  User.grenadeCd = gd.cd * gu.cd;
+  Sfx.shoot();
+}
+function grenadeExplode(x, y, gd) {
+  // 伤害范围内敌人
+  for (let j = G.enemies.length - 1; j >= 0; j--) {
+    const e = G.enemies[j];
+    if (dist2(x, y, e.x, e.y) < gd.radius * gd.radius) {
+      e.hp -= gd.dmg;
+      e.flash = 0.15;
+      if (gd.freeze) e.frozen = Math.max(e.frozen, gd.freeze);
+      if (gd.burn) { e.burn = Math.max(e.burn, gd.burn); e.burnTick = 0.5; }
+      if (e.hp <= 0) killEnemy(j);
+    }
+  }
+  // 伤害 Boss
+  if (G.boss && G.boss.hp > 0 && dist2(x, y, G.boss.x, G.boss.y) < gd.radius * gd.radius) {
+    G.boss.hp -= gd.dmg;
+    G.boss.flash = 0.1;
+    if (G.boss.hp <= 0) killBoss();
+  }
+  // TDM：伤害敌方玩家
+  if (G.gm === 'tdm') {
+    for (const tp of G.players) {
+      if (tp.dead || tp.team === 0) continue;
+      if (dist2(x, y, tp.x, tp.y) < gd.radius * gd.radius) {
+        tp.hp -= gd.dmg; tp.flash = 0.15;
+        if (tp.hp <= 0) { tp.dead = true; tp.respawnTimer = 3; G.teamScore[0]++; }
+      }
+    }
+  }
+  // 爆炸特效
+  addRing(x, y, gd.color, 20);
+  addParticles(x, y, gd.color, 25, 300, 6, 0.8);
+  G.shake = Math.max(G.shake, 10);
+  Sfx.hit();
+  // 集束雷：分裂
+  if (gd.cluster) {
+    for (let i = 0; i < gd.cluster; i++) {
+      const a = (i / gd.cluster) * TAU;
+      const cx = x + Math.cos(a) * 50;
+      const cy = y + Math.sin(a) * 50;
+      addParticles(cx, cy, gd.color, 8, 150, 4, 0.4);
+      for (let j = G.enemies.length - 1; j >= 0; j--) {
+        const e = G.enemies[j];
+        if (dist2(cx, cy, e.x, e.y) < 50 * 50) { e.hp -= 1; if (e.hp <= 0) killEnemy(j); }
+      }
+    }
+  }
+}
 
 // 启动
 resize();
