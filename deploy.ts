@@ -590,6 +590,82 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     return jsonResp({ ok: true, token, user: pubUser(u.value as Record<string, any>) });
   }
 
+  // ---------- 微信扫码登录（网站应用 snsapi_login，需在微信开放平台创建网站应用）----------
+  const WX_CFG = {
+    appid: Deno.env.get('WX_APPID') || '',
+    secret: Deno.env.get('WX_SECRET') || '',
+  };
+
+  // GET /api/auth/wechat/url —— 返回微信扫码授权页地址（redirect_uri 自动用当前域名）
+  if (path === '/api/auth/wechat/url' && req.method === 'GET') {
+    if (!WX_CFG.appid || !WX_CFG.secret) {
+      return jsonResp({ ok: false, msg: '微信登录未配置（请在 Deno Deploy 环境变量设置 WX_APPID / WX_SECRET）' }, 503);
+    }
+    const redirect = 'https://' + url.host + '/api/auth/wechat';
+    const q = 'appid=' + WX_CFG.appid +
+      '&redirect_uri=' + encodeURIComponent(redirect) +
+      '&response_type=code&scope=snsapi_login' +
+      '&state=' + crypto.randomUUID().replace(/-/g, '').slice(0, 10) +
+      '#wechat_redirect';
+    return jsonResp({ ok: true, url: 'https://open.weixin.qq.com/connect/qrconnect?' + q });
+  }
+
+  // GET /api/auth/wechat?code=xx&state=xx —— 微信扫码后的回调：换 token、找/建用户、签发会话、跳回首页
+  if (path === '/api/auth/wechat' && req.method === 'GET') {
+    const back = (msg: string) => new Response(null, {
+      status: 302,
+      headers: { location: '/?wxerr=' + encodeURIComponent(msg) },
+    });
+    const code = url.searchParams.get('code') || '';
+    if (!code) return back('未获取到授权码（' + (url.searchParams.get('errmsg') || '用户取消或参数错误') + '）');
+    if (!WX_CFG.appid || !WX_CFG.secret) return back('微信登录未配置');
+    // 第一步：code 换 access_token + openid
+    let tk: any = null;
+    try {
+      tk = await (await fetch(
+        'https://api.weixin.qq.com/sns/oauth2/access_token?appid=' + WX_CFG.appid +
+        '&secret=' + WX_CFG.secret + '&code=' + encodeURIComponent(code) + '&grant_type=authorization_code'
+      )).json();
+    } catch (e) { /* 网络错误 */ }
+    if (!tk || tk.errcode || !tk.openid) {
+      return back('微信授权失败：' + ((tk && tk.errmsg) || 'code 无效或已过期'));
+    }
+    const openid = String(tk.openid);
+    // 第二步：拉取昵称（可选，失败不阻塞登录）
+    let nickname = '';
+    try {
+      const ui = await (await fetch(
+        'https://api.weixin.qq.com/sns/userinfo?access_token=' + tk.access_token + '&openid=' + openid
+      )).json();
+      if (ui && !ui.errcode && ui.nickname) nickname = String(ui.nickname).slice(0, 12);
+    } catch (e) { /* 拿不到昵称就用默认名 */ }
+    // 第三步：找/建用户（账号键：wx_<openid>，与手机号账号共存）
+    const key = 'wx_' + openid;
+    let u = await kv.get(['user', key]);
+    if (!u.value) {
+      u.value = {
+        name: nickname || ('玩家' + String(Math.floor(1000 + Math.random() * 9000))),
+        coins: 0,
+        exp: 0,
+        level: 1,
+        ownedSkins: ['skin_default'],
+        ownedGuns: ['gun_pistol'],
+        skin: 'skin_default',
+        gun: 'gun_pistol',
+        created: Date.now(),
+      };
+      await kv.set(['user', key], u.value);
+    } else if (nickname && /^玩家\d{4}$/.test(String((u.value as any).name || ''))) {
+      // 用户名还是系统随机名时，同步微信昵称；用户改过名则不动
+      (u.value as any).name = nickname;
+      await kv.set(['user', key], u.value);
+    }
+    // 第四步：签发会话并跳回首页（token 附在 URL，前端存 localStorage 后立即清除）
+    const token = crypto.randomUUID();
+    await kv.set(['session', token], key, { expireIn: 365 * 24 * 3600 * 1000 });
+    return new Response(null, { status: 302, headers: { location: '/?wxtoken=' + token } });
+  }
+
   // GET /api/rank —— 线上排行（公开，按经验值降序，Top 50）
   if (path === '/api/rank' && req.method === 'GET') {
     const list = [];
