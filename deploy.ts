@@ -50,14 +50,14 @@ function dispatch(m) {
   switch (m.action) {
     case 'created': {
       if (!rooms.has(m.room)) {
-        rooms.set(m.room, { host: m.host, guests: [], created: m.created, cap: m.cap || 0, mode: m.mode || 'public' });
+        rooms.set(m.room, { host: m.host, guests: [], created: m.created, cap: m.cap || 0, mode: m.mode || 'public', gm: m.gm || 'coop' });
       }
       break;
     }
     case 'joined': {
       let r = rooms.get(m.room);
       if (!r) {
-        rooms.set(m.room, { host: m.host, guests: [], created: m.created, cap: m.cap || 0, mode: m.mode || 'public' });
+        rooms.set(m.room, { host: m.host, guests: [], created: m.created, cap: m.cap || 0, mode: m.mode || 'public', gm: m.gm || 'coop' });
         r = rooms.get(m.room);
       }
       if (!r.guests.some(g => g.id === m.guest)) {
@@ -142,7 +142,7 @@ function genRoomCode() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
-async function createRoom(connId: string, cap: number, mode: string) {
+async function createRoom(connId: string, cap: number, mode: string, gm: string) {
   let room = genRoomCode();
   let tries = 0;
   while ((rooms.has(room) || await roomReg(room)) && tries < 50) {
@@ -150,15 +150,15 @@ async function createRoom(connId: string, cap: number, mode: string) {
     tries++;
   }
   const now = Date.now();
-  await setRoomReg({ room, host: connId, cap, mode, created: now, ts: now, guests: [] });
-  rooms.set(room, { host: connId, guests: [], created: now, cap, mode });
+  await setRoomReg({ room, host: connId, cap, mode, gm: gm || 'coop', created: now, ts: now, guests: [] });
+  rooms.set(room, { host: connId, guests: [], created: now, cap, mode, gm: gm || 'coop' });
   const c = conns.get(connId);
   if (c) {
     c.room = room;
     c.role = 'host';
     c.slot = 1;
   }
-  broadcast({ type: 'room', action: 'created', room, host: connId, created: now, cap, mode });
+  broadcast({ type: 'room', action: 'created', room, host: connId, created: now, cap, mode, gm: gm || 'coop' });
   return room;
 }
 
@@ -207,8 +207,9 @@ async function joinRoom(connId: string, room: string, name: string, skin: string
     created: reg.created,
     cap: reg.cap,
     mode: reg.mode,
+    gm: reg.gm || 'coop',
   });
-  return { ok: true, slot };
+  return { ok: true, slot, gm: reg.gm || 'coop' };
 }
 
 async function leaveRoom(connId: string) {
@@ -264,8 +265,9 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       if (!isFinite(cap) || cap < 0) cap = 0;
       if (cap > 99) cap = 99;
       const mode = msg.mode === 'private' ? 'private' : 'public';
-      const room = await createRoom(connId, cap, mode);
-      send(ws, { t: 'created', room, cap, mode });
+      const gm = ['coop', 'stronghold', 'tdm'].includes(msg.gm) ? msg.gm : 'coop';
+      const room = await createRoom(connId, cap, mode, gm);
+      send(ws, { t: 'created', room, cap, mode, gm });
       break;
     }
     case 'join': {
@@ -284,7 +286,7 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
         send(ws, { t: 'error', msg: res.msg });
         return;
       }
-      send(ws, { t: 'joined', room, slot: res.slot });
+      send(ws, { t: 'joined', room, slot: res.slot, gm: res.gm || 'coop' });
       break;
     }
     case 'list': {
@@ -387,6 +389,34 @@ const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: nu
   gun_plasma:   { type: 'gun', name: '等离子炮', price: 4000, lv: 15 },
 };
 
+// 可升级物品（武器/皮肤技能/手榴弹），每项最高 5 级；升级花费经验（不影响等级/排行）
+const UPGRADE_MAX_LV = 5;
+function upgCost(lv: number) { return 100 + lv * 100; } // 0→1 级花 100，递增
+const UPGRADE_ITEMS: Record<string, { type: 'gun' | 'skin' | 'grenade'; name: string }> = {
+  gun_pistol:  { type: 'gun', name: '标准手枪' },
+  gun_rapid:   { type: 'gun', name: '冲锋枪' },
+  gun_shotgun: { type: 'gun', name: '散弹枪' },
+  gun_sniper:  { type: 'gun', name: '狙击枪' },
+  gun_laser:   { type: 'gun', name: '激光枪' },
+  gun_cannon:  { type: 'gun', name: '榴弹炮' },
+  gun_dual:    { type: 'gun', name: '双管机枪' },
+  gun_plasma:  { type: 'gun', name: '等离子炮' },
+  skin_default: { type: 'skin', name: '战术冲刺' },
+  skin_green:   { type: 'skin', name: '生命绽放' },
+  skin_pink:    { type: 'skin', name: '樱花弹幕' },
+  skin_gold:    { type: 'skin', name: '点石成金' },
+  skin_purple:  { type: 'skin', name: '闪电链' },
+  skin_dark:    { type: 'skin', name: '暗影突袭' },
+  skin_fire:    { type: 'skin', name: '烈焰新星' },
+  skin_ice:     { type: 'skin', name: '冰霜新星' },
+  skin_mecha:   { type: 'skin', name: '能量护盾' },
+  skin_rainbow: { type: 'skin', name: '彩虹狂暴' },
+  grenade_frag:       { type: 'grenade', name: '破片雷' },
+  grenade_freeze:     { type: 'grenade', name: '冰冻雷' },
+  grenade_incendiary: { type: 'grenade', name: '燃烧雷' },
+  grenade_cluster:    { type: 'grenade', name: '集束雷' },
+};
+
 function jsonResp(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -424,6 +454,9 @@ function pubUser(u: Record<string, any>) {
     ownedGuns: u.ownedGuns,
     skin: u.skin,
     gun: u.gun,
+    upgrades: u.upgrades || {},
+    expSpent: u.expSpent || 0,
+    spendableExp: Math.max(0, (u.exp || 0) - (u.expSpent || 0)),
   };
 }
 
@@ -637,6 +670,30 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     if (!owned.includes(item as string)) return jsonResp({ ok: false, msg: '尚未拥有' }, 400);
     if (def.type === 'skin') u.skin = item;
     else u.gun = item;
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u) });
+  }
+
+  // POST /api/user/upgrade { item } —— 花经验升级武器/皮肤技能/手榴弹
+  // 经验只是「消耗品」：等级与排行仍按累计 exp 计算，不受 expSpent 影响
+  if (path === '/api/user/upgrade' && req.method === 'POST') {
+    const { item } = await readBody(req);
+    const def = UPGRADE_ITEMS[String(item || '')];
+    if (!def) return jsonResp({ ok: false, msg: '升级项不存在' }, 400);
+    // 只有已拥有的物品才能升级
+    if (def.type === 'gun' && !(u.ownedGuns as string[]).includes(item as string))
+      return jsonResp({ ok: false, msg: '尚未拥有该武器' }, 400);
+    if (def.type === 'skin' && !(u.ownedSkins as string[]).includes(item as string))
+      return jsonResp({ ok: false, msg: '尚未拥有该皮肤' }, 400);
+    const ups: Record<string, number> = u.upgrades || {};
+    const lv = ups[item as string] || 0;
+    if (lv >= UPGRADE_MAX_LV) return jsonResp({ ok: false, msg: '已满级' }, 400);
+    const cost = upgCost(lv);
+    const spendable = Math.max(0, (u.exp as number) - ((u.expSpent as number) || 0));
+    if (spendable < cost) return jsonResp({ ok: false, msg: `经验不足（可花 ${spendable}，需 ${cost}）` }, 400);
+    u.expSpent = ((u.expSpent as number) || 0) + cost;
+    ups[item as string] = lv + 1;
+    u.upgrades = ups;
     await kv.set(['user', auth.phone], u);
     return jsonResp({ ok: true, user: pubUser(u) });
   }
