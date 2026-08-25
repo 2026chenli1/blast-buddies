@@ -443,6 +443,20 @@ async function authUser(req: Request) {
   return u.value ? { phone: phone.value as string, user: u.value as Record<string, any> } : null;
 }
 
+// 系统默认名（还没起名的账号）：形如 玩家1234
+function isDefaultName(n: string) {
+  return /^玩家\d{4}$/.test(n || '');
+}
+
+// 用户名全局唯一检查（排除自己）
+async function nameTaken(name: string, excludeKey: string): Promise<boolean> {
+  for await (const e of kv.list({ prefix: ['user'] })) {
+    const u = e.value as Record<string, any>;
+    if (u && u.name === name && String(e.key[1]) !== excludeKey) return true;
+  }
+  return false;
+}
+
 // 下发给前端的用户数据（不含手机号）；等级由经验实时计算（升级曲线放缓：180 经验/级）
 function pubUser(u: Record<string, any>) {
   return {
@@ -666,6 +680,46 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     return new Response(null, { status: 302, headers: { location: '/?wxtoken=' + token } });
   }
 
+  // ---------- 自建扫码登录（免资质）：电脑出码 → 手机扫 → 手机确认 → 电脑自动登录 ----------
+  // 票据流：PC POST /api/auth/qr 拿 ticket+secret（secret 只留在电脑，防止旁人拍码抢登）
+  //        → 手机打开 /qr/<ticket>（已登录则直接确认，未登录先手机号登录）
+  //        → PC 轮询 /api/auth/qr/status 拿到会话 token，一次性消费
+
+  // POST /api/auth/qr —— 电脑生成扫码票据（5 分钟有效）
+  if (path === '/api/auth/qr' && req.method === 'POST') {
+    const ticket = crypto.randomUUID().replace(/-/g, '');
+    const secret = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    await kv.set(['qrt', ticket], { s: secret, state: 0, t: Date.now() }, { expireIn: 5 * 60 * 1000 });
+    return jsonResp({ ok: true, ticket, secret, url: 'https://' + url.host + '/qr/' + ticket });
+  }
+
+  // GET /api/auth/qr/status?ticket=&s= —— 电脑轮询：state 0=等待 1=已确认(返回 token)
+  if (path === '/api/auth/qr/status' && req.method === 'GET') {
+    const ticket = String(url.searchParams.get('ticket') || '');
+    const s = String(url.searchParams.get('s') || '');
+    if (!ticket || !s) return jsonResp({ ok: false, msg: '参数错误' }, 400);
+    const q = await kv.get(['qrt', ticket]);
+    if (!q.value) return jsonResp({ ok: false, state: -1, msg: '二维码已过期，请刷新' });
+    const rec = q.value as any;
+    if (rec.s !== s) return jsonResp({ ok: false, msg: '校验失败' }, 403); // 防拍码抢登
+    if (rec.state === 1) {
+      await kv.delete(['qrt', ticket]); // 一次性，防止重复领取
+      return jsonResp({ ok: true, state: 1, token: rec.token });
+    }
+    return jsonResp({ ok: true, state: 0 });
+  }
+
+  // POST /api/auth/captcha —— 防AI验证码：数学题（2 分钟有效，一次性）
+  if (path === '/api/auth/captcha' && req.method === 'POST') {
+    const a = 3 + Math.floor(Math.random() * 8);
+    const b = 1 + Math.floor(Math.random() * 9);
+    const op = Math.random() < 0.5 ? '+' : '\u00d7';
+    const id = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    const ans = op === '+' ? a + b : a * b;
+    await kv.set(['cap', id], String(ans), { expireIn: 2 * 60 * 1000 });
+    return jsonResp({ ok: true, id, q: `${a} ${op} ${b} = ?` });
+  }
+
   // GET /api/rank —— 线上排行（公开，按经验值降序，Top 50）
   if (path === '/api/rank' && req.method === 'GET') {
     const list = [];
@@ -687,6 +741,44 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
   const auth = await authUser(req);
   if (!auth) return jsonResp({ ok: false, msg: '请先登录' }, 401);
   const u = auth.user;
+
+  // POST /api/auth/qr/confirm { ticket, name?, captcha?, captchaId? } —— 手机确认登录
+  // 新账号（还是默认名 玩家XXXX）必须先创建全局唯一的用户名，并过数学验证码（防AI刷号）
+  if (path === '/api/auth/qr/confirm' && req.method === 'POST') {
+    const body = await readBody(req);
+    const ticket = String(body.ticket || '');
+    if (!ticket) return jsonResp({ ok: false, msg: '参数错误' }, 400);
+    const q = await kv.get(['qrt', ticket]);
+    if (!q.value) return jsonResp({ ok: false, msg: '二维码已过期，请刷新重试' }, 410);
+    const rec = q.value as any;
+    if (isDefaultName(String(u.name || ''))) {
+      // 首次起名：必须过验证码（防AI）
+      const capId = String(body.captchaId || '');
+      const capAns = String(body.captcha || '').trim();
+      const saved = await kv.get(['cap', capId]);
+      if (!saved.value || String(saved.value) !== capAns) {
+        return jsonResp({ ok: false, msg: '验证码错误，请重试' }, 400);
+      }
+      await kv.delete(['cap', capId]);
+      const n = String(body.name || '').trim().slice(0, 12);
+      if (!/^[\u4e00-\u9fa5A-Za-z0-9_]{2,12}$/.test(n)) {
+        return jsonResp({ ok: false, msg: '用户名需 2-12 位中文/字母/数字/下划线' }, 400);
+      }
+      if (await nameTaken(n, auth.phone)) {
+        return jsonResp({ ok: false, msg: '该用户名已被使用，换一个吧' }, 409);
+      }
+      u.name = n;
+      await kv.set(['user', auth.phone], u);
+    }
+    // 确认：把手机端会话 token 交给电脑（同一账号，token 复用，一年有效）
+    const h = req.headers.get('authorization') || '';
+    const token = h.replace(/^Bearer\s+/i, '').trim();
+    if (!token) return jsonResp({ ok: false, msg: '会话异常' }, 401);
+    rec.state = 1;
+    rec.token = token;
+    await kv.set(['qrt', ticket], rec);
+    return jsonResp({ ok: true });
+  }
 
   // POST /api/auth/logout —— 退出登录（仅删除服务端会话，保留账号数据）
   if (path === '/api/auth/logout' && req.method === 'POST') {
@@ -710,11 +802,15 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     return jsonResp({ ok: true, user: pubUser(u) });
   }
 
-  // POST /api/user/name { name } —— 修改用户名
+  // POST /api/user/name { name } —— 修改用户名（全局唯一，重名拒绝）
   if (path === '/api/user/name' && req.method === 'POST') {
     const { name } = await readBody(req);
     const n = String(name || '').trim().slice(0, 12);
     if (!n) return jsonResp({ ok: false, msg: '名字不能为空' }, 400);
+    if (/^玩家\d{4}$/.test(n)) return jsonResp({ ok: false, msg: '这个名字不能使用' }, 400);
+    if (await nameTaken(n, auth.phone)) {
+      return jsonResp({ ok: false, msg: '该用户名已被使用，换一个吧' }, 409);
+    }
     u.name = n;
     await kv.set(['user', auth.phone], u);
     return jsonResp({ ok: true, user: pubUser(u) });
@@ -833,6 +929,135 @@ async function serveStatic(url) {
   }
 }
 
+// ---------- 扫码登录手机确认页（/qr/<ticket>） ----------
+function qrPage(ticket: string): string {
+  return `<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>确认登录 Blast Buddies</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:linear-gradient(180deg,#14263c,#0d1b2a); min-height:100vh; color:#eef4ff;
+         font-family:'Segoe UI','Microsoft YaHei',sans-serif; display:flex; flex-direction:column; align-items:center; padding:32px 20px; }
+  .card { width:min(92vw,420px); background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14);
+          border-radius:16px; padding:24px; text-align:center; }
+  h1 { font-size:20px; font-weight:900; letter-spacing:1px; margin-bottom:6px; }
+  .sub { font-size:13px; color:#9fb3c8; margin-bottom:18px; }
+  input { width:100%; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18);
+          border-radius:10px; color:#fff; font-size:16px; padding:11px 12px; outline:none; text-align:center; margin-bottom:10px; }
+  input:focus { border-color:#ffb703; }
+  .row { display:flex; gap:8px; }
+  .row input { flex:1; }
+  button { width:100%; background:#ffb703; border:none; border-radius:10px; color:#14263c; font-size:16px;
+           font-weight:800; padding:12px; cursor:pointer; }
+  button:disabled { opacity:.5; }
+  .small { font-size:12.5px; color:#9fb3c8; line-height:1.7; margin-bottom:10px; }
+  .err { color:#ff6b6b; font-size:13px; min-height:18px; margin-bottom:8px; }
+  .ok { color:#7ce38b; font-size:16px; font-weight:800; margin:14px 0; }
+  .code-hint { font-size:13px; color:#9fb3c8; margin-bottom:10px; }
+  .code-hint b { color:#ffd166; font-size:17px; letter-spacing:2px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Blast Buddies</h1>
+    <div class="sub">确认在电脑上登录</div>
+    <div id="view"></div>
+  </div>
+<script>
+const TICKET = ${JSON.stringify(ticket)};
+const $ = (id) => document.getElementById(id);
+const API = (p, body) => fetch(p, { method: body ? 'POST' : 'GET', headers: { 'content-type':'application/json', ...(localStorage.getItem('bb_token') ? { authorization: 'Bearer ' + localStorage.getItem('bb_token') } : {}) }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+let CAP = null; // {id, q}
+let phone = '';
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function getCap() {
+  const r = await API('/api/auth/captcha', {});
+  if (r.ok) { CAP = r; return r.q; }
+  return '验证码服务暂不可用';
+}
+
+function isDefault(n){ return /^玩家\\d{4}$/.test(n || ''); }
+
+// 已登录：展示用户名 + 确认（新账号需先起名）
+async function showConfirm(u) {
+  const capQ = await getCap();
+  if (isDefault(u.name)) {
+    $('view').innerHTML = '<div class="small">首次登录，请创建你的用户名（全局唯一）：</div>' +
+      '<input id="name" maxlength="12" placeholder="2-12 位中文/字母/数字/下划线">' +
+      '<div class="err" id="err"></div>' +
+      '<div class="small">防AI验证：<b>' + esc(capQ) + '</b></div>' +
+      '<input id="cap" inputmode="numeric" maxlength="4" placeholder="输入答案">' +
+      '<button id="ok">创建并确认登录</button>';
+    $('ok').onclick = async () => {
+      $('ok').disabled = true;
+      const r = await API('/api/auth/qr/confirm', { ticket: TICKET, name: $('name').value, captcha: $('cap').value, captchaId: CAP.id });
+      if (!r.ok) { $('err').textContent = r.msg || '失败'; $('ok').disabled = false; return; }
+      done();
+    };
+  } else {
+    $('view').innerHTML = '<div class="small">将登录账号</div><div style="font-size:20px;font-weight:900;color:#ffd166;margin-bottom:14px;">' + esc(u.name) + '</div>' +
+      '<button id="ok">确认登录</button><div class="err" id="err"></div>';
+    $('ok').onclick = async () => {
+      $('ok').disabled = true;
+      const r = await API('/api/auth/qr/confirm', { ticket: TICKET });
+      if (!r.ok) { $('err').textContent = r.msg || '失败'; $('ok').disabled = false; return; }
+      done();
+    };
+  }
+}
+
+function done() {
+  $('view').innerHTML = '<div class="ok">已确认！</div><div class="small">请回到电脑查看，页面将自动登录。</div>';
+}
+
+// 未登录：先手机号登录
+function showLogin() {
+  $('view').innerHTML =
+    '<input id="ph" maxlength="11" inputmode="numeric" placeholder="输入 11 位手机号">' +
+    '<div class="err" id="err"></div>' +
+    '<div class="row"><input id="code" maxlength="10" inputmode="numeric" placeholder="验证码"><button id="send" style="flex:0 0 120px;font-size:14px;">发验证码</button></div>' +
+    '<div class="code-hint" id="hint"></div>' +
+    '<button id="login">登录并确认</button>';
+  $('send').onclick = async () => {
+    phone = $('ph').value.trim();
+    if (!/^1\\d{10}$/.test(phone)) { $('err').textContent = '请输入正确的手机号'; return; }
+    $('send').disabled = true;
+    const r = await API('/api/auth/send-code', { phone });
+    if (!r.ok) { $('err').textContent = r.msg || '发送失败'; $('send').disabled = false; return; }
+    $('hint').innerHTML = r.sms ? ('验证码已发送至 <b>' + esc(phone) + '</b>') : ('测试模式验证码：<b>' + esc(r.code || '') + '</b>');
+    $('send').disabled = false;
+  };
+  $('login').onclick = async () => {
+    const code = $('code').value.trim();
+    if (!phone) phone = $('ph').value.trim();
+    if (!code) { $('err').textContent = '请输入验证码'; return; }
+    $('login').disabled = true;
+    const r = await API('/api/auth/verify', { phone, code });
+    if (!r.ok) { $('err').textContent = r.msg || '登录失败'; $('login').disabled = false; return; }
+    localStorage.setItem('bb_token', r.token);
+    await showConfirm(r.user);
+  };
+}
+
+(async () => {
+  const tok = localStorage.getItem('bb_token');
+  if (tok) {
+    const r = await API('/api/user/me');
+    if (r.ok) { await showConfirm(r.user); return; }
+    localStorage.removeItem('bb_token');
+  }
+  showLogin();
+})();
+</script>
+</body>
+</html>`;
+}
+
 // ---------- 入口 ----------
 Deno.serve(async (req) => {
   const url = new URL(req.url);
@@ -851,6 +1076,15 @@ Deno.serve(async (req) => {
   // 用户系统 API（登录/商城/结算）
   if (url.pathname.startsWith('/api/')) {
     return handleApi(req, url);
+  }
+
+  // 扫码登录手机确认页（/qr/<ticket>）
+  if (url.pathname.startsWith('/qr/')) {
+    const ticket = decodeURIComponent(url.pathname.replace(/^\/qr\//, ''));
+    if (!/^[a-f0-9]{32}$/.test(ticket)) return new Response('Not Found', { status: 404 });
+    return new Response(qrPage(ticket), {
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' },
+    });
   }
 
   return serveStatic(url);
