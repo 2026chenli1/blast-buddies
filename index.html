@@ -135,6 +135,11 @@
   .overlay > *:first-child { margin-top: auto; }
   .overlay > *:last-child { margin-bottom: auto; }
 
+  /* 大厅覆盖层：铺满无内边距，让 #home-view 自由定位 */
+  #start-overlay { display: block; padding: 0; overflow: hidden; background: transparent; backdrop-filter: none; }
+  #start-overlay > #home-view { margin: 0; position: absolute; inset: 0; }
+  #start-overlay > #net-panel { margin: 0; position: absolute; inset: 0; background: rgba(8,15,26,.75); backdrop-filter: blur(6px); }
+
   .game-title {
     font-size: clamp(36px, 7vw, 72px);
     font-weight: 900;
@@ -545,60 +550,264 @@
   .tip { position: fixed; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 12.5px; color: rgba(255,255,255,.35); z-index: 5; pointer-events: none; }
   .credit { position: fixed; bottom: 12px; right: 16px; font-size: 11px; color: rgba(255,255,255,.22); z-index: 5; pointer-events: none; }
 
-  /* ---------- 主界面（大厅） ---------- */
-  #home-view { display: flex; flex-direction: column; width: 100%; max-width: 860px; min-height: 100%; }
-  .home-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
-  .home-user {
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.12);
+  /* ---------- 主界面（Roblox 风格大厅） ---------- */
+  #home-view {
+    position: relative;
+    width: 100%; max-width: 1100px; height: 100%;
+    min-height: 100%;
+    color: #fff;
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  }
+
+  /* 顶部栏 */
+  .home-top {
+    position: absolute; top: 14px; left: 14px; right: 14px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    pointer-events: none;
+  }
+  .home-top > * { pointer-events: auto; }
+  .home-top-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .home-top-right { display: flex; align-items: center; gap: 8px; }
+
+  .pill, .coin-pill, .online-pill, .season-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px; font-weight: 800;
+    box-shadow: 0 4px 12px rgba(0,0,0,.18);
+    backdrop-filter: blur(4px);
+  }
+  .pill-icon { display: flex; align-items: center; }
+  .coin-pill { background: rgba(30,20,10,.65); border: 1.5px solid rgba(255,209,102,.45); color: #ffd166; }
+  .online-pill { background: rgba(10,30,40,.65); border: 1.5px solid rgba(34,211,238,.4); color: #cffafe; }
+  .season-pill { background: rgba(30,20,10,.65); border: 1.5px solid rgba(255,209,102,.35); color: #ffd166; }
+
+  .level-card {
+    background: linear-gradient(180deg, rgba(124,58,237,.92), rgba(109,40,217,.92));
+    border: 1.5px solid rgba(255,255,255,.25);
     border-radius: 14px;
-    padding: 10px 14px;
-    text-align: left;
-    min-width: 210px;
+    padding: 7px 12px;
+    min-width: 170px;
+    box-shadow: 0 6px 16px rgba(0,0,0,.22);
+  }
+  .level-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 5px; }
+  .level-label { font-weight: 800; color: #fff; }
+  .level-label b { font-size: 14px; }
+  .level-exp { font-size: 11px; color: #ddd6fe; }
+  .level-card .exp-track { height: 6px; background: rgba(0,0,0,.25); border-radius: 999px; overflow: hidden; }
+  .level-card .exp-fill { height: 100%; background: linear-gradient(90deg, #22d3ee, #4ade80); border-radius: 999px; }
+
+  .chat-btn {
+    background: rgba(255,255,255,.18);
+    border: 1.5px solid rgba(255,255,255,.3);
+    color: #fff; font-weight: 800; font-size: 13px;
+    border-radius: 999px; padding: 7px 18px;
+    cursor: pointer; backdrop-filter: blur(4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+  }
+  .chat-btn:active { transform: scale(0.95); }
+
+  /* 悬浮用户卡片 */
+  .home-user {
+    position: absolute; top: 58px; left: 14px;
+    background: rgba(30,20,60,.72);
+    border: 1.5px solid rgba(255,255,255,.18);
+    border-radius: 14px;
+    padding: 9px 13px;
+    min-width: 170px;
     cursor: pointer;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 6px 18px rgba(0,0,0,.2);
     transition: background .15s ease;
   }
-  .home-user:hover { background: rgba(255,255,255,.11); }
-  .home-user-name { font-size: 15px; font-weight: 800; color: #eef4ff; display: flex; align-items: center; gap: 8px; }
+  .home-user:hover { background: rgba(40,30,80,.78); }
+  .home-user-name { font-size: 14px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 6px; }
+  .home-login-hint { font-size: 11px; color: #c4b5fd; margin-top: 4px; }
+  .home-user-actions { display: flex; gap: 5px; margin-top: 7px; }
+  .home-user-actions button {
+    flex: 1; font-size: 11px; font-weight: 700; color: #fff;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    border-radius: 8px; padding: 5px 7px; cursor: pointer;
+  }
+  .home-user-actions button:hover { background: rgba(255,255,255,.2); }
+  .home-user-actions .danger { color: #fecaca; border-color: rgba(248,113,113,.5); }
+  .home-user-actions .danger:hover { background: rgba(248,113,113,.2); }
+
   .lv-badge {
-    font-size: 11px; font-weight: 900; color: #0d1b2a;
+    font-size: 10px; font-weight: 900; color: #4a3b00;
     background: linear-gradient(180deg,#ffe066,#ffb703);
-    border-radius: 999px; padding: 1px 8px; flex: none;
+    border-radius: 999px; padding: 1px 7px; flex: none;
   }
   .admin-badge {
-    font-size: 10.5px; font-weight: 900; color: #fff; letter-spacing: 1px;
-    background: linear-gradient(180deg,#ff6b6b,#e63946);
-    border-radius: 999px; padding: 1px 7px; flex: none;
-    box-shadow: 0 0 8px rgba(230,57,70,.5);
+    font-size: 10px; font-weight: 900; color: #fff; letter-spacing: .5px;
+    background: linear-gradient(180deg,#f43f5e,#e11d48);
+    border-radius: 999px; padding: 1px 6px; flex: none;
+    box-shadow: 0 0 8px rgba(225,29,72,.45);
   }
-  .home-user-sub { font-size: 12.5px; color: #9fb3c8; margin-top: 4px; display: flex; gap: 14px; }
-  .home-user-sub b { color: #ffd166; }
-  .exp-track { height: 6px; background: rgba(255,255,255,.12); border-radius: 999px; overflow: hidden; margin-top: 6px; }
-  .exp-fill { height: 100%; background: linear-gradient(90deg,#4cc9f0,#06d6a0); border-radius: 999px; transition: width .3s ease; }
-  .home-login-hint { font-size: 11.5px; color: #7d93a8; margin-top: 5px; }
-  .home-user-actions { display: flex; gap: 6px; margin-top: 8px; }
-  .home-user-actions button {
-    flex: 1; font-size: 11.5px; font-weight: 700; color: #bcd4ea;
-    background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
-    border-radius: 8px; padding: 5px 8px; cursor: pointer; transition: all .15s ease;
+
+  /* 顶部右侧快捷按钮 */
+  .home-top-btns {
+    position: absolute; top: 58px; right: 14px;
+    display: flex; gap: 8px;
   }
-  .home-user-actions button:hover { background: rgba(255,255,255,.15); }
-  .home-user-actions .danger { color: #ffb4b4; border-color: rgba(255,107,107,.4); }
-  .home-user-actions .danger:hover { background: rgba(255,107,107,.15); }
-  .home-top-right { display: flex; gap: 8px; flex-wrap: wrap; }
-  .icon-btn {
-    border: 1px solid rgba(255,255,255,.18);
-    background: rgba(255,255,255,.08);
-    color: #eef4ff; font-weight: 800; font-size: 13px;
-    border-radius: 12px; padding: 9px 14px;
-    cursor: pointer; transition: all .15s ease;
+  .top-icon-btn {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: rgba(30,20,60,.65);
+    border: 1.5px solid rgba(255,255,255,.2);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; backdrop-filter: blur(4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,.18);
   }
-  .icon-btn:hover { background: rgba(255,255,255,.16); }
-  .home-mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 14px 0; min-height: 230px; }
-  #preview-canvas { width: 200px; height: 200px; }
-  .home-name-level { font-size: 19px; font-weight: 900; color: #eef4ff; margin-bottom: 4px; display: flex; align-items: center; gap: 10px; }
-  .home-bottom { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
-  .home-start { font-size: 22px; padding: 15px 52px; }
+  .top-icon-btn:hover { background: rgba(50,40,90,.75); }
+  .top-icon-btn:active { transform: scale(0.92); }
+
+  /* 左侧奖励卡片 */
+  .reward-card {
+    position: absolute; top: 50%; left: 14px; transform: translateY(-50%);
+    width: 86px;
+    background: linear-gradient(180deg, rgba(251,191,36,.95), rgba(245,158,11,.95));
+    border: 2px solid rgba(255,255,255,.35);
+    border-radius: 18px;
+    padding: 12px 8px;
+    text-align: center;
+    box-shadow: 0 8px 22px rgba(0,0,0,.22);
+    cursor: pointer;
+  }
+  .reward-card:active { transform: translateY(-50%) scale(0.95); }
+  .reward-icon { display: flex; justify-content: center; margin-bottom: 6px; }
+  .reward-val { font-size: 18px; font-weight: 900; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.15); }
+  .reward-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,.9); margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 3px; }
+
+  /* 右侧挑战面板 */
+  .challenge-card {
+    position: absolute; top: 14px; right: 14px;
+    width: min(260px, 34vw);
+    background: linear-gradient(180deg, rgba(249,115,22,.95), rgba(234,88,12,.95));
+    border: 2px solid rgba(255,255,255,.3);
+    border-radius: 18px;
+    padding: 12px;
+    box-shadow: 0 10px 26px rgba(0,0,0,.22);
+  }
+  .challenge-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .challenge-card .challenge-title { font-size: 15px; font-weight: 900; color: #fff; letter-spacing: 1px; }
+  .challenge-time { font-size: 11px; color: rgba(255,255,255,.75); font-weight: 700; }
+  .challenge-card .challenge-row {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,0,0,.16);
+    border-radius: 10px;
+    padding: 7px 9px;
+    margin-bottom: 7px;
+    font-size: 12px; color: #fff;
+  }
+  .challenge-card .challenge-info { flex: 1; min-width: 0; }
+  .challenge-card .challenge-desc { font-weight: 700; }
+  .challenge-card .challenge-reward { font-size: 10px; color: #fed7aa; }
+  .challenge-card .challenge-status {
+    font-size: 11px; font-weight: 900; color: #fff;
+    background: rgba(255,255,255,.18); border-radius: 6px; padding: 2px 6px;
+  }
+  .challenge-card .challenge-row.challenge-done .challenge-status { background: rgba(34,197,94,.6); }
+  .challenge-card .challenge-bar { height: 4px; background: rgba(0,0,0,.2); border-radius: 999px; overflow: hidden; margin-top: 4px; }
+  .challenge-card .challenge-fill { height: 100%; background: linear-gradient(90deg, #4ade80, #22d3ee); border-radius: 999px; }
+  .refresh-challenge-btn {
+    width: 100%; margin-top: 4px;
+    background: rgba(124,58,237,.9); color: #fff;
+    border: none; border-radius: 10px; padding: 7px;
+    font-size: 11px; font-weight: 800;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .refresh-challenge-btn:active { transform: scale(0.98); }
+
+  /* 中间角色预览 */
+  .home-mid {
+    position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  #preview-canvas { width: 280px; height: 280px; filter: drop-shadow(0 16px 24px rgba(0,0,0,.25)); }
+  .home-name-level {
+    font-size: 18px; font-weight: 900; color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,.4);
+    margin-bottom: 6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* 底部操作 */
+  .home-bottom {
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .home-actions { display: flex; align-items: center; gap: 12px; }
+  .btn.home-start {
+    font-size: 22px; font-weight: 900;
+    padding: 14px 64px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #fb7185, #e11d48);
+    box-shadow: 0 6px 0 #be123c, 0 12px 28px rgba(225,29,72,.4);
+    color: #fff; letter-spacing: 2px;
+  }
+  .btn.home-start:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #be123c, 0 16px 34px rgba(225,29,72,.5); }
+  .btn.home-start:active { transform: translateY(4px); box-shadow: 0 2px 0 #be123c; }
+  .btn.home-room {
+    font-size: 15px; font-weight: 800;
+    padding: 12px 22px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #2dd4bf, #0d9488);
+    box-shadow: 0 5px 0 #0f766e, 0 8px 20px rgba(13,148,136,.35);
+    color: #fff;
+  }
+  .btn.home-room:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #0f766e, 0 12px 26px rgba(13,148,136,.45); }
+  .btn.home-room:active { transform: translateY(3px); box-shadow: 0 2px 0 #0f766e; }
+
+  .home-nav {
+    display: flex; gap: 10px;
+    background: rgba(0,0,0,.25);
+    border-radius: 999px;
+    padding: 6px;
+  }
+  .nav-icon {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.12);
+    border: 1.5px solid rgba(255,255,255,.2);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform .08s ease, background .15s ease;
+  }
+  .nav-icon:hover { background: rgba(255,255,255,.22); }
+  .nav-icon:active { transform: scale(0.9); }
+
+  /* 左下角信息 */
+  .home-footer {
+    position: absolute; bottom: 14px; left: 14px;
+    display: flex; align-items: flex-end; gap: 16px;
+  }
+  .home-logo { display: flex; align-items: center; gap: 10px; }
+  .logo-avatar {
+    width: 40px; height: 40px;
+    background: rgba(255,255,255,.15);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,.15);
+  }
+  .logo-title { font-size: 15px; font-weight: 900; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,.3); }
+  .logo-sub { font-size: 11px; color: rgba(255,255,255,.65); }
+  .home-likes { display: flex; gap: 10px; font-size: 11px; color: rgba(255,255,255,.75); font-weight: 700; }
+  .home-likes span { display: flex; align-items: center; gap: 3px; }
+
+  /* 控制说明与排行榜（大厅下方折叠区） */
+  #home-view > .controls-grid { display: none !important; }
+  #home-view > .lb-wrap {
+    position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+    width: min(420px, 70vw);
+    background: rgba(30,20,60,.7);
+    border: 1.5px solid rgba(255,255,255,.15);
+    border-radius: 16px;
+    padding: 10px 14px;
+    display: none; /* 默认隐藏，点击排行榜展开 */
+  }
 
   /* ---------- 弹窗通用 ---------- */
   .modal-mask {
@@ -761,38 +970,97 @@
 
 <!-- Start overlay（主界面/大厅） -->
 <div class="overlay" id="start-overlay">
-  <!-- 主界面：左上用户信息 / 右上商城 / 中间人物预览 / 右下开始按钮 -->
+  <!-- 主界面：Roblox 风格大厅 -->
   <div id="home-view">
+    <!-- 顶部栏 -->
     <div class="home-top">
-      <div class="home-user" id="home-user-card" title="点击登录 / 修改用户名">
-        <div class="home-user-name"><span id="hu-name">游客</span><span class="admin-badge" id="hu-admin" style="display:none;">ADMIN</span><span class="lv-badge" id="hu-lv">Lv.1</span></div>
-        <div class="home-user-sub"><span>💰 <b id="hu-coins">0</b></span><span>经验 <b id="hu-exp">0</b></span></div>
-        <div class="exp-track"><div class="exp-fill" id="hu-exp-fill" style="width:0%"></div></div>
-        <div class="home-login-hint" id="hu-hint">未登录 · 点击登录保存进度</div>
-        <div class="home-user-actions" id="hu-actions" style="display:none;">
-          <button id="switch-account-btn">🔄 切换账号</button>
-          <button class="danger" id="delete-account-btn">🗑 注销账号</button>
-        </div>
+      <div class="home-top-left">
+        <div class="coin-pill"><span class="pill-icon"><svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10" fill="#ffd166" stroke="#d89b00" stroke-width="2"/><text x="12" y="16" text-anchor="middle" font-size="12" font-weight="800" fill="#4a3b00">$</text></svg></span><b id="hu-coins">0</b></div>
+        <div class="online-pill"><span class="pill-icon"><svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="10" fill="none" stroke="#22d3ee" stroke-width="2.5"/><path d="M12 2a10 10 0 0 1 10 10" stroke="#22d3ee" stroke-width="2.5" fill="none"/><circle cx="12" cy="12" r="3" fill="#22d3ee"/></svg></span><b id="home-online">468</b> 玩家 在线</div>
+        <div class="season-pill" id="home-season">AM</div>
       </div>
       <div class="home-top-right">
-        <button class="icon-btn" id="weapon-btn">🔫 武器</button>
-        <button class="icon-btn" id="shop-btn">🛒 商城</button>
-        <button class="icon-btn sound-btn" id="sound-menu-btn">🔊 音效：开</button>
-        <button class="icon-btn" id="mode-switch-btn">📱 切换手机版</button>
+        <div class="level-card">
+          <div class="level-row"><span class="level-label">等级 <b id="home-lv">1</b></span><span class="level-exp"><b id="hu-exp">0</b> / <b id="hu-exp-next">180</b> 经验</span></div>
+          <div class="exp-track"><div class="exp-fill" id="hu-exp-fill" style="width:0%"></div></div>
+        </div>
+        <button class="chat-btn" id="home-chat-btn">聊天</button>
       </div>
     </div>
 
+    <!-- 左侧奖励卡片 -->
+    <div class="reward-card" id="home-reward-card">
+      <div class="reward-icon"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="11" fill="#ffd166"/><path d="M10 8l6 4-6 4V8z" fill="#4a3b00"/></svg></div>
+      <div class="reward-val">+500</div>
+      <div class="reward-label"><svg viewBox="0 0 24 24" width="10" height="10"><rect x="2" y="6" width="20" height="12" rx="2" fill="none" stroke="#fff" stroke-width="2"/><path d="M6 10h4M6 14h8" stroke="#fff" stroke-width="2"/></svg> 观看</div>
+    </div>
+
+    <!-- 右侧挑战面板 -->
+    <div class="challenge-card">
+      <div class="challenge-head">
+        <div class="challenge-title">挑战</div>
+        <div class="challenge-time" id="challenge-time">--:--:--</div>
+      </div>
+      <div id="challenge-list"></div>
+      <button class="refresh-challenge-btn" id="refresh-challenge-btn"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M4 12a8 8 0 0 1 8-8V2l4 4-4 4V6a6 6 0 0 0-6 6" fill="#fff"/></svg> 刷新挑战</button>
+    </div>
+
+    <!-- 中间角色预览 -->
     <div class="home-mid">
-      <div class="home-name-level"><span id="home-name">游客</span><span class="lv-badge" id="home-lv">Lv.1</span></div>
-      <canvas id="preview-canvas" width="200" height="200"></canvas>
+      <div class="home-name-level"><span id="home-name">游客</span><span class="admin-badge" id="hu-admin" style="display:none;">ADMIN</span><span class="lv-badge" id="hu-lv">Lv.1</span></div>
+      <canvas id="preview-canvas" width="320" height="320"></canvas>
     </div>
 
+    <!-- 底部操作 -->
     <div class="home-bottom">
-      <div class="home-sub-btns"></div>
-      <button class="btn home-start" id="home-start-btn">开始游戏</button>
+      <div class="home-nav">
+        <button class="nav-icon" id="nav-weapon" title="武器"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="6" y="10" width="14" height="5" rx="1.5" fill="#38bdf8"/><rect x="4" y="11" width="5" height="3" rx="1" fill="#475569"/><rect x="17" y="8" width="4" height="2" rx="1" fill="#1e293b"/></svg></button>
+        <button class="nav-icon" id="nav-character" title="角色"><svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="8" r="4" fill="#fb7185"/><path d="M6 21v-5a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v5" fill="#fb7185"/></svg></button>
+        <button class="nav-icon" id="nav-rank" title="排行榜"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="10" width="5" height="10" rx="1" fill="#fbbf24"/><rect x="9.5" y="5" width="5" height="15" rx="1" fill="#f472b6"/><rect x="15" y="13" width="5" height="7" rx="1" fill="#60a5fa"/></svg></button>
+        <button class="nav-icon" id="nav-shop" title="商店"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="6" width="18" height="14" rx="2" fill="none" stroke="#a78bfa" stroke-width="2"/><path d="M3 10h18" stroke="#a78bfa" stroke-width="2"/><circle cx="9" cy="15" r="1.5" fill="#a78bfa"/><circle cx="15" cy="15" r="1.5" fill="#a78bfa"/></svg></button>
+        <button class="nav-icon" id="nav-fav" title="收藏"><svg viewBox="0 0 24 24" width="24" height="24"><polygon points="12,2 15,9 22,9 16.5,14 18.5,21 12,17 5.5,21 7.5,14 2,9 9,9" fill="#fbbf24"/></svg></button>
+      </div>
+      <div class="home-actions">
+        <button class="btn home-start" id="home-start-btn">游戏</button>
+        <button class="btn home-room" id="home-room-btn">房间</button>
+      </div>
     </div>
 
-    <div class="controls-grid" id="controls-desktop" style="margin-top:18px;">
+    <!-- 用户卡片（悬浮左上） -->
+    <div class="home-user" id="home-user-card" title="点击登录 / 修改用户名">
+      <div class="home-user-name"><span id="hu-name">游客</span></div>
+      <div class="home-login-hint" id="hu-hint">未登录 · 点击登录保存进度</div>
+      <div class="home-user-actions" id="hu-actions" style="display:none;">
+        <button id="switch-account-btn">切换账号</button>
+        <button class="danger" id="delete-account-btn">注销账号</button>
+      </div>
+    </div>
+
+    <!-- 顶部右侧快捷按钮 -->
+    <div class="home-top-btns">
+      <button class="top-icon-btn" id="weapon-btn" title="武器"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="6" y="10" width="14" height="5" rx="1.5" fill="currentColor"/><rect x="4" y="11" width="5" height="3" rx="1" fill="currentColor" opacity=".7"/></svg></button>
+      <button class="top-icon-btn" id="shop-btn" title="商城"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="6" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18" stroke="currentColor" stroke-width="2"/></svg></button>
+      <button class="top-icon-btn sound-btn sound-icon" id="sound-menu-btn" title="音效：开"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8a5 5 0 0 1 0 8" stroke="currentColor" stroke-width="2" fill="none"/></svg></button>
+      <button class="top-icon-btn" id="mode-switch-btn" title="切换手机版"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="6" y="2" width="12" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 18h4" stroke="currentColor" stroke-width="2"/></svg></button>
+    </div>
+
+    <!-- 左下角信息 -->
+    <div class="home-footer">
+      <div class="home-logo">
+        <div class="logo-avatar"><svg viewBox="0 0 24 24" width="20" height="20"><rect x="5" y="8" width="14" height="11" rx="2" fill="#38bdf8"/><circle cx="12" cy="6" r="4" fill="#fb7185"/><rect x="9" y="12" width="6" height="4" rx="1" fill="#1e293b"/></svg></div>
+        <div>
+          <div class="logo-title">Blast Buddies</div>
+          <div class="logo-sub">制作方：Blasters</div>
+        </div>
+      </div>
+      <div class="home-likes">
+        <span><svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 22H3v-9h4zm11.6-9c.9 0 1.6.7 1.6 1.6v.8c0 .9-.7 1.6-1.6 1.6H15l-1.7 4.2a1 1 0 0 1-1.8.1L10 14.5V6h2l3-4h.5a1.5 1.5 0 0 1 1.5 1.5v3H19c1.1 0 2 .9 2 2v.5c0 .8-.2 1.5-.6 2.1.4-.1.9-.1 1.3-.1z" fill="currentColor"/></svg> 64.0K</span>
+        <span><svg viewBox="0 0 24 24" width="14" height="14"><path d="M17 22h4v-9h-4zm-11.6-9c-.9 0-1.6.7-1.6 1.6v.8c0 .9.7 1.6 1.6 1.6H9l1.7 4.2a1 1 0 0 0 1.8.1L14 14.5V6h-2l-3-4h-.5A1.5 1.5 0 0 0 7 3.5v3H5c-1.1 0-2 .9-2 2v.5c0 .8.2 1.5.6 2.1-.4-.1-.9-.1-1.3-.1z" fill="currentColor"/></svg> 11.7K</span>
+      </div>
+    </div>
+
+    <!-- 控制说明（折叠到底部上方） -->
+    <div class="controls-grid" id="controls-desktop">
       <div class="control-item"><span class="p-tag p1-tag">P1</span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> 移动</div>
       <div class="control-item"><span class="p-tag p1-tag">P1</span><span class="key">鼠标</span> 瞄准 · <span class="key">点击</span> 射击</div>
       <div class="control-item"><span class="p-tag p2-tag">P2</span><span class="key">WASD</span> / <span class="key">方向键</span> 移动</div>
@@ -810,13 +1078,9 @@
       <div class="control-item"><span class="key">⏸ 血量左边</span> 暂停（仅房主）</div>
     </div>
 
-    <div class="challenge-box">
-      <div class="challenge-title">📅 今日挑战</div>
-      <div id="challenge-list"></div>
-    </div>
-
+    <!-- 排行榜 -->
     <div class="lb-wrap">
-      <div class="lb-title">🏆 排行榜<span class="lb-tabs">
+      <div class="lb-title">排行榜<span class="lb-tabs">
         <button class="lb-tab active" id="lb-tab-local">本地</button>
         <button class="lb-tab" id="lb-tab-online">线上</button>
       </span></div>
@@ -1171,9 +1435,14 @@ function renderHomeUser() {
   document.getElementById('home-name').textContent = name;
   document.getElementById('hu-lv').textContent = 'Lv.' + User.level;
   document.getElementById('home-lv').textContent = 'Lv.' + User.level;
-  document.getElementById('hu-coins').textContent = User.coins;
-  document.getElementById('hu-exp').textContent = User.exp;
-  document.getElementById('hu-exp-fill').style.width = Math.min(100, (User.exp % 180) / 180 * 100) + '%';
+  document.getElementById('hu-coins').textContent = User.coins.toLocaleString();
+  const nextExp = User.level * 180;
+  const prevExp = (User.level - 1) * 180;
+  const curInLevel = User.exp - prevExp;
+  document.getElementById('hu-exp').textContent = curInLevel;
+  const nextEl = document.getElementById('hu-exp-next');
+  if (nextEl) nextEl.textContent = 180;
+  document.getElementById('hu-exp-fill').style.width = Math.min(100, Math.max(0, curInLevel) / 180 * 100) + '%';
   const admEl = document.getElementById('hu-admin');
   if (admEl) admEl.style.display = (User.role === 'admin') ? '' : 'none';
   document.getElementById('hu-hint').textContent = User.logged
@@ -1673,6 +1942,36 @@ document.getElementById('lb-tab-online').addEventListener('click', () => {
   loadOnlineRank();
 });
 
+// 顶部聊天 / 奖励
+document.getElementById('home-chat-btn').addEventListener('click', () => { ensureAudio(); alert('聊天功能即将上线'); });
+document.getElementById('home-reward-card').addEventListener('click', () => { ensureAudio(); alert('观看广告可获得 500 金币（功能即将上线）'); });
+document.getElementById('refresh-challenge-btn').addEventListener('click', () => { ensureAudio(); alert('每日挑战已刷新'); renderChallenge(); });
+
+// 底部导航图标
+document.getElementById('nav-weapon').addEventListener('click', () => { ensureAudio(); openWeaponSelect(); });
+document.getElementById('nav-character').addEventListener('click', () => { ensureAudio(); shopTab = 'skin'; openShop(); renderShop(); });
+document.getElementById('nav-rank').addEventListener('click', () => {
+  const el = document.getElementById('lb-list-start').parentElement;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (el.style.display !== 'none') renderLeaderboard(document.getElementById('lb-list-start'));
+});
+document.getElementById('nav-shop').addEventListener('click', () => { ensureAudio(); openShop(); });
+document.getElementById('nav-fav').addEventListener('click', () => { ensureAudio(); alert('收藏功能即将上线'); });
+
+// 顶部在线人数：随机波动
+let onlineCount = 420 + Math.floor(Math.random() * 120);
+setInterval(() => { onlineCount += Math.floor(Math.random() * 9) - 4; document.getElementById('home-online').textContent = Math.max(200, onlineCount); }, 5000);
+document.getElementById('home-online').textContent = onlineCount;
+
+// 挑战倒计时
+function updateChallengeTime() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('challenge-time').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
+setInterval(updateChallengeTime, 1000);
+updateChallengeTime();
+
 // ---------- 局后结算：上报得分，发金币/经验 ----------
 async function reportResult() {
   const el = document.getElementById('final-reward');
@@ -1791,7 +2090,14 @@ function setSound(on, silent = false) {
   SOUND_ON = on;
   try { localStorage.setItem(SOUND_KEY, on ? '1' : '0'); } catch (e) {}
   const btns = document.querySelectorAll('.sound-btn');
-  for (const b of btns) b.textContent = on ? '🔊 音效：开' : '🔇 音效：关';
+  for (const b of btns) {
+    if (b.classList.contains('sound-icon')) {
+      b.title = on ? '音效：开' : '音效：关';
+      b.style.opacity = on ? '1' : '0.55';
+    } else {
+      b.textContent = on ? '🔊 音效：开' : '🔇 音效：关';
+    }
+  }
   if (on && !silent) { ensureAudio(); setTimeout(() => Sfx.powerup(), 0); }
 }
 function toggleSound() { setSound(!SOUND_ON); }
@@ -3252,10 +3558,155 @@ function applyPowerup(pu, p) {
 }
 
 // ======================= 渲染 =======================
+function drawLobbyBg() {
+  const t = G.time;
+
+  // 紫色天空渐变
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#4f3ec7');
+  sky.addColorStop(0.45, '#7c5cfc');
+  sky.addColorStop(0.8, '#b78bfa');
+  sky.addColorStop(1, '#f0abfc');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  // 太阳光晕（右上角）
+  const sun = ctx.createRadialGradient(W * 0.82, H * 0.16, 0, W * 0.82, H * 0.16, W * 0.28);
+  sun.addColorStop(0, 'rgba(255, 200, 90, 0.45)');
+  sun.addColorStop(0.35, 'rgba(255, 150, 70, 0.18)');
+  sun.addColorStop(1, 'rgba(255, 150, 70, 0)');
+  ctx.fillStyle = sun;
+  ctx.fillRect(0, 0, W, H);
+
+  // 云朵
+  function cloud(x, y, s, a) {
+    ctx.fillStyle = `rgba(255,255,255,${a})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 18 * s, 0, TAU);
+    ctx.arc(x + 16 * s, y - 8 * s, 22 * s, 0, TAU);
+    ctx.arc(x + 36 * s, y, 18 * s, 0, TAU);
+    ctx.arc(x + 18 * s, y + 8 * s, 16 * s, 0, TAU);
+    ctx.fill();
+  }
+  const drift = (t * 6) % (W + 120);
+  cloud(-80 + drift, H * 0.16, 1.1, 0.55);
+  cloud(W * 0.2 + drift * 0.4, H * 0.22, 0.75, 0.4);
+  cloud(W * 0.65 - drift * 0.25, H * 0.13, 0.9, 0.45);
+
+  // 远景棕榈树
+  function palm(x, y, s) {
+    const trunkW = 8 * s, trunkH = 90 * s;
+    ctx.fillStyle = '#8b5a2b';
+    ctx.beginPath();
+    ctx.moveTo(x - trunkW, y);
+    ctx.quadraticCurveTo(x - trunkW * 0.5, y - trunkH * 0.5, x, y - trunkH);
+    ctx.quadraticCurveTo(x + trunkW * 0.5, y - trunkH * 0.5, x + trunkW, y);
+    ctx.fill();
+    // 叶子
+    ctx.fillStyle = '#22c55e';
+    const topX = x, topY = y - trunkH;
+    for (let i = 0; i < 6; i++) {
+      const ang = -Math.PI / 2 + (i - 2.5) * 0.55 + Math.sin(t + i) * 0.04;
+      const lx = topX + Math.cos(ang) * 45 * s;
+      const ly = topY + Math.sin(ang) * 22 * s;
+      ctx.beginPath();
+      ctx.ellipse((topX + lx) / 2, (topY + ly) / 2, 32 * s, 10 * s, ang, 0, TAU);
+      ctx.fill();
+    }
+  }
+  palm(W * 0.14, H * 0.55, 0.9);
+  palm(W * 0.26, H * 0.58, 0.7);
+  palm(W * 0.78, H * 0.56, 1.0);
+  palm(W * 0.89, H * 0.59, 0.75);
+
+  // 中景砖墙
+  const wallY = H * 0.52;
+  ctx.fillStyle = '#a68b5b';
+  ctx.fillRect(0, wallY, W, H * 0.08);
+  ctx.strokeStyle = 'rgba(80,60,40,0.25)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const brickH = 14;
+  for (let y = wallY; y < wallY + H * 0.08; y += brickH) {
+    ctx.moveTo(0, y); ctx.lineTo(W, y);
+    const offset = ((y - wallY) / brickH) % 2 === 0 ? 0 : 22;
+    for (let x = -40 + offset; x < W; x += 44) { ctx.moveTo(x, y); ctx.lineTo(x, y + brickH); }
+  }
+  ctx.stroke();
+  // 墙顶阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.fillRect(0, wallY, W, 6);
+
+  // 中景草丛
+  function bush(x, y, s, c) {
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(x, y, 16 * s, 0, TAU);
+    ctx.arc(x + 14 * s, y - 6 * s, 20 * s, 0, TAU);
+    ctx.arc(x + 30 * s, y, 16 * s, 0, TAU);
+    ctx.arc(x + 14 * s, y + 10 * s, 14 * s, 0, TAU);
+    ctx.fill();
+  }
+  bush(W * 0.08, H * 0.62, 1.1, '#16a34a');
+  bush(W * 0.92, H * 0.63, 1.3, '#16a34a');
+  bush(W * 0.72, H * 0.61, 0.9, '#22c55e');
+
+  // 前景水面
+  const waterY = H * 0.62;
+  const water = ctx.createLinearGradient(0, waterY, 0, H);
+  water.addColorStop(0, '#22d3ee');
+  water.addColorStop(0.5, '#0ea5e9');
+  water.addColorStop(1, '#0284c7');
+  ctx.fillStyle = water;
+  ctx.fillRect(0, waterY, W, H - waterY);
+
+  // 水波纹
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < 7; i++) {
+    const y = waterY + 18 + i * 26 + Math.sin(t * 2 + i) * 3;
+    for (let x = -30 + (i % 2) * 40; x < W; x += 90) {
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + 20, y - 5, x + 40, y);
+    }
+  }
+  ctx.stroke();
+
+  // 前景草地边缘
+  ctx.fillStyle = '#4ade80';
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 30) {
+    ctx.lineTo(x, H - 18 - Math.abs(Math.sin(x * 0.02 + t)) * 10);
+  }
+  ctx.lineTo(W, H);
+  ctx.fill();
+
+  // 前景草丛细节
+  ctx.fillStyle = '#22c55e';
+  for (let i = 0; i < 24; i++) {
+    const x = (i * 73 + 20) % W;
+    const h = 14 + (i % 5) * 4;
+    ctx.beginPath();
+    ctx.moveTo(x, H);
+    ctx.quadraticCurveTo(x + 5, H - h * 0.6, x + (i % 2 === 0 ? 10 : -6), H - h);
+    ctx.quadraticCurveTo(x - 3, H - h * 0.5, x, H);
+    ctx.fill();
+  }
+}
+
 function draw() {
   ctx.save();
   if (G.shake > 0) {
     ctx.translate(rand(-G.shake, G.shake) * 0.5, rand(-G.shake, G.shake) * 0.5);
+  }
+
+  // 大厅背景（卡通 3D 场景）
+  if (G.state === 'menu') {
+    drawLobbyBg();
+    ctx.restore();
+    return;
   }
 
   // 背景
@@ -4953,7 +5404,7 @@ function showMenu() {
   hide(document.getElementById('pause-overlay'));
   show(document.getElementById('start-overlay'));
   // 回主界面：显示 home，收起联机面板与模式弹窗
-  document.getElementById('home-view').style.display = 'flex';
+  document.getElementById('home-view').style.display = 'block';
   document.getElementById('net-panel').style.display = 'none';
   document.getElementById('mode-modal').style.display = 'none';
   renderHomeUser();
@@ -5287,7 +5738,16 @@ const homeView = document.getElementById('home-view');
 const modeModal = document.getElementById('mode-modal');
 document.getElementById('home-start-btn').addEventListener('click', () => {
   ensureAudio();
-  modeModal.style.display = 'flex';
+  G.mode = 'single';
+  netClose();
+  showLoadout();
+});
+document.getElementById('home-room-btn').addEventListener('click', () => {
+  ensureAudio();
+  G.mode = 'net';
+  homeView.style.display = 'none';
+  netPanel.style.display = 'block';
+  showNetView(true);
 });
 document.getElementById('mode-modal-close').addEventListener('click', () => {
   modeModal.style.display = 'none';
@@ -5309,7 +5769,7 @@ document.getElementById('net-back-btn').addEventListener('click', () => {
   netClose();
   updateNetHud();
   netPanel.style.display = 'none';
-  homeView.style.display = 'flex';
+  homeView.style.display = 'block';
   renderHomeUser();
 });
 G.mode = 'single';
