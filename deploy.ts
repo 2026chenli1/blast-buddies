@@ -20,12 +20,21 @@ const rooms = new Map(); // room -> { host, guests: [{slot, id}], created, cap, 
 // 在线人数统计：ip -> 最近活跃时间（大厅轮询 /api/online 时更新，70 秒未活跃剔除）
 const lastSeen = new Map<string, number>();
 
+// 大厅玩家：connId -> { x, y, angle, name, skin, lastSeen, ip }
+// 所有未进入房间的 WebSocket 连接默认都在大厅，可在大厅里自由移动、看见彼此
+const lobbyPlayers = new Map<string, Record<string, any>>();
+const LOBBY_BROADCAST_MS = 80; // 大厅位置广播间隔（ms）
+
 const bc = new BroadcastChannel('blast-relay');
 
 function send(ws, obj) {
   try {
     ws.send(JSON.stringify(obj));
   } catch (_) {}
+}
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
 }
 
 // ---------- 跨 isolate 消息 ----------
@@ -48,6 +57,29 @@ function dispatch(m) {
     }
     return;
   }
+
+  if (m.type === 'lobby') {
+    if (m.action === 'pos') {
+      // 同步其他 isolate 的大厅玩家位置
+      const lp = lobbyPlayers.get(m.id);
+      if (lp) {
+        lp.x = m.x; lp.y = m.y; lp.angle = m.angle; lp.lastSeen = Date.now();
+      }
+    } else if (m.action === 'join') {
+      lobbyPlayers.set(m.id, {
+        x: m.x, y: m.y, angle: m.angle, name: m.name, skin: m.skin, lastSeen: Date.now(), ip: m.ip,
+      });
+    } else if (m.action === 'leave') {
+      lobbyPlayers.delete(m.id);
+    } else if (m.action === 'list') {
+      // 全量同步：用发送方 isolate 的玩家覆盖本 isolate（用于启动/定时对齐）
+      for (const [id, data] of Object.entries(m.players || {})) {
+        lobbyPlayers.set(id, { ...data, lastSeen: Date.now() });
+      }
+    }
+    return;
+  }
+
   if (m.type !== 'room') return;
 
   switch (m.action) {
@@ -108,7 +140,45 @@ function broadcast(m) {
   dispatch(m); // 本 isolate 立即处理（BC 不投给自己）
 }
 
+// 大厅广播：把本 isolate 所有大厅玩家快照发给每个大厅连接（含跨 isolate 同步）
+function broadcastLobbyList() {
+  const now = Date.now();
+  const players: Record<string, any> = {};
+  for (const [id, p] of lobbyPlayers) {
+    players[id] = { x: p.x, y: p.y, angle: p.angle, name: p.name, skin: p.skin };
+  }
+  for (const [id, c] of conns) {
+    if (c.ws && !c.room && c.ws.readyState === 1) {
+      // me：告知该连接自己的 id，前端据此过滤自己（自己位置以本地为准）
+      send(c.ws, { t: 'lobby_list', me: id, d: players });
+    }
+  }
+  // 同步给其他 isolate：每 5 秒广播一次全量，保持 isolate 间大厅玩家一致
+  if (Math.floor(now / 5000) % 2 === 0) {
+    broadcast({ type: 'lobby', action: 'list', players });
+  }
+}
+
+// 清理超过 10 秒未更新位置的大厅玩家（视为断线/离开）
+function cleanLobby() {
+  const now = Date.now();
+  const stale: string[] = [];
+  for (const [id, p] of lobbyPlayers) {
+    if (!conns.has(id) || now - p.lastSeen > 10000) stale.push(id);
+  }
+  for (const id of stale) {
+    lobbyPlayers.delete(id);
+    broadcast({ type: 'lobby', action: 'leave', id });
+  }
+}
+
 bc.onmessage = (ev) => dispatch(ev.data);
+
+// 大厅定时广播 + 清理
+setInterval(() => {
+  cleanLobby();
+  broadcastLobbyList();
+}, LOBBY_BROADCAST_MS);
 
 // ---------- 房间管理（KV 持久化注册表 + 内存镜像） ----------
 // Deno Deploy 的 isolate 会被回收/重建：仅靠进程内 rooms Map 时，新 isolate 里
@@ -244,6 +314,9 @@ async function leaveRoom(connId: string) {
   c.room = null;
   c.role = null;
   c.slot = null;
+  // 离开房间后从大厅移除（客户端回主界面时会重新走 lobby_join）
+  lobbyPlayers.delete(connId);
+  broadcast({ type: 'lobby', action: 'leave', id: connId });
 }
 
 // ---------- 消息处理 ----------
@@ -258,11 +331,55 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
 
   const c = conns.get(connId);
   switch (msg.t) {
+    case 'lobby_join': {
+      if (!c) return;
+      // 条目可能不存在（首次加入 / 被超时清理后重新加入），先补建
+      const lp = lobbyPlayers.get(connId) || {
+        x: 0.45 + Math.random() * 0.1,
+        y: 0.5 + Math.random() * 0.1,
+        angle: 0,
+        name: '',
+        skin: '',
+        lastSeen: 0,
+        ip: c.ip,
+      };
+      lp.name = String(msg.name || '').slice(0, 12);
+      lp.skin = String(msg.skin || '');
+      lp.lastSeen = Date.now();
+      lobbyPlayers.set(connId, lp);
+      // 立即广播一次大厅全量玩家
+      const players: Record<string, any> = {};
+      for (const [id, p] of lobbyPlayers) {
+        players[id] = { x: p.x, y: p.y, angle: p.angle, name: p.name, skin: p.skin };
+      }
+      send(ws, { t: 'lobby_list', me: connId, d: players });
+      broadcast({ type: 'lobby', action: 'join', id: connId, x: lp?.x, y: lp?.y, angle: lp?.angle, name: lp?.name, skin: lp?.skin, ip: c.ip });
+      break;
+    }
+    case 'lobby_pos': {
+      if (!c || c.room) return;
+      const lp = lobbyPlayers.get(connId);
+      if (!lp) return;
+      const nx = Number(msg.x);
+      const ny = Number(msg.y);
+      const na = Number(msg.angle);
+      if (isFinite(nx) && isFinite(ny) && isFinite(na)) {
+        lp.x = clamp(nx, 0, 1);
+        lp.y = clamp(ny, 0, 1);
+        lp.angle = na;
+        lp.lastSeen = Date.now();
+        broadcast({ type: 'lobby', action: 'pos', id: connId, x: lp.x, y: lp.y, angle: lp.angle });
+      }
+      break;
+    }
     case 'create': {
       if (c && c.room) {
         send(ws, { t: 'error', msg: '你已经在房间里了' });
         return;
       }
+      // 进入房间后离开大厅
+      lobbyPlayers.delete(connId);
+      broadcast({ type: 'lobby', action: 'leave', id: connId });
       // 最多人数：不填/非法 = 0（不限）；模式：public 公开 / private 私有
       let cap = Math.floor(Number(msg.max));
       if (!isFinite(cap) || cap < 0) cap = 0;
@@ -278,6 +395,9 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
         send(ws, { t: 'error', msg: '你已经在房间里了' });
         return;
       }
+      // 进入房间后离开大厅
+      lobbyPlayers.delete(connId);
+      broadcast({ type: 'lobby', action: 'leave', id: connId });
       const room = String(msg.room || '').trim();
       const res = await joinRoom(
         connId,
@@ -349,16 +469,25 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
   }
 }
 
-function setupSocket(ws: WebSocket) {
+function getClientIp(req?: Request, connInfo?: Deno.ServeHandlerInfo): string {
+  let ip = (connInfo && connInfo.remoteAddr && (connInfo.remoteAddr as any).hostname) || '';
+  if (!ip && req) ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || '';
+  return String(ip).replace(/^::ffff:/, '');
+}
+
+function setupSocket(ws: WebSocket, req?: Request, connInfo?: Deno.ServeHandlerInfo) {
   const connId = 'c' + (++connSeq) + '-' + Math.random().toString(36).slice(2, 8);
-  conns.set(connId, { ws, room: null, role: null, slot: null });
+  const ip = getClientIp(req, connInfo);
+  conns.set(connId, { ws, room: null, role: null, slot: null, ip });
 
   ws.onmessage = (ev: MessageEvent) => {
     handleWsMessage(ws, connId, String(ev.data)).catch((e) => console.error('ws msg err', e));
   };
   ws.onclose = () => {
     void leaveRoom(connId);
+    lobbyPlayers.delete(connId);
     conns.delete(connId);
+    broadcast({ type: 'lobby', action: 'leave', id: connId });
   };
   ws.onerror = () => {
     try {
@@ -1042,7 +1171,7 @@ Deno.serve(async (req, connInfo) => {
   if (upgrade === 'websocket') {
     try {
       const { socket, response } = Deno.upgradeWebSocket(req);
-      setupSocket(socket);
+      setupSocket(socket, req, connInfo);
       return response;
     } catch (_) {
       return new Response('WebSocket upgrade failed', { status: 400 });
