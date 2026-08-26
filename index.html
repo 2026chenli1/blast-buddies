@@ -44,6 +44,23 @@
   }
   body.mobile-mode #mobile-pause-btn.show { display: flex; }
 
+  /* 管理员波次传送按钮（仅管理员登录后游戏中显示） */
+  #admin-warp-btn {
+    pointer-events: auto;
+    width: 44px; height: 44px;
+    flex: none;
+    border-radius: 12px;
+    border: 2px solid rgba(255,209,102,.65);
+    background: rgba(13,27,42,.6);
+    color: #ffd166;
+    font-size: 18px;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+  #admin-warp-btn:active { transform: scale(0.92); }
+
   /* 技能按钮（Q 释放） */
   .skill-btn {
     pointer-events: auto;
@@ -720,6 +737,7 @@
   <div class="hud-score">得分 <span id="score-display">0</span></div>
   <div class="hud-wave" id="wave-display">第 1 波</div>
   <div class="hud-right-wrap">
+    <button id="admin-warp-btn" aria-label="传送波次" title="管理员：传送至任意波次" style="display:none;">⚡</button>
     <button id="mobile-pause-btn" aria-label="暂停">⏸</button>
     <div class="hud-right" id="hearts-display"></div>
     <button class="skill-btn" id="grenade-btn" aria-label="手榴弹" title="按 3 扔手榴弹" style="font-size:18px;">
@@ -1409,7 +1427,8 @@ function drawMiniPlayer(cv, def, isGun) {
 function renderShop() {
   const listEl = document.getElementById('shop-list');
   if (!listEl) return;
-  document.getElementById('shop-coins').textContent = '💰 ' + User.coins + ' · 可花经验 ' + spendableExp();
+  document.getElementById('shop-coins').textContent = '💰 ' + User.coins
+    + ' · 可花经验 ' + (User.role === 'admin' ? '∞' : spendableExp());
   document.getElementById('shop-tab-skin').classList.toggle('active', shopTab === 'skin');
   document.getElementById('shop-tab-gun').classList.toggle('active', shopTab === 'gun');
   document.getElementById('shop-tab-upg').classList.toggle('active', shopTab === 'upg');
@@ -1510,10 +1529,11 @@ function renderUpgradeTab() {
       const name = GUN_DEFS[id] ? GUN_DEFS[id].name : (GRENADE_DEFS[id] ? GRENADE_DEFS[id].name : (SKIN_DEFS[id] ? SKIN_DEFS[id].skill.name : id));
       const lv = upgLv(id);
       const cost = upgCost(id);
-      const can = lv < UPG_MAX_LV && spendableExp() >= cost;
+      const isAdmin = User.role === 'admin'; // 管理员：升级不消耗经验
+      const can = lv < UPG_MAX_LV && (isAdmin || spendableExp() >= cost);
       const btn = lv >= UPG_MAX_LV
         ? `<button class="shop-buy own" disabled>已满级</button>`
-        : `<button class="shop-buy upg" data-upg="${id}" ${can ? '' : 'disabled style="opacity:.45;cursor:not-allowed;"'}>${cost} 经验</button>`;
+        : `<button class="shop-buy upg" data-upg="${id}" ${can ? '' : 'disabled style="opacity:.45;cursor:not-allowed;"'}>${isAdmin ? '免费升级' : cost + ' 经验'}</button>`;
       rows.push(`<div class="upg-row">
         <div class="upg-name">${name}<span class="upg-cat">${grp.cat} · Lv.${lv}</span>${upgPips(lv)}</div>
         <div class="upg-info">${upgEffectText(id)}</div>
@@ -2557,6 +2577,7 @@ function update(dt) {
         if (inp.gm) p.netGunDmg = inp.gm / 100;          // guest 武器升级伤害倍率
         if (inp.rr) p.netGunRate = inp.rr / 100;         // guest 武器升级射速倍率
         if (inp.sc) p.netSkillCdMul = inp.sc / 100;      // guest 技能升级冷却倍率
+        if (inp.ad) p.netAdmin = true;                   // guest 是管理员 → 无敌
         if (inp.sk) useSkill(p);                         // guest 释放技能（host 权威）
       }
     } else {
@@ -3075,10 +3096,30 @@ function updateBoss(dt) {
 }
 
 // ======================= 波次 =======================
+// 管理员传送：直接跳到任意波次（清场后立刻开目标波）
+function adminWarpWave() {
+  if (User.role !== 'admin' || G.state !== 'playing') return;
+  if (G.mode === 'net' && NET.role !== 'host') { alert('联机模式仅房主可传送波次'); return; }
+  if (G.gm === 'tdm') { alert('团队死斗模式没有波次'); return; }
+  const v = prompt('传送至第几波？（1-999）', String(G.wave + 1));
+  if (v === null) return;
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n) || n < 1 || n > 999) { alert('请输入 1-999 之间的波次'); return; }
+  G.enemies = [];
+  G.enemyBullets = [];
+  G.boss = null;
+  hideBossBar();
+  G.spawnQueue = 0;
+  G.wave = n - 1;          // startWave() 会 +1，到达目标波次
+  G.waveTimer = 0.8;
+  addPopup(W / 2, H / 2 - 80, `⚡ 传送至第 ${n} 波`, '#ffd166');
+  addRing(W / 2, H / 2, '#ffd166', 60);
+}
+document.getElementById('admin-warp-btn').addEventListener('click', adminWarpWave);
+
 function startWave() {
   // TDM 模式不刷怪
-  if (G.gm === 'tdm') return;
-  G.wave++;
+  if (G.gm === 'tdm') return;  G.wave++;
   const banner = document.getElementById('wave-banner');
   const isBoss = G.wave % CFG.bossEvery === 0;
   banner.textContent = isBoss ? `⚠ 第 ${G.wave} 波 · BOSS 来袭 ⚠` : `第 ${G.wave} 波`;
@@ -3149,6 +3190,11 @@ function killBoss() {
 
 function damagePlayer(p, n) {
   if (p.invuln > 0) return;
+  // 管理员无敌：本机玩家（P1）是管理员，或联机 guest 标记了管理员身份
+  if ((p.id === 1 && User.role === 'admin') || p.netAdmin) {
+    addRing(p.x, p.y, '#ffd166', p.r + 6);
+    return;
+  }
   // 能量护盾：抵挡一次伤害
   if (p.shield > 0 && p.shieldCharges > 0) {
     p.shieldCharges--;
@@ -4793,6 +4839,8 @@ function applyNetState(s) {
       hide(document.getElementById('pause-overlay'));
       hideBossBar();
       document.getElementById('hud').style.display = 'flex';
+      const awBtn2 = document.getElementById('admin-warp-btn');
+      if (awBtn2) awBtn2.style.display = (User.role === 'admin') ? 'flex' : 'none';
       // 新开局清空 guest 本地残留的粒子/飘字
       G.particles = [];
       G.popups = [];
@@ -4868,6 +4916,7 @@ function netSendInput() {
   netSend({ t: 'input', d: {
     dx: dx / len, dy: dy / len, ax, ay, fire, g: activeGun, sk: skillPressed ? 1 : 0,
     gm: Math.round(gu.dmg * 100), rr: Math.round(gu.rate * 100), sc: Math.round(su.cd * 100),
+    ad: User.role === 'admin' ? 1 : 0,
   } });
   skillPressed = false;
 }
@@ -4909,6 +4958,8 @@ function showMenu() {
   document.getElementById('mode-modal').style.display = 'none';
   renderHomeUser();
   document.getElementById('hud').style.display = 'none';
+  const awBtn = document.getElementById('admin-warp-btn');
+  if (awBtn) awBtn.style.display = 'none';
   updateSkillBtn();  // 隐藏技能按钮
   // 回到菜单时结束联机房间
   netClose();
@@ -4977,6 +5028,8 @@ function startGame() {
   hide(document.getElementById('pause-overlay'));
   hideBossBar();
   document.getElementById('hud').style.display = 'flex';
+  const awBtn = document.getElementById('admin-warp-btn');
+  if (awBtn) awBtn.style.display = (User.role === 'admin') ? 'flex' : 'none';
   const sb = document.getElementById('save-score-btn');
   sb.textContent = '保存成绩';
   sb.disabled = false;
