@@ -23,7 +23,7 @@ const lastSeen = new Map<string, number>();
 // 大厅玩家：connId -> { x, y, angle, name, skin, lastSeen, ip }
 // 所有未进入房间的 WebSocket 连接默认都在大厅，可在大厅里自由移动、看见彼此
 const lobbyPlayers = new Map<string, Record<string, any>>();
-const LOBBY_BROADCAST_MS = 80; // 大厅位置广播间隔（ms）
+const LOBBY_BROADCAST_MS = 150; // 大厅位置广播间隔（ms）。过大：位置滞后；过小：流量爆炸（免费额度 20GB/月）
 
 const bc = new BroadcastChannel('blast-relay');
 
@@ -143,6 +143,12 @@ function broadcast(m) {
 // 大厅广播：把本 isolate 所有大厅玩家快照发给每个大厅连接（含跨 isolate 同步）
 function broadcastLobbyList() {
   const now = Date.now();
+  // 省流量：没有大厅玩家或没有任何大厅连接时完全跳过（避免空转广播耗尽免费额度）
+  let hasLobbyConn = false;
+  for (const [, c] of conns) {
+    if (c.ws && !c.room && c.ws.readyState === 1) { hasLobbyConn = true; break; }
+  }
+  if (!hasLobbyConn || lobbyPlayers.size === 0) return;
   const players: Record<string, any> = {};
   for (const [id, p] of lobbyPlayers) {
     players[id] = { x: p.x, y: p.y, angle: p.angle, name: p.name, skin: p.skin };
