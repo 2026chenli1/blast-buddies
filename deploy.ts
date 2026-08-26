@@ -554,7 +554,7 @@ async function sendSmsCode(phone: string, code: string): Promise<{ ok: boolean; 
   return { ok: false, msg: st?.Message || '未知错误' };
 }
 
-async function handleApi(req: Request, url: URL): Promise<Response> {
+async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInfo): Promise<Response> {
   const path = url.pathname;
 
   // POST /api/auth/send-code { phone } —— 生成 10 位验证码并（可选）发送短信
@@ -677,8 +677,10 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
   // GET /api/online —— 真实在线人数（最近 70 秒活跃的独立访客数）
   if (path === '/api/online' && req.method === 'GET') {
     const now = Date.now();
-    const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim()
-      || req.headers.get('cf-connecting-ip') || '';
+    // 优先取 TCP 连接的真实客户端 IP（Deno 边缘注入），x-forwarded-for 兜底
+    let ip = (connInfo && connInfo.remoteAddr && (connInfo.remoteAddr as any).hostname) || '';
+    if (!ip) ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || '';
+    ip = String(ip).replace(/^::ffff:/, '');
     if (ip) lastSeen.set(ip, now);
     let stale: string[] = [];
     for (const [k, v] of lastSeen) if (now - v > 70000) stale.push(k);
@@ -1033,7 +1035,7 @@ function showLogin() {
 }
 
 // ---------- 入口 ----------
-Deno.serve(async (req) => {
+Deno.serve(async (req, connInfo) => {
   const url = new URL(req.url);
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
 
@@ -1049,7 +1051,7 @@ Deno.serve(async (req) => {
 
   // 用户系统 API（登录/商城/结算）
   if (url.pathname.startsWith('/api/')) {
-    return handleApi(req, url);
+    return handleApi(req, url, connInfo);
   }
 
   // 扫码登录手机确认页（/qr/<ticket>）
