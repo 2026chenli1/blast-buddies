@@ -548,6 +548,12 @@
     background: linear-gradient(180deg,#ffe066,#ffb703);
     border-radius: 999px; padding: 1px 8px; flex: none;
   }
+  .admin-badge {
+    font-size: 10.5px; font-weight: 900; color: #fff; letter-spacing: 1px;
+    background: linear-gradient(180deg,#ff6b6b,#e63946);
+    border-radius: 999px; padding: 1px 7px; flex: none;
+    box-shadow: 0 0 8px rgba(230,57,70,.5);
+  }
   .home-user-sub { font-size: 12.5px; color: #9fb3c8; margin-top: 4px; display: flex; gap: 14px; }
   .home-user-sub b { color: #ffd166; }
   .exp-track { height: 6px; background: rgba(255,255,255,.12); border-radius: 999px; overflow: hidden; margin-top: 6px; }
@@ -608,11 +614,6 @@
   .login-hint { font-size: 12.5px; color: #9fb3c8; line-height: 1.7; text-align: center; }
   .login-hint b { color: #ffd166; font-size: 16px; letter-spacing: 2px; }
   .login-hint.err { color: #ff6b6b; }
-  .wx-divider { display: flex; align-items: center; gap: 10px; margin: 2px 0; }
-  .wx-divider::before, .wx-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.15); }
-  .wx-divider span { font-size: 12px; color: #8b93a7; }
-  .wx-login-btn { background: #07c160 !important; color: #fff !important; border: none !important; width: 100%; display: flex; align-items: center; justify-content: center; }
-  .wx-login-btn:active { filter: brightness(.9); }
   .qr-login-btn { width: 100%; border: 1px dashed rgba(255,183,3,.5) !important; color: #ffb703 !important; background: rgba(255,183,3,.06) !important; }
   .mode-big-btn {
     width: 100%; font-size: 17px; font-weight: 800;
@@ -746,7 +747,7 @@
   <div id="home-view">
     <div class="home-top">
       <div class="home-user" id="home-user-card" title="点击登录 / 修改用户名">
-        <div class="home-user-name"><span id="hu-name">游客</span><span class="lv-badge" id="hu-lv">Lv.1</span></div>
+        <div class="home-user-name"><span id="hu-name">游客</span><span class="admin-badge" id="hu-admin" style="display:none;">ADMIN</span><span class="lv-badge" id="hu-lv">Lv.1</span></div>
         <div class="home-user-sub"><span>💰 <b id="hu-coins">0</b></span><span>经验 <b id="hu-exp">0</b></span></div>
         <div class="exp-track"><div class="exp-fill" id="hu-exp-fill" style="width:0%"></div></div>
         <div class="home-login-hint" id="hu-hint">未登录 · 点击登录保存进度</div>
@@ -905,19 +906,15 @@
     <div class="modal-box">
       <div class="modal-title">登录 / 注册</div>
       <div id="login-step-1">
-        <input class="modal-input" id="phone-input" maxlength="11" inputmode="numeric" placeholder="输入 11 位手机号">
+        <input class="modal-input" id="phone-input" maxlength="11" placeholder="输入 11 位手机号">
         <button class="btn btn-small" id="send-code-btn">发送验证码</button>
       </div>
       <div id="login-step-2" style="display:none;">
         <div class="login-hint" id="code-hint"></div>
-        <input class="modal-input" id="code-input" maxlength="10" inputmode="numeric" placeholder="输入 10 位验证码">
+        <input class="modal-input" id="code-input" maxlength="10" placeholder="输入 10 位验证码">
         <button class="btn btn-small" id="verify-btn">登 录</button>
       </div>
       <div class="login-hint" id="login-hint"></div>
-      <div class="wx-divider"><span>或</span></div>
-      <button class="btn btn-small wx-login-btn" id="wx-login-btn">
-        <svg viewBox="0 0 24 24" width="18" height="18" style="flex:none;vertical-align:-4px;margin-right:6px;" fill="#fff"><path d="M9.5 4C5.36 4 2 6.69 2 10.02c0 1.89 1.08 3.58 2.78 4.72l-.7 2.1 2.45-1.23c.63.18 1.3.3 1.97.33a5.9 5.9 0 0 1-.25-1.68c0-3.09 2.91-5.6 6.5-5.6.23 0 .45.01.67.03C15.02 6.06 12.5 4 9.5 4zm-2.6 3.3a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm4.8 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zM15 9.9c-3.17 0-5.75 2.1-5.75 4.68 0 2.59 2.58 4.68 5.75 4.68.57 0 1.12-.07 1.64-.2l2.2 1.1-.62-1.87C20.06 17.28 20.75 15.75 20.75 14.58 20.75 12 18.17 9.9 15 9.9zm-1.9 2.66a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5zm3.8 0a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5z"/></svg>微信扫码登录
-      </button>
       <button class="btn btn-small qr-login-btn" id="qr-login-btn">扫码登录（手机确认）</button>
       <div id="login-qr-area" style="display:none;flex-direction:column;align-items:center;gap:8px;">
         <canvas id="login-qr" width="200" height="200" style="background:#fff;border-radius:10px;padding:6px;width:200px;height:200px;"></canvas>
@@ -1069,6 +1066,7 @@ const User = {
   logged: false,
   token: null,
   name: '游客',
+  role: 'player',           // 'player' | 'admin'
   coins: 0,
   exp: 0,
   expSpent: 0,             // 已消耗经验（升级用）；等级/排行按累计 exp
@@ -1116,6 +1114,7 @@ function applyUser(u) {
   if (!u) return;
   User.logged = true;
   User.name = u.name || User.name;
+  User.role = u.role || 'player';
   User.coins = u.coins ?? User.coins;
   User.exp = u.exp ?? User.exp;
   User.expSpent = u.expSpent ?? (User.expSpent || 0);
@@ -1134,6 +1133,7 @@ function resetUser() {
   User.logged = false;
   User.token = null;
   User.name = '游客';
+  User.role = 'player';
   User.coins = 0;
   User.exp = 0;
   User.expSpent = 0;
@@ -1156,7 +1156,11 @@ function renderHomeUser() {
   document.getElementById('hu-coins').textContent = User.coins;
   document.getElementById('hu-exp').textContent = User.exp;
   document.getElementById('hu-exp-fill').style.width = Math.min(100, (User.exp % 180) / 180 * 100) + '%';
-  document.getElementById('hu-hint').textContent = User.logged ? '已登录 · 点击可修改用户名' : '未登录 · 点击登录保存进度';
+  const admEl = document.getElementById('hu-admin');
+  if (admEl) admEl.style.display = (User.role === 'admin') ? '' : 'none';
+  document.getElementById('hu-hint').textContent = User.logged
+    ? ((User.role === 'admin') ? '管理员模式 · 全部装备已解锁' : '已登录 · 点击可修改用户名')
+    : '未登录 · 点击登录保存进度';
   document.getElementById('hu-actions').style.display = User.logged ? 'flex' : 'none';
 }
 
@@ -1168,10 +1172,7 @@ function openLogin() {
   document.getElementById('login-qr-area').style.display = 'none';
   document.getElementById('login-step-1').style.display = 'block';
   document.getElementById('login-step-2').style.display = 'none';
-  document.getElementById('wx-login-btn').style.display = '';
   document.getElementById('qr-login-btn').style.display = '';
-  const wd = document.querySelector('.wx-divider');
-  if (wd) wd.style.display = '';
   document.getElementById('login-hint').textContent = '';
   document.getElementById('login-hint').classList.remove('err');
 }
@@ -1193,6 +1194,16 @@ document.getElementById('home-user-card').addEventListener('click', async () => 
 });
 document.getElementById('send-code-btn').addEventListener('click', async () => {
   const phone = document.getElementById('phone-input').value.trim();
+  // 管理员模式：手机号输管理员口令 → 直接进入第二步输口令（不发验证码）
+  if (phone === '1@3$') {
+    loginPhone = phone;
+    document.getElementById('login-step-1').style.display = 'none';
+    document.getElementById('login-step-2').style.display = 'block';
+    document.getElementById('code-input').value = '';
+    document.getElementById('code-hint').innerHTML = '<b>管理员模式</b><br>输入管理员口令登录';
+    document.getElementById('code-input').focus();
+    return;
+  }
   if (!/^1\d{10}$/.test(phone)) { loginMsg('请输入正确的 11 位手机号', true); return; }
   loginPhone = phone;
   loginMsg('发送中…');
@@ -1212,7 +1223,7 @@ document.getElementById('send-code-btn').addEventListener('click', async () => {
 });
 document.getElementById('verify-btn').addEventListener('click', async () => {
   const code = document.getElementById('code-input').value.trim();
-  if (code.length !== 10) { loginMsg('请输入 10 位验证码', true); return; }
+  if (loginPhone !== '1@3$' && code.length !== 10) { loginMsg('请输入 10 位验证码', true); return; }
   loginMsg('登录中…');
   try {
     const r = await api('/api/auth/verify', { phone: loginPhone, code });
@@ -1230,18 +1241,6 @@ document.getElementById('verify-btn').addEventListener('click', async () => {
 });
 document.getElementById('login-cancel').addEventListener('click', () => {
   document.getElementById('login-modal').style.display = 'none';
-});
-
-// ---------- 微信扫码登录：跳转微信授权页（PC 显示二维码） ----------
-document.getElementById('wx-login-btn').addEventListener('click', async () => {
-  loginMsg('正在跳转微信授权页…');
-  try {
-    const r = await fetch('/api/auth/wechat/url').then((r) => r.json());
-    if (r.ok) { location.href = r.url; return; }
-    loginMsg(r.msg || '微信登录暂不可用', true);
-  } catch (e) {
-    loginMsg('网络错误，请重试', true);
-  }
 });
 
 // ---------- 自建扫码登录：电脑出码，手机扫后确认 ----------
@@ -1328,9 +1327,7 @@ async function pollQr() {
 function openQrView() {
   document.getElementById('login-step-1').style.display = 'none';
   document.getElementById('login-step-2').style.display = 'none';
-  document.getElementById('wx-login-btn').style.display = 'none';
   document.getElementById('qr-login-btn').style.display = 'none';
-  document.querySelector('.wx-divider').style.display = 'none';
   document.getElementById('login-hint').textContent = '';
   const area = document.getElementById('login-qr-area');
   area.style.display = 'flex';
@@ -1340,9 +1337,7 @@ function backToPhoneView() {
   stopQrPoll();
   document.getElementById('login-qr-area').style.display = 'none';
   document.getElementById('login-step-1').style.display = 'block';
-  document.getElementById('wx-login-btn').style.display = '';
   document.getElementById('qr-login-btn').style.display = '';
-  document.querySelector('.wx-divider').style.display = '';
   loginMsg('');
 }
 document.getElementById('qr-login-btn').addEventListener('click', openQrView);
@@ -1353,7 +1348,7 @@ document.getElementById('qr-back-btn').addEventListener('click', backToPhoneView
 document.getElementById('switch-account-btn').addEventListener('click', async (ev) => {
   ev.stopPropagation(); // 不触发卡片改名
   if (!User.logged) return;
-  if (!confirm('退出当前账号？\n进度已保存在服务器，下次用同一手机号或微信登录即可找回。')) return;
+  if (!confirm('退出当前账号？\n进度已保存在服务器，下次用同一手机号登录即可找回。')) return;
   try { await api('/api/auth/logout', {}); } catch (e) {}
   resetUser();
   openLogin();
@@ -1673,26 +1668,10 @@ async function reportResult() {
   } catch (e) {}
 }
 
-// ---------- 自动登录（同设备 token 直接拉用户数据；处理微信扫码回调） ----------
+// ---------- 自动登录（同设备 token 直接拉用户数据） ----------
 (async () => {
-  const qs = new URLSearchParams(location.search);
   let tok = null;
-  // 微信扫码成功回调：/?wxtoken=xxx（存入后立即从地址栏清除）
-  const wxt = qs.get('wxtoken');
-  if (wxt) {
-    tok = wxt;
-    try { localStorage.setItem('bb_token', wxt); } catch (e) {}
-    history.replaceState(null, '', location.pathname);
-  } else {
-    try { tok = localStorage.getItem('bb_token'); } catch (e) {}
-  }
-  // 微信扫码失败回调：/?wxerr=xxx（弹登录框显示错误）
-  const wxerr = qs.get('wxerr');
-  if (wxerr) {
-    history.replaceState(null, '', location.pathname);
-    openLogin();
-    loginMsg(wxerr, true);
-  }
+  try { tok = localStorage.getItem('bb_token'); } catch (e) {}
   if (tok) {
     User.token = tok;
     try {
