@@ -4765,10 +4765,17 @@ function startLobbyWorld() {
       if (m.t === 'lobby_list') {
         if (m.me) Lobby.wsId = m.me; // 服务器告知我的连接 id，用于过滤自己
         const d = m.d || {};
+        // 保留旧位置做插值起点：网络快照只是目标值，渲染时平滑逼近
+        const old = new Map(Lobby.players);
         Lobby.players.clear();
         for (const [id, p] of Object.entries(d)) {
           if (id === Lobby.wsId) continue;
-          Lobby.players.set(id, { ...p, lastSeen: performance.now() });
+          const o = old.get(id);
+          Lobby.players.set(id, {
+            x: o ? o.x : p.x, y: o ? o.y : p.y, angle: o ? o.angle : (p.angle || 0),
+            tx: p.x, ty: p.y, tangle: p.angle || 0,
+            name: p.name, skin: p.skin, lastSeen: performance.now(),
+          });
         }
       }
     };
@@ -5624,7 +5631,15 @@ function updateLobbyPlayer(dt) {
   // 清理太久没更新的其他玩家（本地回退）
   const now = performance.now();
   for (const [id, p] of Lobby.players) {
-    if (now - p.lastSeen > 8000) Lobby.players.delete(id);
+    if (now - p.lastSeen > 8000) { Lobby.players.delete(id); continue; }
+    // 位置插值：向最近一次网络快照（目标值）平滑滑动，补偿 150ms 广播间隔
+    const k = Math.min(1, dt * 10);
+    p.x += ((p.tx ?? p.x) - p.x) * k;
+    p.y += ((p.ty ?? p.y) - p.y) * k;
+    let da = ((p.tangle ?? p.angle) - p.angle) % Math.PI;
+    if (da > Math.PI) da -= Math.PI * 2;
+    if (da < -Math.PI) da += Math.PI * 2;
+    p.angle += da * k;
   }
 }
 
