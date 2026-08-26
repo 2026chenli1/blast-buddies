@@ -671,12 +671,13 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     return jsonResp({ ok: true, id, q: `${a} ${op} ${b} = ?` });
   }
 
-  // GET /api/rank —— 线上排行（公开，按经验值降序，Top 50）
+  // GET /api/rank —— 线上排行（公开，按经验值降序，Top 50；管理员不出现在榜单）
   if (path === '/api/rank' && req.method === 'GET') {
     const list = [];
     for await (const e of kv.list({ prefix: ['user'] })) {
       const u = e.value as Record<string, any>;
       if (!u) continue;
+      if (u.role === 'admin' || String(e.key[1]) === '__admin__') continue; // 管理员不参与排行
       list.push({
         name: u.name || '玩家',
         level: 1 + Math.floor((u.exp || 0) / 180),
@@ -811,6 +812,13 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     const ups: Record<string, number> = u.upgrades || {};
     const lv = ups[item as string] || 0;
     if (lv >= UPGRADE_MAX_LV) return jsonResp({ ok: false, msg: '已满级' }, 400);
+    if (u.role === 'admin') {
+      // 管理员：免费升级，不消耗经验
+      ups[item as string] = lv + 1;
+      u.upgrades = ups;
+      await kv.set(['user', auth.phone], u);
+      return jsonResp({ ok: true, user: pubUser(u) });
+    }
     const cost = upgCost(lv);
     const spendable = Math.max(0, (u.exp as number) - ((u.expSpent as number) || 0));
     if (spendable < cost) return jsonResp({ ok: false, msg: `经验不足（可花 ${spendable}，需 ${cost}）` }, 400);
