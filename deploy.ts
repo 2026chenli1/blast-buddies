@@ -481,9 +481,8 @@ function getClientIp(req?: Request, connInfo?: Deno.ServeHandlerInfo): string {
   return String(ip).replace(/^::ffff:/, '');
 }
 
-function setupSocket(ws: WebSocket, req?: Request, connInfo?: Deno.ServeHandlerInfo) {
+function setupSocket(ws: WebSocket, ip: string) {
   const connId = 'c' + (++connSeq) + '-' + Math.random().toString(36).slice(2, 8);
-  const ip = getClientIp(req, connInfo);
   conns.set(connId, { ws, room: null, role: null, slot: null, ip });
 
   ws.onmessage = (ev: MessageEvent) => {
@@ -1176,10 +1175,14 @@ Deno.serve(async (req, connInfo) => {
 
   if (upgrade === 'websocket') {
     try {
+      // 注意：必须在 upgradeWebSocket 之前读取 remoteAddr ——
+      // 升级后 Request 已关闭，再访问 connInfo.remoteAddr 会抛 "Request closed"
+      const ip = getClientIp(req, connInfo);
       const { socket, response } = Deno.upgradeWebSocket(req);
-      setupSocket(socket, req, connInfo);
+      setupSocket(socket, ip);
       return response;
-    } catch (_) {
+    } catch (err) {
+      console.error('WS setup error:', err);
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
   }
