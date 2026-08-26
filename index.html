@@ -1408,6 +1408,12 @@ function applyUser(u) {
   User.gun = GUN_DEFS[u.gun] ? u.gun : 'gun_pistol';
   try { localStorage.setItem('bb_name', User.name); } catch (e) {}
   renderHomeUser();
+  // 登录/资料刷新后，把最新昵称与皮肤同步到在线大厅
+  if (Lobby.ws && Lobby.ws.readyState === 1) {
+    try {
+      Lobby.ws.send(JSON.stringify({ t: 'lobby_join', name: User.name || '游客', skin: User.skin || 'skin_default' }));
+    } catch (e) {}
+  }
 }
 
 // ---------- 主界面用户卡片 ----------
@@ -3573,141 +3579,21 @@ function applyPowerup(pu, p) {
 
 // ======================= 渲染 =======================
 function drawLobbyBg() {
-  const t = G.time;
+  // 大厅背景：恢复为之前的深色/黑色 + 网格
+  const bg = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.75);
+  bg.addColorStop(0, '#16283f');
+  bg.addColorStop(1, '#0b1626');
+  ctx.fillStyle = bg;
+  ctx.fillRect(-20, -20, W + 40, H + 40);
 
-  // 紫色天空渐变
-  const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, '#4f3ec7');
-  sky.addColorStop(0.45, '#7c5cfc');
-  sky.addColorStop(0.8, '#b78bfa');
-  sky.addColorStop(1, '#f0abfc');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, H);
-
-  // 太阳光晕（右上角）
-  const sun = ctx.createRadialGradient(W * 0.82, H * 0.16, 0, W * 0.82, H * 0.16, W * 0.28);
-  sun.addColorStop(0, 'rgba(255, 200, 90, 0.45)');
-  sun.addColorStop(0.35, 'rgba(255, 150, 70, 0.18)');
-  sun.addColorStop(1, 'rgba(255, 150, 70, 0)');
-  ctx.fillStyle = sun;
-  ctx.fillRect(0, 0, W, H);
-
-  // 云朵
-  function cloud(x, y, s, a) {
-    ctx.fillStyle = `rgba(255,255,255,${a})`;
-    ctx.beginPath();
-    ctx.arc(x, y, 18 * s, 0, TAU);
-    ctx.arc(x + 16 * s, y - 8 * s, 22 * s, 0, TAU);
-    ctx.arc(x + 36 * s, y, 18 * s, 0, TAU);
-    ctx.arc(x + 18 * s, y + 8 * s, 16 * s, 0, TAU);
-    ctx.fill();
-  }
-  const drift = (t * 6) % (W + 120);
-  cloud(-80 + drift, H * 0.16, 1.1, 0.55);
-  cloud(W * 0.2 + drift * 0.4, H * 0.22, 0.75, 0.4);
-  cloud(W * 0.65 - drift * 0.25, H * 0.13, 0.9, 0.45);
-
-  // 远景棕榈树
-  function palm(x, y, s) {
-    const trunkW = 8 * s, trunkH = 90 * s;
-    ctx.fillStyle = '#8b5a2b';
-    ctx.beginPath();
-    ctx.moveTo(x - trunkW, y);
-    ctx.quadraticCurveTo(x - trunkW * 0.5, y - trunkH * 0.5, x, y - trunkH);
-    ctx.quadraticCurveTo(x + trunkW * 0.5, y - trunkH * 0.5, x + trunkW, y);
-    ctx.fill();
-    // 叶子
-    ctx.fillStyle = '#22c55e';
-    const topX = x, topY = y - trunkH;
-    for (let i = 0; i < 6; i++) {
-      const ang = -Math.PI / 2 + (i - 2.5) * 0.55 + Math.sin(t + i) * 0.04;
-      const lx = topX + Math.cos(ang) * 45 * s;
-      const ly = topY + Math.sin(ang) * 22 * s;
-      ctx.beginPath();
-      ctx.ellipse((topX + lx) / 2, (topY + ly) / 2, 32 * s, 10 * s, ang, 0, TAU);
-      ctx.fill();
-    }
-  }
-  palm(W * 0.14, H * 0.55, 0.9);
-  palm(W * 0.26, H * 0.58, 0.7);
-  palm(W * 0.78, H * 0.56, 1.0);
-  palm(W * 0.89, H * 0.59, 0.75);
-
-  // 中景砖墙
-  const wallY = H * 0.52;
-  ctx.fillStyle = '#a68b5b';
-  ctx.fillRect(0, wallY, W, H * 0.08);
-  ctx.strokeStyle = 'rgba(80,60,40,0.25)';
-  ctx.lineWidth = 2;
+  // 网格装饰
+  ctx.strokeStyle = 'rgba(255,255,255,0.035)';
+  ctx.lineWidth = 1;
+  const grid = 64;
   ctx.beginPath();
-  const brickH = 14;
-  for (let y = wallY; y < wallY + H * 0.08; y += brickH) {
-    ctx.moveTo(0, y); ctx.lineTo(W, y);
-    const offset = ((y - wallY) / brickH) % 2 === 0 ? 0 : 22;
-    for (let x = -40 + offset; x < W; x += 44) { ctx.moveTo(x, y); ctx.lineTo(x, y + brickH); }
-  }
+  for (let x = (G.time * 8) % grid; x < W; x += grid) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for (let y = (G.time * 8) % grid; y < H; y += grid) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
   ctx.stroke();
-  // 墙顶阴影
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
-  ctx.fillRect(0, wallY, W, 6);
-
-  // 中景草丛
-  function bush(x, y, s, c) {
-    ctx.fillStyle = c;
-    ctx.beginPath();
-    ctx.arc(x, y, 16 * s, 0, TAU);
-    ctx.arc(x + 14 * s, y - 6 * s, 20 * s, 0, TAU);
-    ctx.arc(x + 30 * s, y, 16 * s, 0, TAU);
-    ctx.arc(x + 14 * s, y + 10 * s, 14 * s, 0, TAU);
-    ctx.fill();
-  }
-  bush(W * 0.08, H * 0.62, 1.1, '#16a34a');
-  bush(W * 0.92, H * 0.63, 1.3, '#16a34a');
-  bush(W * 0.72, H * 0.61, 0.9, '#22c55e');
-
-  // 前景水面
-  const waterY = H * 0.62;
-  const water = ctx.createLinearGradient(0, waterY, 0, H);
-  water.addColorStop(0, '#22d3ee');
-  water.addColorStop(0.5, '#0ea5e9');
-  water.addColorStop(1, '#0284c7');
-  ctx.fillStyle = water;
-  ctx.fillRect(0, waterY, W, H - waterY);
-
-  // 水波纹
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = 0; i < 7; i++) {
-    const y = waterY + 18 + i * 26 + Math.sin(t * 2 + i) * 3;
-    for (let x = -30 + (i % 2) * 40; x < W; x += 90) {
-      ctx.moveTo(x, y);
-      ctx.quadraticCurveTo(x + 20, y - 5, x + 40, y);
-    }
-  }
-  ctx.stroke();
-
-  // 前景草地边缘
-  ctx.fillStyle = '#4ade80';
-  ctx.beginPath();
-  ctx.moveTo(0, H);
-  for (let x = 0; x <= W; x += 30) {
-    ctx.lineTo(x, H - 18 - Math.abs(Math.sin(x * 0.02 + t)) * 10);
-  }
-  ctx.lineTo(W, H);
-  ctx.fill();
-
-  // 前景草丛细节
-  ctx.fillStyle = '#22c55e';
-  for (let i = 0; i < 24; i++) {
-    const x = (i * 73 + 20) % W;
-    const h = 14 + (i % 5) * 4;
-    ctx.beginPath();
-    ctx.moveTo(x, H);
-    ctx.quadraticCurveTo(x + 5, H - h * 0.6, x + (i % 2 === 0 ? 10 : -6), H - h);
-    ctx.quadraticCurveTo(x - 3, H - h * 0.5, x, H);
-    ctx.fill();
-  }
 }
 
 function draw() {
@@ -3716,9 +3602,15 @@ function draw() {
     ctx.translate(rand(-G.shake, G.shake) * 0.5, rand(-G.shake, G.shake) * 0.5);
   }
 
-  // 大厅背景（卡通 3D 场景）
+  // 大厅：黑色背景 + 在线玩家自由移动
   if (G.state === 'menu') {
     drawLobbyBg();
+    // 绘制其他在线玩家
+    for (const [id, p] of Lobby.players) {
+      drawLobbyPlayer(p.x * W, p.y * H, p.angle, p.skin, p.name);
+    }
+    // 绘制自己
+    drawLobbyPlayer(Lobby.me.x * W, Lobby.me.y * H, Lobby.me.angle, User.skin, User.name || '游客', true);
     ctx.restore();
     return;
   }
@@ -3907,6 +3799,68 @@ function drawMobileControls() {
     ctx.lineWidth = 4;
     ctx.beginPath(); ctx.arc(fb.x, fb.y, fb.r + 6, 0, Math.PI * 2); ctx.stroke();
   }
+  ctx.restore();
+}
+
+function drawLobbyPlayer(x, y, angle, skinId, name, isMe = false) {
+  const r = 26;
+  const def = (skinId && SKIN_DEFS[skinId]) ? SKIN_DEFS[skinId] : SKIN_DEFS.skin_default;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath();
+  ctx.ellipse(0, 4, r, r * 0.8, 0, 0, TAU);
+  ctx.fill();
+
+  // 身体
+  const grad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.2, 0, 0, r);
+  grad.addColorStop(0, def.body1);
+  grad.addColorStop(1, def.body2);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = isMe ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = isMe ? 3 : 2;
+  ctx.stroke();
+
+  // 高光
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.3, -r * 0.35, r * 0.28, r * 0.18, -0.6, 0, TAU);
+  ctx.fill();
+
+  // 眼睛
+  ctx.fillStyle = '#0d1b2a';
+  ctx.beginPath();
+  ctx.arc(r * 0.34, -r * 0.3, 3.4, 0, TAU);
+  ctx.arc(r * 0.34, r * 0.3, 3.4, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(r * 0.34 + 1.2, -r * 0.3 - 1.2, 1.2, 0, TAU);
+  ctx.arc(r * 0.34 + 1.2, r * 0.3 - 1.2, 1.2, 0, TAU);
+  ctx.fill();
+
+  // 炮口
+  ctx.fillStyle = def.gun1;
+  ctx.beginPath();
+  ctx.roundRect(r * 0.5, -5, r * 0.8, 10, 4);
+  ctx.fill();
+
+  ctx.restore();
+
+  // 昵称标签
+  ctx.save();
+  ctx.fillStyle = isMe ? '#67e8f9' : '#fff';
+  ctx.font = `bold ${isMe ? 13 : 12}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(0,0,0,0.7)';
+  ctx.shadowBlur = 4;
+  ctx.fillText(String(name || '').slice(0, 12) || '游客', x, y - r - 8);
   ctx.restore();
 }
 
@@ -4776,10 +4730,69 @@ const NET = {
   rtt: 0,          // 客户端↔服务器往返延迟（ms），ping/pong 测得
 };
 
+// ---------- 在线大厅（首页） ----------
+// 大厅是一个共享世界：所有未进入房间的玩家都在这里，只能移动、看见彼此
+const Lobby = {
+  ws: null,
+  me: { x: 0.5, y: 0.55, angle: 0, moving: false, anim: 0 }, // 位置用 0~1 比例
+  players: new Map(), // id -> { x, y, angle, name, skin, lastSeen }
+  lastSend: 0,
+  connected: false,
+};
+
 function wsURL() {
   const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   return proto + location.host + '/ws';
 }
+
+function closeLobbyWorld() {
+  if (Lobby.ws) { try { Lobby.ws.close(); } catch (e) {} Lobby.ws = null; }
+  Lobby.connected = false;
+  Lobby.players.clear();
+}
+function startLobbyWorld() {
+  if (Lobby.ws || NET.ws) return; // 在房间里时不连大厅
+  try {
+    const ws = new WebSocket(wsURL());
+    Lobby.ws = ws;
+    ws.onopen = () => {
+      Lobby.connected = true;
+      ws.send(JSON.stringify({ t: 'lobby_join', name: User.name || '游客', skin: User.skin || 'skin_default' }));
+    };
+    ws.onmessage = (e) => {
+      let m;
+      try { m = JSON.parse(e.data); } catch (err) { return; }
+      if (m.t === 'lobby_list') {
+        if (m.me) Lobby.wsId = m.me; // 服务器告知我的连接 id，用于过滤自己
+        const d = m.d || {};
+        Lobby.players.clear();
+        for (const [id, p] of Object.entries(d)) {
+          if (id === Lobby.wsId) continue;
+          Lobby.players.set(id, { ...p, lastSeen: performance.now() });
+        }
+      }
+    };
+    ws.onclose = ws.onerror = () => {
+      if (Lobby.ws === ws) { Lobby.ws = null; Lobby.connected = false; }
+      // 未进入房间时自动重连
+      if (!NET.ws && G.state === 'menu') setTimeout(startLobbyWorld, 2000);
+    };
+  } catch (e) {}
+}
+function sendLobbyPos() {
+  if (!Lobby.ws || Lobby.ws.readyState !== 1) return;
+  const now = performance.now();
+  if (now - Lobby.lastSend < 60) return;
+  Lobby.lastSend = now;
+  Lobby.ws.send(JSON.stringify({
+    t: 'lobby_pos',
+    x: Math.round(Lobby.me.x * 1000) / 1000,
+    y: Math.round(Lobby.me.y * 1000) / 1000,
+    angle: Math.round(Lobby.me.angle * 1000) / 1000,
+  }));
+}
+// 页面加载即进入在线大厅（未登录时先以「游客」身份，登录后由 applyUser 更新昵称）
+startLobbyWorld();
 // ---------- RTT 测量：每 2 秒发 ping，服务器直接回 pong ----------
 // （不绕经对方浏览器：对方标签页后台节流会把 RTT 拉到几万毫秒）
 let netPingLast = 0;
@@ -4868,6 +4881,7 @@ function updateNetHud() {
 function netCreate(max, mode, gm) {
   if (NET.ws) return;
   closeLobby();
+  closeLobbyWorld(); // 进入房间：离开共享大厅
   setNetStatus('create', '正在连接服务器 (' + wsURL() + ') …');
   clearTimeout(NET.createTimer);
   NET.createTimer = setTimeout(() => {
@@ -4963,6 +4977,7 @@ function netCreate(max, mode, gm) {
 function netJoin(room) {
   if (NET.ws) return;
   closeLobby();
+  closeLobbyWorld(); // 进入房间：离开共享大厅
   setNetStatus('join', '正在连接房间 ' + room + ' (' + wsURL() + ') …');
   clearTimeout(NET.joinTimer);
   NET.joinTimer = setTimeout(() => {
@@ -5428,6 +5443,8 @@ function showMenu() {
   updateSkillBtn();  // 隐藏技能按钮
   // 回到菜单时结束联机房间
   netClose();
+  closeLobbyWorld(); // 关掉可能残留的大厅连接（服务器可能已因超时清理）
+  startLobbyWorld(); // 重新进入在线大厅
   updateNetHud();
   renderLeaderboard(document.getElementById('lb-list-start'));
   initChallenge();
@@ -5573,6 +5590,44 @@ function gameOver() {
   }, 600);
 }
 
+function updateLobbyPlayer(dt) {
+  const me = Lobby.me;
+  // 鼠标控制朝向
+  me.angle = Math.atan2(mouse.y - me.y * H, mouse.x - me.x * W);
+
+  // WASD / 方向键 / 手机摇杆 移动
+  let dx = 0, dy = 0;
+  if (Mobile.active && Mobile.joy.id !== null) {
+    dx = Mobile.joy.dx; dy = Mobile.joy.dy;
+  } else {
+    if (keys.has('KeyW') || keys.has('ArrowUp')) dy -= 1;
+    if (keys.has('KeyS') || keys.has('ArrowDown')) dy += 1;
+    if (keys.has('KeyA') || keys.has('ArrowLeft')) dx -= 1;
+    if (keys.has('KeyD') || keys.has('ArrowRight')) dx += 1;
+  }
+  const len = Math.hypot(dx, dy);
+  me.moving = len > 0;
+  const speed = 220; // 大厅移动速度（像素/秒）
+  if (len > 0) {
+    const spd = (Mobile.active && Mobile.joy.id !== null) ? Math.max(0.3, len) : 1;
+    me.x += (dx / len) * (speed / W) * spd * dt;
+    me.y += (dy / len) * (speed / H) * spd * dt;
+    me.anim += dt * 10;
+  }
+  // 边界限制（留一点边距）
+  me.x = clamp(me.x, 0.04, 0.96);
+  me.y = clamp(me.y, 0.08, 0.92);
+
+  // 同步给服务器
+  sendLobbyPos();
+
+  // 清理太久没更新的其他玩家（本地回退）
+  const now = performance.now();
+  for (const [id, p] of Lobby.players) {
+    if (now - p.lastSeen > 8000) Lobby.players.delete(id);
+  }
+}
+
 // ======================= 主循环 =======================
 let lastTime = performance.now();
 // FPS 统计：每 500ms 刷新一次显示，用于区分「网络延迟高」和「帧率低（渲染卡）」
@@ -5611,9 +5666,9 @@ function loop(now) {
     netBroadcast();
     netPing();           // RTT 测量（每 2 秒一次）
   }
-  // 主界面：人物预览动画（转圈展示皮肤+枪）
+  // 主界面：在线大厅移动 + 渲染
   if (G.state === 'menu' && document.getElementById('home-view').style.display !== 'none') {
-    drawPreview(dt);
+    updateLobbyPlayer(dt);
   }
   draw();
   requestAnimationFrame(loop);
@@ -5781,6 +5836,8 @@ document.getElementById('pick-net').addEventListener('click', () => {
 });
 document.getElementById('net-back-btn').addEventListener('click', () => {
   netClose();
+  closeLobbyWorld();
+  startLobbyWorld(); // 返回主界面：重新进入在线大厅
   updateNetHud();
   netPanel.style.display = 'none';
   homeView.style.display = 'block';
