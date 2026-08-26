@@ -17,6 +17,9 @@ const conns = new Map(); // connId -> { ws, room, role, slot }
 const rooms = new Map(); // room -> { host, guests: [{slot, id}], created, cap, mode }
 // cap: 0 = 不限人数；mode: 'public'（房间列表可见）| 'private'（凭房间号加入）
 
+// 在线人数统计：ip -> 最近活跃时间（大厅轮询 /api/online 时更新，70 秒未活跃剔除）
+const lastSeen = new Map<string, number>();
+
 const bc = new BroadcastChannel('blast-relay');
 
 function send(ws, obj) {
@@ -669,6 +672,18 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     const ans = op === '+' ? a + b : a * b;
     await kv.set(['cap', id], String(ans), { expireIn: 2 * 60 * 1000 });
     return jsonResp({ ok: true, id, q: `${a} ${op} ${b} = ?` });
+  }
+
+  // GET /api/online —— 真实在线人数（最近 70 秒活跃的独立访客数）
+  if (path === '/api/online' && req.method === 'GET') {
+    const now = Date.now();
+    const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim()
+      || req.headers.get('cf-connecting-ip') || '';
+    if (ip) lastSeen.set(ip, now);
+    let stale: string[] = [];
+    for (const [k, v] of lastSeen) if (now - v > 70000) stale.push(k);
+    for (const k of stale) lastSeen.delete(k);
+    return jsonResp({ ok: true, online: lastSeen.size });
   }
 
   // GET /api/rank —— 线上排行（公开，按经验值降序，Top 50；管理员不出现在榜单）
