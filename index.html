@@ -680,6 +680,22 @@
   .reward-val { font-size: 18px; font-weight: 900; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.15); }
   .reward-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,.9); margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 3px; }
 
+  /* 每日地图卡片（左侧，奖励卡下方） */
+  .daily-map-card {
+    position: absolute; top: calc(50% + 82px); left: 14px;
+    width: 112px;
+    background: linear-gradient(180deg, rgba(139,92,246,.95), rgba(109,40,217,.95));
+    border: 2px solid rgba(255,255,255,.35);
+    border-radius: 18px;
+    padding: 10px 8px;
+    text-align: center;
+    box-shadow: 0 8px 22px rgba(0,0,0,.22);
+  }
+  .daily-map-card .dm-title { font-size: 11px; font-weight: 900; color: #fff; letter-spacing: 1px; margin-bottom: 6px; }
+  .daily-map-card canvas { width: 100%; border-radius: 8px; border: 1px solid rgba(255,255,255,.35); background: #0b1626; display: block; }
+  .daily-map-card .dm-name { font-size: 11px; font-weight: 700; color: #fff; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .daily-map-card .dm-author { font-size: 9px; color: rgba(255,255,255,.85); margin: 2px 0 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   /* 右侧挑战面板 */
   .challenge-card {
     position: absolute; top: 14px; right: 14px;
@@ -818,6 +834,7 @@
     #home-view .coin-pill, #home-view .online-pill { font-size: 11px; padding: 4px 8px; }
     #home-view .chat-btn { font-size: 11px; padding: 6px 8px; }
     #home-view .reward-card { transform: scale(.85); transform-origin: left center; }
+    #home-view .daily-map-card { top: auto; bottom: 148px; left: 8px; width: 98px; transform: scale(.92); transform-origin: left bottom; }
     #home-view .home-bottom { bottom: 10px; }
     #home-view .home-nav { gap: 8px; }
     #home-view .nav-icon { width: 48px; height: 48px; }
@@ -1021,6 +1038,15 @@
       <div class="reward-label"><svg viewBox="0 0 24 24" width="10" height="10"><rect x="2" y="6" width="20" height="12" rx="2" fill="none" stroke="#fff" stroke-width="2"/><path d="M6 10h4M6 14h8" stroke="#fff" stroke-width="2"/></svg> 观看</div>
     </div>
 
+    <!-- 每日地图卡片：每天随机展示一位玩家分享的地图 -->
+    <div class="daily-map-card" id="daily-map-card">
+      <div class="dm-title"><svg viewBox="0 0 24 24" width="12" height="12" style="vertical-align:-2px;"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/><path d="M9 3v15M15 6v15" stroke="#fff" stroke-width="2"/></svg> 今日地图</div>
+      <canvas id="daily-map-canvas" width="128" height="80"></canvas>
+      <div class="dm-name" id="daily-map-name">加载中…</div>
+      <div class="dm-author" id="daily-map-author"></div>
+      <button class="btn btn-small" id="daily-map-play" style="width:100%;background:#22c55e;">游玩</button>
+    </div>
+
     <!-- 右侧挑战面板（默认隐藏，右上角「任务」按钮开关） -->
     <div class="challenge-card" id="challenge-card" style="display:none;">
       <div class="challenge-head">
@@ -1197,6 +1223,7 @@
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
         <button class="btn btn-small" id="map-tool-wall" style="background:#8b5cf6;">墙壁</button>
         <button class="btn btn-small btn-secondary" id="map-tool-trap">陷阱</button>
+        <button class="btn btn-small btn-secondary" id="map-tool-spawn">重生点</button>
         <button class="btn btn-small btn-secondary" id="map-tool-erase">橡皮</button>
         <button class="btn btn-small btn-secondary" id="map-clear-btn">清空</button>
       </div>
@@ -1205,6 +1232,7 @@
         <input id="map-name-input" type="text" maxlength="12" placeholder="地图名称" style="flex:1;min-width:120px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px 10px;color:#e2e8f0;font-size:13px;">
         <button class="btn btn-small" id="map-save-btn">保存地图</button>
         <button class="btn btn-small" id="map-play-btn" style="background:#22c55e;">▶ 游玩</button>
+        <button class="btn btn-small btn-secondary" id="map-share-btn">分享</button>
         <button class="btn btn-small btn-secondary" id="map-none-btn">不使用自定义地图</button>
       </div>
       <div id="map-list" style="margin-top:10px;"></div>
@@ -2121,8 +2149,8 @@ function openMapEditor() {
 }
 function meSetTool(t) {
   ME.tool = t;
-  const conf = { wall: '#8b5cf6', trap: '#ef4444', erase: '#475569' };
-  for (const [k, id] of Object.entries({ wall: 'map-tool-wall', trap: 'map-tool-trap', erase: 'map-tool-erase' })) {
+  const conf = { wall: '#8b5cf6', trap: '#ef4444', spawn: '#22c55e', erase: '#475569' };
+  for (const [k, id] of Object.entries({ wall: 'map-tool-wall', trap: 'map-tool-trap', spawn: 'map-tool-spawn', erase: 'map-tool-erase' })) {
     const b = document.getElementById(id);
     if (b) {
       if (k === t) { b.classList.remove('btn-secondary'); b.style.background = conf[k]; }
@@ -2169,6 +2197,19 @@ function meRender() {
         c.strokeStyle = '#f87171';
         c.lineWidth = 2;
         c.stroke();
+      } else if (v === 3) {
+        // 重生点：绿色圆环 + 白点
+        c.fillStyle = 'rgba(34,197,94,0.8)';
+        c.beginPath();
+        c.arc(x + cw / 2, y + ch / 2, Math.min(cw, ch) * 0.38, 0, Math.PI * 2);
+        c.fill();
+        c.strokeStyle = '#bbf7d0';
+        c.lineWidth = 2;
+        c.stroke();
+        c.fillStyle = '#fff';
+        c.beginPath();
+        c.arc(x + cw / 2, y + ch / 2, Math.min(cw, ch) * 0.13, 0, Math.PI * 2);
+        c.fill();
       }
     }
   }
@@ -2185,7 +2226,7 @@ function meCellAt(ev) {
 function mePaint(ev) {
   const cell = meCellAt(ev);
   if (!cell) return;
-  ME.cells[cell.row][cell.col] = ME.tool === 'wall' ? 1 : ME.tool === 'trap' ? 2 : 0;
+  ME.cells[cell.row][cell.col] = ME.tool === 'wall' ? 1 : ME.tool === 'trap' ? 2 : ME.tool === 'spawn' ? 3 : 0;
   meRender();
 }
 (function meInit() {
@@ -2202,6 +2243,7 @@ function mePaint(ev) {
 })();
 document.getElementById('map-tool-wall').addEventListener('click', () => meSetTool('wall'));
 document.getElementById('map-tool-trap').addEventListener('click', () => meSetTool('trap'));
+document.getElementById('map-tool-spawn').addEventListener('click', () => meSetTool('spawn'));
 document.getElementById('map-tool-erase').addEventListener('click', () => meSetTool('erase'));
 document.getElementById('map-clear-btn').addEventListener('click', () => { ME.cells = meBlank(); meRender(); });
 document.getElementById('map-save-btn').addEventListener('click', () => {
@@ -2214,7 +2256,7 @@ document.getElementById('map-save-btn').addEventListener('click', () => {
   document.getElementById('map-name-input').value = name;
   meRenderList();
 });
-// 游玩：先保存当前画布，再用这张地图直接开一局公开房间
+// 游玩：先保存当前画布，再用这张地图直接开一局（服务器不可用期间为单人模式）
 document.getElementById('map-play-btn').addEventListener('click', () => {
   const name = (document.getElementById('map-name-input').value || '').trim() || ('我的地图' + (meLoad().length + 1));
   const maps = meLoad();
@@ -2224,6 +2266,31 @@ document.getElementById('map-play-btn').addEventListener('click', () => {
   meSave(maps);
   document.getElementById('map-name-input').value = name;
   mePlay(data);
+});
+// 分享：把当前画布的地图发布到服务器「每日地图池」，有机会成为别人的今日地图
+document.getElementById('map-share-btn').addEventListener('click', async () => {
+  const name = (document.getElementById('map-name-input').value || '').trim() || ('我的地图' + (meLoad().length + 1));
+  const maps = meLoad();
+  const data = { name, cols: ME.cols, rows: ME.rows, cells: ME.cells.map(r => r.slice()) };
+  const idx = maps.findIndex(m => m.name === name);
+  if (idx >= 0) maps[idx] = data; else maps.push(data);
+  meSave(maps);
+  document.getElementById('map-name-input').value = name;
+  meRenderList();
+  const filled = data.cells.flat().filter(v => v > 0).length;
+  if (!filled) { alert('先画点墙壁/陷阱/重生点再分享吧'); return; }
+  try {
+    const r = await fetch('/api/maps/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: data.name, cols: data.cols, rows: data.rows, cells: data.cells, author: User.name || '玩家' })
+    });
+    const d = await r.json();
+    if (d.ok) alert('✅ 已分享！你的地图有机会成为其他玩家的「今日地图」');
+    else alert('分享失败：' + (d.msg || '未知错误'));
+  } catch (e) {
+    alert('分享失败：服务器暂不可用，稍后再试');
+  }
 });
 document.getElementById('map-editor-close').addEventListener('click', () => {
   document.getElementById('map-editor-modal').style.display = 'none';
@@ -2242,7 +2309,7 @@ function meRenderList() {
   }
   el.innerHTML = maps.map((m, i) => `
     <div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:6px 10px;margin-bottom:6px;">
-      <span style="flex:1;font-size:13px;color:#e2e8f0;">${escapeHtml(m.name || '未命名')}<span style="color:#64748b;font-size:11px;"> · ${(m.cells || []).flat().filter(v => v === 1).length} 墙 ${(m.cells || []).flat().filter(v => v === 2).length} 陷阱</span></span>
+      <span style="flex:1;font-size:13px;color:#e2e8f0;">${escapeHtml(m.name || '未命名')}<span style="color:#64748b;font-size:11px;"> · ${(m.cells || []).flat().filter(v => v === 1).length} 墙 ${(m.cells || []).flat().filter(v => v === 2).length} 陷阱 ${(m.cells || []).flat().filter(v => v === 3).length} 重生点</span></span>
       <button class="btn btn-small" data-meuse="${i}">使用</button>
       <button class="btn btn-small" data-meplay="${i}" style="background:#22c55e;">游玩</button>
       <button class="btn btn-small btn-secondary" data-medel="${i}">删除</button>
@@ -2271,18 +2338,16 @@ function meUse(m) {
   // 使用该地图创建房间
   document.getElementById('room-setup-modal').style.display = 'flex';
 }
-// 游玩：用该地图直接开一局公开房间，其他玩家点「快速游戏」即可随机加入
+// 游玩：直接用这张地图开局。服务器可用时开公开房间；服务器不可用/连接失败时单人游玩
 function mePlay(m) {
   G.customMap = m;
   document.getElementById('map-editor-modal').style.display = 'none';
-  if (NET.ws) { alert('你已在房间中，退出当前房间后即可游玩自定义地图'); return; }
-  if (document.getElementById('home-view').style.display !== 'none') {
-    G.mode = 'net';
-    document.getElementById('home-view').style.display = 'none';
-    document.getElementById('net-panel').style.display = 'block';
-    showNetView(true);
-  }
-  netCreate(8, 'public', 'coop', true);
+  closeLobby();
+  closeLobbyWorld();
+  // 服务器维护期间：直接单人开局（点击即玩，不等联机）
+  G.mode = 'single';
+  document.getElementById('home-view').style.display = 'none';
+  startGame();
 }
 
 // 顶部在线人数：真实数据（服务端统计最近 70 秒活跃访客）
@@ -2298,6 +2363,75 @@ async function refreshOnline() {
 }
 refreshOnline();
 setInterval(refreshOnline, 20000);
+
+// ---------- 今日地图：每天随机展示一位玩家分享的地图 ----------
+function dailySeed() {
+  // 以日期字符串做哈希：同一天结果稳定，跨天自动更换
+  const s = new Date().toISOString().slice(0, 10);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+let DailyMap = null; // 当前展示的地图 { name, author, cols, rows, cells }
+async function loadDailyMap() {
+  let map = null;
+  // 1) 优先服务器：所有玩家分享的地图池，按日期确定性随机
+  try {
+    const r = await fetch('/api/maps/daily');
+    const d = await r.json();
+    if (d.ok && d.map && d.map.cells) map = d.map;
+  } catch (e) {}
+  // 2) 服务器不可用：按同一日期种子从本地地图确定性挑选
+  if (!map) {
+    const maps = meLoad();
+    if (maps.length) {
+      map = maps[dailySeed() % maps.length];
+      map.author = User.name || '我';
+    }
+  }
+  DailyMap = map;
+  renderDailyMap();
+}
+function renderDailyMap() {
+  const nameEl = document.getElementById('daily-map-name');
+  const authorEl = document.getElementById('daily-map-author');
+  const cv = document.getElementById('daily-map-canvas');
+  const playBtn = document.getElementById('daily-map-play');
+  if (!DailyMap || !DailyMap.cells) {
+    if (nameEl) nameEl.textContent = '暂无地图';
+    if (authorEl) authorEl.textContent = '去「地图」创建一张吧';
+    if (playBtn) playBtn.disabled = true;
+    return;
+  }
+  const m = DailyMap;
+  if (playBtn) playBtn.disabled = false;
+  if (nameEl) nameEl.textContent = m.name || '未命名';
+  if (authorEl) authorEl.textContent = '作者：' + (m.author || '玩家');
+  // 迷你预览：墙壁灰 / 陷阱红 / 重生点绿
+  if (cv) {
+    const c = cv.getContext('2d');
+    const cols = m.cols || 16, rows = m.rows || 10;
+    const cw = cv.width / cols, ch = cv.height / rows;
+    c.fillStyle = '#0b1626';
+    c.fillRect(0, 0, cv.width, cv.height);
+    for (let r = 0; r < rows; r++) {
+      const row = m.cells[r] || [];
+      for (let col = 0; col < cols; col++) {
+        const v = row[col] || 0;
+        if (!v) continue;
+        const x = col * cw, y = r * ch;
+        if (v === 1) { c.fillStyle = '#64748b'; c.fillRect(x + 1, y + 1, cw - 2, ch - 2); }
+        else if (v === 2) { c.fillStyle = '#ef4444'; c.beginPath(); c.arc(x + cw / 2, y + ch / 2, Math.min(cw, ch) * 0.32, 0, Math.PI * 2); c.fill(); }
+        else if (v === 3) { c.fillStyle = '#22c55e'; c.beginPath(); c.arc(x + cw / 2, y + ch / 2, Math.min(cw, ch) * 0.34, 0, Math.PI * 2); c.fill(); }
+      }
+    }
+  }
+}
+document.getElementById('daily-map-play').addEventListener('click', () => {
+  if (!DailyMap || !DailyMap.cells) return;
+  mePlay({ name: DailyMap.name, cols: DailyMap.cols, rows: DailyMap.rows, cells: DailyMap.cells });
+});
+loadDailyMap();
 
 // 挑战倒计时
 function updateChallengeTime() {
@@ -2693,6 +2827,7 @@ const G = {
   boss: null,
   obstacles: [],
   traps: [],            // 陷阱（自定义地图）
+  spawnPoints: [],      // 重生点（自定义地图，玩家出生/重生位置）
   customMap: null,      // 自定义地图 { name, cols, rows, cells }（地图编辑器选择）
   effects: [],          // 技能特效（闪电/冲击波）
   scoreSaved: false,
@@ -2932,10 +3067,17 @@ function respawnPlayer(p) {
   p.invuln = 2.5;
   p.dashT = 0; p.shield = 0; p.shieldCharges = 0; p.stealth = 0; p.rainbow = 0; // 死亡清除持续效果
   const i = G.players.indexOf(p);
-  const n = G.players.length;
-  const spread = Math.min(130 * (n - 1), W * 0.7);
-  p.x = clamp(W / 2 + (n > 1 ? (i / (n - 1) - 0.5) * spread : 0), 60, W - 60);
-  p.y = H / 2;
+  if (G.spawnPoints && G.spawnPoints.length) {
+    // 自定义地图重生点：按玩家序号轮流分配
+    const s = G.spawnPoints[i % G.spawnPoints.length] || G.spawnPoints[0];
+    p.x = s.x;
+    p.y = s.y;
+  } else {
+    const n = G.players.length;
+    const spread = Math.min(130 * (n - 1), W * 0.7);
+    p.x = clamp(W / 2 + (n > 1 ? (i / (n - 1) - 0.5) * spread : 0), 60, W - 60);
+    p.y = H / 2;
+  }
   addParticles(p.x, p.y, p.colors.body2, 14, 200, 4, 0.5);
   addRing(p.x, p.y, p.colors.body2, p.r);
   addPopup(p.x, p.y - 30, `${(p.name && String(p.name).trim()) ? p.name : 'P' + p.id} 重生！`, p.colors.body1);
@@ -3166,6 +3308,7 @@ function applyCustomMap() {
   const cols = m.cols || 16, rows = m.rows || 10;
   const cw = W / cols, ch = H / rows;
   const cr = Math.min(cw, ch);
+  G.spawnPoints = [];
   for (let r = 0; r < rows; r++) {
     const row = m.cells[r] || [];
     for (let c = 0; c < cols; c++) {
@@ -3184,8 +3327,19 @@ function applyCustomMap() {
       } else if (v === 2) {
         // 陷阱：周期性伤害圈（伤害玩家与敌人）
         G.traps.push({ x, y, r: cr * 0.42, tick: Math.random() * 0.4, pulse: 0 });
+      } else if (v === 3) {
+        // 重生点：玩家出生/重生位置
+        G.spawnPoints.push({ x, y });
       }
     }
+  }
+  // 画了重生点：玩家出生在重生点上（多个则按序轮流分配）
+  if (G.spawnPoints.length) {
+    G.players.forEach((p, i) => {
+      const s = G.spawnPoints[i % G.spawnPoints.length];
+      p.x = s.x;
+      p.y = s.y;
+    });
   }
 }
 
@@ -5937,6 +6091,7 @@ function startGame() {
   G.boss = null;
   G.obstacles = [];
   G.traps = [];            // 陷阱（自定义地图）
+  G.spawnPoints = [];      // 重生点（自定义地图）
   G.effects = [];
   G.scoreSaved = false;
   G.reported = false;
