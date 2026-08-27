@@ -977,6 +977,50 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     return jsonResp({ ok: true, list: list.slice(0, 50) });
   }
 
+  // GET /api/maps/daily —— 今日地图：按日期确定性随机挑选一张玩家分享的地图（每天更换）
+  if (path === '/api/maps/daily' && req.method === 'GET') {
+    const e = await kv.get(['maps']);
+    const list = (e.value as any[]) || [];
+    const date = new Date().toISOString().slice(0, 10);
+    if (!list.length) return jsonResp({ ok: true, map: null, date });
+    let h = 0;
+    for (let i = 0; i < date.length; i++) h = (h * 31 + date.charCodeAt(i)) >>> 0;
+    const map = list[h % list.length];
+    return jsonResp({ ok: true, map, date });
+  }
+
+  // POST /api/maps/publish —— 分享自定义地图进「每日地图池」
+  if (path === '/api/maps/publish' && req.method === 'POST') {
+    const body = await readBody(req);
+    const name = String(body.name || '').trim().slice(0, 12) || '未命名地图';
+    const author = String(body.author || '').trim().slice(0, 12) || '玩家';
+    const cols = Math.max(4, Math.min(40, body.cols | 0));
+    const rows = Math.max(4, Math.min(40, body.rows | 0));
+    const cells = body.cells;
+    if (!Array.isArray(cells) || cells.length !== rows) {
+      return jsonResp({ ok: false, msg: '地图数据错误' }, 400);
+    }
+    for (const row of cells) {
+      if (!Array.isArray(row) || row.length !== cols) {
+        return jsonResp({ ok: false, msg: '地图数据错误' }, 400);
+      }
+      for (const v of row) {
+        if (![0, 1, 2, 3].includes(v)) return jsonResp({ ok: false, msg: '地图数据错误' }, 400);
+      }
+    }
+    const filled = (cells as number[][]).flat().filter((v) => v > 0).length;
+    if (filled < 1) return jsonResp({ ok: false, msg: '先画点东西再分享吧' }, 400);
+    const e = await kv.get(['maps']);
+    const list = (e.value as any[]) || [];
+    // 同作者同名地图覆盖，防止刷屏
+    const idx = list.findIndex((m: any) => m && m.author === author && m.name === name);
+    const rec = { id: crypto.randomUUID(), name, author, cols, rows, cells, ts: Date.now() };
+    if (idx >= 0) list[idx] = rec; else list.push(rec);
+    while (list.length > 200) list.shift(); // 池子上限 200 张，超出淘汰最旧的
+    await kv.set(['maps'], list);
+    return jsonResp({ ok: true, total: list.length });
+  }
+
   // 以下接口均需登录
   const auth = await authUser(req);
   if (!auth) return jsonResp({ ok: false, msg: '请先登录' }, 401);
