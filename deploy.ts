@@ -25,7 +25,47 @@ const lastSeen = new Map<string, number>();
 const lobbyPlayers = new Map<string, Record<string, any>>();
 const LOBBY_BROADCAST_MS = 150; // 大厅位置广播间隔（ms）。过大：位置滞后；过小：流量爆炸（免费额度 20GB/月）
 
+// ---------- 排位赛匹配 ----------
+const MATCH_PLAYERS = 16; // 16 人陆续匹配，凑齐即开局
+const matchLocal = new Set<string>(); // 本 isolate 正在匹配的连接（跨 isolate 队列存 KV）
+
+async function getMatchQueue(): Promise<any[]> {
+  const e = await kv.get(['matchqueue']);
+  const q = (e?.value as any[]) || [];
+  return Array.isArray(q) ? q.filter((x) => x && x.id && Date.now() - x.ts < 90000) : [];
+}
+
+async function saveMatchQueue(q: any[]) {
+  await kv.set(['matchqueue'], q);
+}
+
+async function removeFromMatchQueue(id: string) {
+  try {
+    const q = await getMatchQueue();
+    const nq = q.filter((x) => x.id !== id);
+    if (nq.length !== q.length) {
+      await saveMatchQueue(nq);
+      broadcast({ type: 'match', action: 'count', n: nq.length });
+    }
+  } catch (_) {}
+}
+
+// 匹配队列互斥锁：并发 'match' 消息同时读改写 KV 会互相覆盖（15 人同时排队只留 1 人）
+let matchLock: Promise<unknown> = Promise.resolve();
+function withMatchLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = matchLock.then(fn, fn);
+  matchLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 const bc = new BroadcastChannel('blast-relay');
+
+// ---------- 战斗通行证 ----------
+const PASS_KILLS = 10; // 累计击杀 10 个敌人获得战斗通行证
+const PASS_GUNS = new Set(['gun_laser', 'gun_dual', 'gun_plasma']); // 通行证专属武器
 
 function send(ws, obj) {
   try {
@@ -75,6 +115,32 @@ function dispatch(m) {
       // 全量同步：用发送方 isolate 的玩家覆盖本 isolate（用于启动/定时对齐）
       for (const [id, data] of Object.entries(m.players || {})) {
         lobbyPlayers.set(id, { ...data, lastSeen: Date.now() });
+      }
+    }
+    return;
+  }
+
+  // 排位匹配事件：count（队列人数变化）/ found（凑齐 16 人，各 isolate 通知本地连接）
+  if (m.type === 'match') {
+    if (m.action === 'count') {
+      for (const id of matchLocal) {
+        const c = conns.get(id);
+        if (c && !c.room && c.ws && c.ws.readyState === 1) send(c.ws, { t: 'match_status', n: m.n });
+      }
+    } else if (m.action === 'found') {
+      for (const p of m.players || []) {
+        const c = conns.get(p.id);
+        // 房主的 c.room 已由 createRoom 设置（且值相同），其余玩家此时才设置
+        if (c && (!c.room || c.room === m.room)) {
+          if (!c.room) {
+            c.room = m.room;
+            c.role = p.slot === 1 ? 'host' : 'guest';
+            c.slot = p.slot;
+          }
+          matchLocal.delete(p.id);
+          lobbyPlayers.delete(p.id);
+          send(c.ws, { t: 'matched', room: m.room, slot: p.slot });
+        }
       }
     }
     return;
@@ -438,6 +504,70 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       send(ws, { t: 'rooms', d: list });
       break;
     }
+    case 'match': {
+      // 排位赛：加入匹配队列；凑齐 MATCH_PLAYERS 人后自动建房开局
+      if (c && c.room) {
+        send(ws, { t: 'error', msg: '你已经在房间里了' });
+        return;
+      }
+      if (matchLocal.has(connId)) return;
+      await withMatchLock(async () => {
+        matchLocal.add(connId);
+        lobbyPlayers.delete(connId);
+        broadcast({ type: 'lobby', action: 'leave', id: connId });
+        const q = await getMatchQueue();
+        if (q.some((x) => x.id === connId)) {
+          matchLocal.delete(connId);
+          return;
+        }
+        q.push({ id: connId, name: String(msg.name || '').slice(0, 12), skin: String(msg.skin || ''), ts: Date.now() });
+        if (q.length >= MATCH_PLAYERS) {
+          // 凑齐：前 16 人成团，其余留在队列
+          const batch = q.slice(0, MATCH_PLAYERS);
+          const rest = q.slice(MATCH_PLAYERS);
+          await saveMatchQueue(rest);
+          const room = await createRoom(batch[0].id, MATCH_PLAYERS, 'public', 'tdm');
+          // KV 注册表补上其余 15 人（guest），并广播 joined 让各 isolate 的 rooms 镜像同步、房主收到 peer
+          const reg = await roomReg(room);
+          for (let i = 1; i < batch.length; i++) {
+            if (reg && !reg.guests.some((g: any) => g.id === batch[i].id)) {
+              reg.guests.push({ slot: i + 1, id: batch[i].id, name: batch[i].name, skin: batch[i].skin });
+            }
+            broadcast({
+              type: 'room',
+              action: 'joined',
+              room,
+              host: batch[0].id,
+              guest: batch[i].id,
+              slot: i + 1,
+              name: batch[i].name,
+              skin: batch[i].skin,
+              created: Date.now(),
+              cap: MATCH_PLAYERS,
+              mode: 'public',
+            });
+          }
+          if (reg) await setRoomReg(reg);
+          // 通知所有成团玩家（本 isolate 直接发 + 跨 isolate 广播）
+          broadcast({ type: 'match', action: 'found', room, players: batch.map((b: any, i: number) => ({ id: b.id, slot: i + 1 })) });
+        } else {
+          await saveMatchQueue(q);
+          broadcast({ type: 'match', action: 'count', n: q.length });
+        }
+      });
+      break;
+    }
+    case 'match_cancel': {
+      await withMatchLock(async () => {
+        matchLocal.delete(connId);
+        const q = await getMatchQueue();
+        const nq = q.filter((x) => x.id !== connId);
+        await saveMatchQueue(nq);
+        send(ws, { t: 'match_cancelled' });
+        broadcast({ type: 'match', action: 'count', n: nq.length });
+      });
+      break;
+    }
     case 'input': {
       if (c && c.role === 'guest' && c.room) {
         void touchRoom(c.room);
@@ -493,6 +623,11 @@ function setupSocket(ws: WebSocket, ip: string) {
     lobbyPlayers.delete(connId);
     conns.delete(connId);
     broadcast({ type: 'lobby', action: 'leave', id: connId });
+    // 匹配中断开：从排位队列移除
+    if (matchLocal.has(connId)) {
+      matchLocal.delete(connId);
+      void removeFromMatchQueue(connId);
+    }
   };
   ws.onerror = () => {
     try {
@@ -606,6 +741,8 @@ function pubUser(u: Record<string, any>) {
     ownedGuns: u.ownedGuns,
     skin: u.skin,
     gun: u.gun,
+    kills: (u.kills as number) || 0,
+    pass: u.pass ? 1 : 0,
     upgrades: u.upgrades || {},
     expSpent: u.expSpent || 0,
     spendableExp: Math.max(0, (u.exp || 0) - (u.expSpent || 0)),
@@ -927,6 +1064,10 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     if ((def.lv || 1) > (u.level as number)) {
       return jsonResp({ ok: false, msg: `需要 Lv.${def.lv} 才能解锁该武器` }, 400);
     }
+    // 通行证专属武器：未获得战斗通行证不可购买
+    if (def.type === 'gun' && PASS_GUNS.has(String(item)) && !u.pass) {
+      return jsonResp({ ok: false, msg: `需要战斗通行证（累计击杀 ${PASS_KILLS} 个敌人）才能解锁` }, 400);
+    }
     const owned: string[] = def.type === 'skin' ? u.ownedSkins : u.ownedGuns;
     if (owned.includes(item as string)) return jsonResp({ ok: false, msg: '已拥有该物品' }, 400);
     if ((u.coins as number) < def.price) return jsonResp({ ok: false, msg: '金币不足' }, 400);
@@ -980,18 +1121,25 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     return jsonResp({ ok: true, user: pubUser(u) });
   }
 
-  // POST /api/user/result { score, kills, wave } —— 局后结算金币/经验
+  // POST /api/user/result { score, kills, wave } —— 局后结算金币/经验/击杀（累计击杀达标发战斗通行证）
   if (path === '/api/user/result' && req.method === 'POST') {
-    const { score, wave } = await readBody(req);
+    const { score, wave, kills } = await readBody(req);
     const s = Math.max(0, Math.min(1000000, Math.floor(Number(score) || 0)));
     const w = Math.max(0, Math.min(999, Math.floor(Number(wave) || 0)));
+    const k = Math.max(0, Math.min(9999, Math.floor(Number(kills) || 0)));
     const gainedCoins = Math.floor(s / 10) + w * 5;
     const gainedExp = Math.floor(s / 2);
     u.coins = (u.coins as number) + gainedCoins;
     u.exp = (u.exp as number) + gainedExp;
+    u.kills = ((u.kills as number) || 0) + k;
     u.level = 1 + Math.floor((u.exp as number) / 180); // 升级放缓：180 经验/级
+    let passGained = false;
+    if (!u.pass && (u.kills as number) >= PASS_KILLS) {
+      u.pass = 1;
+      passGained = true;
+    }
     await kv.set(['user', auth.phone], u);
-    return jsonResp({ ok: true, user: pubUser(u), gainedCoins, gainedExp });
+    return jsonResp({ ok: true, user: pubUser(u), gainedCoins, gainedExp, passGained });
   }
 
   return jsonResp({ ok: false, msg: 'Not Found' }, 404);
