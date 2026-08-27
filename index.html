@@ -1204,6 +1204,7 @@
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;">
         <input id="map-name-input" type="text" maxlength="12" placeholder="地图名称" style="flex:1;min-width:120px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px 10px;color:#e2e8f0;font-size:13px;">
         <button class="btn btn-small" id="map-save-btn">保存地图</button>
+        <button class="btn btn-small" id="map-play-btn" style="background:#22c55e;">▶ 游玩</button>
         <button class="btn btn-small btn-secondary" id="map-none-btn">不使用自定义地图</button>
       </div>
       <div id="map-list" style="margin-top:10px;"></div>
@@ -2213,6 +2214,17 @@ document.getElementById('map-save-btn').addEventListener('click', () => {
   document.getElementById('map-name-input').value = name;
   meRenderList();
 });
+// 游玩：先保存当前画布，再用这张地图直接开一局公开房间
+document.getElementById('map-play-btn').addEventListener('click', () => {
+  const name = (document.getElementById('map-name-input').value || '').trim() || ('我的地图' + (meLoad().length + 1));
+  const maps = meLoad();
+  const data = { name, cols: ME.cols, rows: ME.rows, cells: ME.cells.map(r => r.slice()) };
+  const idx = maps.findIndex(m => m.name === name);
+  if (idx >= 0) maps[idx] = data; else maps.push(data);
+  meSave(maps);
+  document.getElementById('map-name-input').value = name;
+  mePlay(data);
+});
 document.getElementById('map-editor-close').addEventListener('click', () => {
   document.getElementById('map-editor-modal').style.display = 'none';
 });
@@ -2232,10 +2244,14 @@ function meRenderList() {
     <div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:6px 10px;margin-bottom:6px;">
       <span style="flex:1;font-size:13px;color:#e2e8f0;">${escapeHtml(m.name || '未命名')}<span style="color:#64748b;font-size:11px;"> · ${(m.cells || []).flat().filter(v => v === 1).length} 墙 ${(m.cells || []).flat().filter(v => v === 2).length} 陷阱</span></span>
       <button class="btn btn-small" data-meuse="${i}">使用</button>
+      <button class="btn btn-small" data-meplay="${i}" style="background:#22c55e;">游玩</button>
       <button class="btn btn-small btn-secondary" data-medel="${i}">删除</button>
     </div>`).join('') + '<button class="btn btn-small btn-secondary" id="map-none-btn-2" style="margin-top:2px;">不使用自定义地图</button>';
   for (const b of el.querySelectorAll('[data-meuse]')) {
     b.addEventListener('click', () => meUse(maps[+b.dataset.meuse]));
+  }
+  for (const b of el.querySelectorAll('[data-meplay]')) {
+    b.addEventListener('click', () => mePlay(maps[+b.dataset.meplay]));
   }
   for (const b of el.querySelectorAll('[data-medel]')) {
     b.addEventListener('click', () => {
@@ -2254,6 +2270,19 @@ function meUse(m) {
   if (NET.ws) return;
   // 使用该地图创建房间
   document.getElementById('room-setup-modal').style.display = 'flex';
+}
+// 游玩：用该地图直接开一局公开房间，其他玩家点「快速游戏」即可随机加入
+function mePlay(m) {
+  G.customMap = m;
+  document.getElementById('map-editor-modal').style.display = 'none';
+  if (NET.ws) { alert('你已在房间中，退出当前房间后即可游玩自定义地图'); return; }
+  if (document.getElementById('home-view').style.display !== 'none') {
+    G.mode = 'net';
+    document.getElementById('home-view').style.display = 'none';
+    document.getElementById('net-panel').style.display = 'block';
+    showNetView(true);
+  }
+  netCreate(8, 'public', 'coop', true);
 }
 
 // 顶部在线人数：真实数据（服务端统计最近 70 秒活跃访客）
@@ -5250,6 +5279,7 @@ function netClose() {
   NET.ws = null; NET.role = null; NET.room = null;
   NET.slot = 1; NET.connected = false;
   NET.peers.clear(); NET.cap = 0; NET.mode = 'public';
+  NET.autoStart = false;
   updateNetHud();
 }
 
@@ -5285,8 +5315,9 @@ function updateNetHud() {
 }
 
 // ---------- host：创建房间（max：人数上限 0=不限；mode：public/private） ----------
-function netCreate(max, mode, gm) {
+function netCreate(max, mode, gm, autoStart) {
   if (NET.ws) return;
+  NET.autoStart = !!autoStart; // 建房后直接开局（游玩自定义地图 / 快速游戏兜底建房）
   closeLobby();
   closeLobbyWorld(); // 进入房间：离开共享大厅
   setNetStatus('create', '正在连接服务器 (' + wsURL() + ') …');
@@ -5319,7 +5350,14 @@ function netCreate(max, mode, gm) {
       const capLabel = NET.cap > 0 ? `人数上限 ${NET.cap}` : '人数不限';
       setNetStatus('create', `${gmLabel} · ${modeLabel} · ${capLabel}，等待好友加入…`, 'ok');
       document.getElementById('net-create-btn').style.display = 'none';
+      document.getElementById('net-start-btn').style.display = 'inline-block';
       updateNetHud();
+      // 自动开局：游玩自定义地图 / 快速游戏兜底建房 → 直接开始，不等其他玩家
+      if (NET.autoStart) {
+        NET.autoStart = false;
+        setNetStatus('create', `🚀 已开局！房间号 ${m.room} · 公开房间，其他玩家点「快速游戏」即可随机加入`, 'ok');
+        startGame();
+      }
     } else if (m.t === 'peer') {
       const slot = m.slot || 2;
       if (m.state === 'connected') {
@@ -5408,7 +5446,7 @@ function netJoin(room) {
       NET.slot = m.slot || 2; // 服务器分配的玩家编号（P2..Pn）
       NET.gm = m.gm || 'coop'; // 游戏模式由服务器返回
       const gmLabel = { coop: '协作', stronghold: '据点', tdm: '团队死斗' }[NET.gm] || '协作';
-      setNetStatus('join', `✅ 已加入房间 ${m.room}（${gmLabel}），你是 P${NET.slot}，等待房主开始…`, 'ok');
+      setNetStatus('join', `✅ 已加入房间 ${m.room}（${gmLabel}），你是 P${NET.slot}。比赛已开始的话将直接进入战场…`, 'ok');
       updateNetHud();
     } else if (m.t === 'state') {
       applyNetState(m.d);
@@ -6295,7 +6333,8 @@ function netQuick() {
         netJoin(pick.room);
       } else {
         showNetView(true);
-        netCreate(8, 'public', 'coop');
+        // 没有可加入的房间：自动创建公开房间并直接开局（单人也可玩，其他玩家可随机加入）
+        netCreate(8, 'public', 'coop', true);
       }
     }
   };
