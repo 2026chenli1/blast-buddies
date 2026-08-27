@@ -809,6 +809,31 @@
     display: none; /* 默认隐藏，点击排行榜展开 */
   }
 
+  /* ---------- 手机竖屏自动适配 ---------- */
+  @media (orientation: portrait) and (pointer: coarse) {
+    #home-view .home-top-left .season-pill { display: none; }
+    #home-view .level-card { max-width: 44vw; }
+    #home-view .level-row { font-size: 10px; }
+    #home-view .level-row .level-exp { font-size: 9px; }
+    #home-view .coin-pill, #home-view .online-pill { font-size: 11px; padding: 4px 8px; }
+    #home-view .chat-btn { font-size: 11px; padding: 6px 8px; }
+    #home-view .reward-card { transform: scale(.85); transform-origin: left center; }
+    #home-view .home-bottom { bottom: 10px; }
+    #home-view .home-nav { gap: 8px; }
+    #home-view .nav-icon { width: 48px; height: 48px; }
+    #home-view .nav-icon svg { width: 20px; height: 20px; }
+    #home-view .nav-label { font-size: 10px; }
+    #home-view .home-actions { gap: 10px; }
+    #home-view .home-actions .btn { font-size: 16px; padding: 12px 26px; }
+    #home-view .challenge-card { top: 64px; right: 8px; width: min(300px, 86vw); max-height: 46vh; overflow: auto; }
+    #home-view .home-footer .home-likes { display: none; }
+    #home-view .home-user-card { max-width: 40vw; font-size: 12px; }
+    #home-view .home-top-btns { top: 8px; right: 8px; gap: 4px; }
+    #home-view .top-icon-btn { width: 32px; height: 32px; }
+    /* 弹窗在竖屏下占满宽度 */
+    .modal-box { max-width: 92vw !important; max-height: 88vh; overflow: auto; }
+  }
+
   /* ---------- 弹窗通用 ---------- */
   .modal-mask {
     position: fixed; inset: 0; z-index: 40;
@@ -984,6 +1009,7 @@
           <div class="level-row"><span class="level-label">等级 <b id="home-lv">1</b></span><span class="level-exp"><b id="hu-exp">0</b> / <b id="hu-exp-next">180</b> 经验</span></div>
           <div class="exp-track"><div class="exp-fill" id="hu-exp-fill" style="width:0%"></div></div>
         </div>
+        <button class="chat-btn" id="home-task-btn" title="每日任务"><svg viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-3px;margin-right:4px;"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="2"/><path d="M9 15l2 2 4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg>任务</button>
         <button class="chat-btn" id="home-chat-btn">聊天</button>
       </div>
     </div>
@@ -995,8 +1021,8 @@
       <div class="reward-label"><svg viewBox="0 0 24 24" width="10" height="10"><rect x="2" y="6" width="20" height="12" rx="2" fill="none" stroke="#fff" stroke-width="2"/><path d="M6 10h4M6 14h8" stroke="#fff" stroke-width="2"/></svg> 观看</div>
     </div>
 
-    <!-- 右侧挑战面板 -->
-    <div class="challenge-card">
+    <!-- 右侧挑战面板（默认隐藏，右上角「任务」按钮开关） -->
+    <div class="challenge-card" id="challenge-card" style="display:none;">
       <div class="challenge-head">
         <div class="challenge-title">挑战</div>
         <div class="challenge-time" id="challenge-time">--:--:--</div>
@@ -1005,8 +1031,9 @@
       <button class="refresh-challenge-btn" id="refresh-challenge-btn"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M4 12a8 8 0 0 1 8-8V2l4 4-4 4V6a6 6 0 0 0-6 6" fill="#fff"/></svg> 刷新挑战</button>
     </div>
 
-    <!-- 中间角色预览 -->
-    <div class="home-mid">
+    <!-- 中间区域即共享在线大厅：自己与其他在线玩家直接在大厅里移动（主画布渲染） -->
+    <!-- 预览画布保留但隐藏（大厅本体即实时预览），相关元素供 JS 引用 -->
+    <div class="home-mid" style="display:none;">
       <div class="home-name-level"><span id="home-name">游客</span><span class="admin-badge" id="hu-admin" style="display:none;">ADMIN</span><span class="lv-badge" id="hu-lv">Lv.1</span></div>
       <canvas id="preview-canvas" width="320" height="320"></canvas>
     </div>
@@ -1014,11 +1041,11 @@
     <!-- 底部操作 -->
     <div class="home-bottom">
       <div class="home-nav">
-        <button class="nav-icon" id="nav-weapon" title="武器"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="6" y="10" width="14" height="5" rx="1.5" fill="#38bdf8"/><rect x="4" y="11" width="5" height="3" rx="1" fill="#475569"/><rect x="17" y="8" width="4" height="2" rx="1" fill="#1e293b"/></svg></button>
-        <button class="nav-icon" id="nav-character" title="角色"><svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="8" r="4" fill="#fb7185"/><path d="M6 21v-5a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v5" fill="#fb7185"/></svg></button>
-        <button class="nav-icon" id="nav-rank" title="排行榜"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="10" width="5" height="10" rx="1" fill="#fbbf24"/><rect x="9.5" y="5" width="5" height="15" rx="1" fill="#f472b6"/><rect x="15" y="13" width="5" height="7" rx="1" fill="#60a5fa"/></svg></button>
-        <button class="nav-icon" id="nav-create" title="创建地图"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/><path d="M9 3v15M15 6v15" stroke="#a78bfa" stroke-width="2"/></svg></button>
-        <button class="nav-icon" id="nav-fav" title="收藏"><svg viewBox="0 0 24 24" width="24" height="24"><polygon points="12,2 15,9 22,9 16.5,14 18.5,21 12,17 5.5,21 7.5,14 2,9 9,9" fill="#fbbf24"/></svg></button>
+        <button class="nav-icon" id="nav-weapon" title="枪械"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="6" y="10" width="14" height="5" rx="1.5" fill="#38bdf8"/><rect x="4" y="11" width="5" height="3" rx="1" fill="#475569"/><rect x="17" y="8" width="4" height="2" rx="1" fill="#1e293b"/></svg><span class="nav-label">枪</span></button>
+        <button class="nav-icon" id="nav-character" title="皮肤"><svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="8" r="4" fill="#fb7185"/><path d="M6 21v-5a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v5" fill="#fb7185"/></svg><span class="nav-label">皮肤</span></button>
+        <button class="nav-icon" id="nav-rank" title="排行榜（点击开关）"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="10" width="5" height="10" rx="1" fill="#fbbf24"/><rect x="9.5" y="5" width="5" height="15" rx="1" fill="#f472b6"/><rect x="15" y="13" width="5" height="7" rx="1" fill="#60a5fa"/></svg><span class="nav-label">排名</span></button>
+        <button class="nav-icon" id="nav-create" title="创建地图"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/><path d="M9 3v15M15 6v15" stroke="#a78bfa" stroke-width="2"/></svg><span class="nav-label">地图</span></button>
+        <button class="nav-icon" id="nav-fav" title="战斗通行证"><svg viewBox="0 0 24 24" width="24" height="24"><polygon points="12,2 15,9 22,9 16.5,14 18.5,21 12,17 5.5,21 7.5,14 2,9 9,9" fill="#fbbf24"/></svg><span class="nav-label">通行证</span></button>
       </div>
       <div class="home-actions">
         <button class="btn home-start" id="home-start-btn">游戏</button>
@@ -1120,9 +1147,67 @@
   <div class="modal-mask" id="mode-modal" style="display:none;">
     <div class="modal-box">
       <div class="modal-title">选择模式</div>
-      <button class="mode-big-btn" id="pick-single">🎮 单人模式<small>独自挑战无尽波次与 BOSS</small></button>
-      <button class="mode-big-btn" id="pick-net">🌐 联机模式<small>创建房间，或加入好友的战局</small></button>
+      <button class="mode-big-btn" id="pick-quick">⚡ 快速游戏<small>加入随机比赛 · 所有房间都是公开的</small></button>
+      <button class="mode-big-btn" id="pick-ranked">🏆 排位赛<small>16 名玩家陆续匹配 · 凑齐即开局</small></button>
       <button class="btn btn-secondary btn-small" id="mode-modal-close" style="margin-top:0;">取消</button>
+    </div>
+  </div>
+
+  <!-- 排位匹配弹窗 -->
+  <div class="modal-mask" id="match-modal" style="display:none;">
+    <div class="modal-box" style="max-width:360px;">
+      <div class="modal-title">排位匹配中</div>
+      <div style="text-align:center;padding:8px 0 4px;">
+        <div id="match-count" style="font-size:38px;font-weight:900;color:#fbbf24;">0/16</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px;">已匹配玩家 · 凑齐 16 人自动开局</div>
+        <div style="height:6px;background:rgba(0,0,0,.3);border-radius:999px;margin:14px 8px;overflow:hidden;">
+          <div id="match-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#fbbf24,#f472b6);border-radius:999px;transition:width .4s;"></div>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-small" id="match-cancel-btn">取消匹配</button>
+    </div>
+  </div>
+
+  <!-- 战斗通行证弹窗 -->
+  <div class="modal-mask" id="pass-modal" style="display:none;">
+    <div class="modal-box" style="max-width:400px;">
+      <div class="modal-title">🎖 战斗通行证</div>
+      <div style="padding:6px 2px 2px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#e2e8f0;">
+          <span>累计击杀进度</span>
+          <span id="pass-kills">0 / 10</span>
+        </div>
+        <div style="height:8px;background:rgba(0,0,0,.3);border-radius:999px;margin:8px 0 10px;overflow:hidden;">
+          <div id="pass-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#fbbf24,#f59e0b);border-radius:999px;transition:width .4s;"></div>
+        </div>
+        <div id="pass-status" style="font-size:13px;margin-bottom:10px;"></div>
+        <div style="font-size:12px;color:#94a3b8;line-height:1.7;">
+          击杀敌人即可累计进度。达到 10 击杀后自动获得战斗通行证，解锁专属武器：
+        </div>
+        <div id="pass-guns" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;"></div>
+      </div>
+      <button class="btn btn-secondary btn-small" id="pass-close-btn">关闭</button>
+    </div>
+  </div>
+
+  <!-- 地图编辑器弹窗 -->
+  <div class="modal-mask" id="map-editor-modal" style="display:none;">
+    <div class="modal-box" style="max-width:560px;max-height:92vh;overflow:auto;">
+      <div class="modal-title">🗺 地图编辑器</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+        <button class="btn btn-small" id="map-tool-wall" style="background:#8b5cf6;">墙壁</button>
+        <button class="btn btn-small btn-secondary" id="map-tool-trap">陷阱</button>
+        <button class="btn btn-small btn-secondary" id="map-tool-erase">橡皮</button>
+        <button class="btn btn-small btn-secondary" id="map-clear-btn">清空</button>
+      </div>
+      <canvas id="map-editor-canvas" width="480" height="300" style="width:100%;background:#0b1626;border:1px solid rgba(255,255,255,.15);border-radius:10px;touch-action:none;cursor:crosshair;"></canvas>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+        <input id="map-name-input" type="text" maxlength="12" placeholder="地图名称" style="flex:1;min-width:120px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px 10px;color:#e2e8f0;font-size:13px;">
+        <button class="btn btn-small" id="map-save-btn">保存地图</button>
+        <button class="btn btn-small btn-secondary" id="map-none-btn">不使用自定义地图</button>
+      </div>
+      <div id="map-list" style="margin-top:10px;"></div>
+      <button class="btn btn-secondary btn-small" id="map-editor-close" style="margin-top:10px;">关闭</button>
     </div>
   </div>
 
@@ -1330,10 +1415,10 @@ const GUN_DEFS = {
   gun_rapid:   { name: '冲锋枪',   price: 300, lv: 2,  desc: '超高射速<br>火力压制小怪群',     fireRate: 0.08, speed: 700,  dmg: 1, r: 4, spread: 1, spreadAngle: 0, barrel: 14, c1: '#334155', c2: '#0f172a' },
   gun_shotgun: { name: '散弹枪',   price: 600, lv: 4,  desc: '一次 3 发扇形<br>近距离爆发',     fireRate: 0.42, speed: 560,  dmg: 1, r: 4, spread: 3, spreadAngle: 0.3, barrel: 15, c1: '#7c2d12', c2: '#0f172a' },
   gun_sniper:  { name: '狙击枪',   price: 800, lv: 6,  desc: '3 倍伤害·超快弹速<br>一发入魂',   fireRate: 0.38, speed: 1100, dmg: 3, r: 6, spread: 1, spreadAngle: 0, barrel: 26, c1: '#451a03', c2: '#0f172a' },
-  gun_laser:   { name: '激光枪',   price: 1200, lv: 8, desc: '极速连发<br>弹速如光',           fireRate: 0.1,  speed: 950,  dmg: 1, r: 4, spread: 1, spreadAngle: 0, barrel: 22, c1: '#dc2626', c2: '#7f1d1d' },
+  gun_laser:   { name: '激光枪',   price: 1200, lv: 8, pass: 1, desc: '极速连发<br>弹速如光<span style="color:#fbbf24"> · 需战斗通行证</span>', fireRate: 0.1,  speed: 950,  dmg: 1, r: 4, spread: 1, spreadAngle: 0, barrel: 22, c1: '#dc2626', c2: '#7f1d1d' },
   gun_cannon:  { name: '榴弹炮',   price: 1800, lv: 10, desc: '重炮轰击<br>高伤慢速',          fireRate: 0.55, speed: 430,  dmg: 3, r: 8, spread: 1, spreadAngle: 0, barrel: 18, c1: '#3f6212', c2: '#1a2e05' },
-  gun_dual:    { name: '双管机枪', price: 2500, lv: 12, desc: '双管齐射<br>终极火力',          fireRate: 0.055, speed: 780, dmg: 1, r: 4, spread: 2, spreadAngle: 0.12, barrel: 12, c1: '#0e7490', c2: '#164e63' },
-  gun_plasma:  { name: '等离子炮', price: 4000, lv: 15, desc: '双发高伤<br>毁天灭地',          fireRate: 0.3,  speed: 820,  dmg: 4, r: 7, spread: 2, spreadAngle: 0.16, barrel: 20, c1: '#7c3aed', c2: '#4c1d95' },
+  gun_dual:    { name: '双管机枪', price: 2500, lv: 12, pass: 1, desc: '双管齐射<br>终极火力<span style="color:#fbbf24"> · 需战斗通行证</span>', fireRate: 0.055, speed: 780, dmg: 1, r: 4, spread: 2, spreadAngle: 0.12, barrel: 12, c1: '#0e7490', c2: '#164e63' },
+  gun_plasma:  { name: '等离子炮', price: 4000, lv: 15, pass: 1, desc: '双发高伤<br>毁天灭地<span style="color:#fbbf24"> · 需战斗通行证</span>', fireRate: 0.3,  speed: 820,  dmg: 4, r: 7, spread: 2, spreadAngle: 0.16, barrel: 20, c1: '#7c3aed', c2: '#4c1d95' },
 };
 
 // ---------- 手榴弹定义 ----------
@@ -1359,6 +1444,8 @@ const User = {
   skin: 'skin_default',
   gun: 'gun_pistol',       // 主武器
   gun2: 'gun_pistol',      // 副武器
+  kills: 0,                // 累计击杀（战斗通行证进度）
+  pass: 0,                 // 战斗通行证：累计击杀 10 个敌人获得
   grenade: 'grenade_frag',  // 手榴弹
   activeSlot: 1,            // 当前激活槽位 1=主武器 2=副武器
   grenadeCd: 0,             // 手榴弹冷却
@@ -1404,6 +1491,8 @@ function applyUser(u) {
   User.level = u.level ?? userLevel(User.exp);
   User.ownedSkins = u.ownedSkins || ['skin_default'];
   User.ownedGuns = u.ownedGuns || ['gun_pistol'];
+  User.kills = u.kills || 0;
+  User.pass = u.pass ? 1 : 0;
   User.skin = SKIN_DEFS[u.skin] ? u.skin : 'skin_default';
   User.gun = GUN_DEFS[u.gun] ? u.gun : 'gun_pistol';
   try { localStorage.setItem('bb_name', User.name); } catch (e) {}
@@ -1861,15 +1950,17 @@ function renderWeaponSelect() {
     const d = GUN_DEFS[id];
     const owned = User.ownedGuns.includes(id);
     const isEq = User.gun === id;
+    const needPass = d.pass && !owned && !User.pass;
     const locked = !owned && (d.lv || 1) > User.level;
     let btn;
     if (isEq) btn = `<button class="shop-buy equipped" disabled>装备中</button>`;
     else if (owned) btn = `<button class="shop-buy own" data-wq="${id}">装备</button>`;
+    else if (needPass) btn = `<button class="shop-buy locked" disabled>通行证解锁</button>`;
     else if (locked) btn = `<button class="shop-buy locked" disabled>🔒 Lv.${d.lv} 解锁</button>`;
     else btn = `<button class="shop-buy" data-wbuy="${id}">💰 ${d.price}</button>`;
     h += `<div class="weapon-item ${isEq ? 'equipped' : ''} ${locked ? 'locked' : ''}">
       <canvas data-wprev="${id}" width="96" height="96"></canvas>
-      <div class="shop-item-name">${d.name}${upgLv(id) > 0 ? ` <span style="color:#2ec4b6">+${upgLv(id)}</span>` : ''}</div>
+      <div class="shop-item-name">${d.name}${upgLv(id) > 0 ? ` <span style="color:#2ec4b6">+${upgLv(id)}</span>` : ''}${d.pass ? ' <span style="color:#fbbf24;font-size:10px;">★通行证</span>' : ''}</div>
       <div class="weapon-stat">${gunStatLine(d, id)}</div>
       <div class="shop-item-desc">${d.desc || ''}</div>
       ${btn}
@@ -1948,10 +2039,17 @@ document.getElementById('lb-tab-online').addEventListener('click', () => {
   loadOnlineRank();
 });
 
-// 顶部聊天 / 奖励
+// 顶部聊天 / 奖励 / 每日任务（右上角任务按钮开关挑战面板）
 document.getElementById('home-chat-btn').addEventListener('click', () => { ensureAudio(); alert('聊天功能即将上线'); });
 document.getElementById('home-reward-card').addEventListener('click', () => { ensureAudio(); alert('观看广告可获得 500 金币（功能即将上线）'); });
 document.getElementById('refresh-challenge-btn').addEventListener('click', () => { ensureAudio(); alert('每日挑战已刷新'); renderChallenge(); });
+document.getElementById('home-task-btn').addEventListener('click', () => {
+  ensureAudio();
+  const el = document.getElementById('challenge-card');
+  const show = el.style.display === 'none';
+  el.style.display = show ? 'flex' : 'none';
+  if (show) renderChallenge();
+});
 
 // 底部导航图标
 document.getElementById('nav-weapon').addEventListener('click', () => { ensureAudio(); openWeaponSelect(); });
@@ -1961,13 +2059,202 @@ document.getElementById('nav-rank').addEventListener('click', () => {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
   if (el.style.display !== 'none') renderLeaderboard(document.getElementById('lb-list-start'));
 });
-// 底部导航：创建地图 = 打开建房设置（人数 / 可见性 / 游戏模式）
+// 底部导航：地图编辑器（绘制墙壁 / 陷阱）
 document.getElementById('nav-create').addEventListener('click', () => {
   ensureAudio();
   if (NET.ws) return;
-  document.getElementById('room-setup-modal').style.display = 'flex';
+  openMapEditor();
 });
-document.getElementById('nav-fav').addEventListener('click', () => { ensureAudio(); alert('收藏功能即将上线'); });
+// 底部导航：战斗通行证（击杀解锁专属武器）
+document.getElementById('nav-fav').addEventListener('click', () => {
+  ensureAudio();
+  renderPassModal();
+  document.getElementById('pass-modal').style.display = 'flex';
+});
+
+// ---------- 战斗通行证 ----------
+const PASS_KILLS = 10;
+function renderPassModal() {
+  const kills = User.kills || 0;
+  const has = !!User.pass;
+  document.getElementById('pass-kills').textContent = `${Math.min(kills, PASS_KILLS)} / ${PASS_KILLS}`;
+  document.getElementById('pass-bar').style.width = Math.min(100, kills / PASS_KILLS * 100) + '%';
+  document.getElementById('pass-status').innerHTML = has
+    ? '<span style="color:#4ade80;font-weight:800;">🎖 已获得战斗通行证 · 专属武器已解锁购买资格</span>'
+    : `<span style="color:#fbbf24;">再击杀 ${PASS_KILLS - Math.min(kills, PASS_KILLS)} 个敌人即可获得通行证</span>`;
+  const guns = Object.entries(GUN_DEFS).filter(([, d]) => d.pass);
+  document.getElementById('pass-guns').innerHTML = guns.map(([id, d]) => {
+    const owned = User.ownedGuns.includes(id);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px 10px;">
+      <span style="font-size:13px;color:#e2e8f0;">★ ${d.name} <span style="color:#94a3b8;font-size:11px;">Lv.${d.lv} · 💰${d.price}</span></span>
+      <span style="font-size:12px;font-weight:700;color:${owned ? '#4ade80' : (has ? '#fbbf24' : '#64748b')}">${owned ? '已拥有' : (has ? '可购买' : '未解锁')}</span>
+    </div>`;
+  }).join('');
+}
+document.getElementById('pass-close-btn').addEventListener('click', () => {
+  document.getElementById('pass-modal').style.display = 'none';
+});
+
+// ---------- 地图编辑器 ----------
+const ME = {
+  cols: 16, rows: 10, tool: 'wall',
+  cells: [], canvas: null, ctx: null, drawing: false,
+};
+function meLoad() {
+  try { return JSON.parse(localStorage.getItem('bb_maps') || '[]'); } catch (e) { return []; }
+}
+function meSave(maps) {
+  try { localStorage.setItem('bb_maps', JSON.stringify(maps)); } catch (e) {}
+}
+function meBlank() {
+  return Array.from({ length: ME.rows }, () => new Array(ME.cols).fill(0));
+}
+function openMapEditor() {
+  document.getElementById('map-editor-modal').style.display = 'flex';
+  ME.canvas = document.getElementById('map-editor-canvas');
+  ME.ctx = ME.canvas.getContext('2d');
+  if (!ME.cells.length) ME.cells = meBlank();
+  meSetTool(ME.tool || 'wall');
+  meRender();
+  meRenderList();
+}
+function meSetTool(t) {
+  ME.tool = t;
+  const conf = { wall: '#8b5cf6', trap: '#ef4444', erase: '#475569' };
+  for (const [k, id] of Object.entries({ wall: 'map-tool-wall', trap: 'map-tool-trap', erase: 'map-tool-erase' })) {
+    const b = document.getElementById(id);
+    if (b) {
+      if (k === t) { b.classList.remove('btn-secondary'); b.style.background = conf[k]; }
+      else { b.classList.add('btn-secondary'); b.style.background = ''; }
+    }
+  }
+}
+function meRender() {
+  const c = ME.ctx;
+  if (!c) return;
+  const w = ME.canvas.width, h = ME.canvas.height;
+  const cw = w / ME.cols, ch = h / ME.rows;
+  c.fillStyle = '#0b1626';
+  c.fillRect(0, 0, w, h);
+  // 中央出生区提示
+  c.fillStyle = 'rgba(74,222,128,0.09)';
+  c.fillRect(w / 2 - cw * 1.5, h / 2 - ch * 1.5, cw * 3, ch * 3);
+  c.strokeStyle = 'rgba(74,222,128,0.25)';
+  c.setLineDash([4, 4]);
+  c.strokeRect(w / 2 - cw * 1.5, h / 2 - ch * 1.5, cw * 3, ch * 3);
+  c.setLineDash([]);
+  // 网格
+  c.strokeStyle = 'rgba(255,255,255,0.06)';
+  c.lineWidth = 1;
+  for (let i = 1; i < ME.cols; i++) { c.beginPath(); c.moveTo(i * cw, 0); c.lineTo(i * cw, h); c.stroke(); }
+  for (let j = 1; j < ME.rows; j++) { c.beginPath(); c.moveTo(0, j * ch); c.lineTo(w, j * ch); c.stroke(); }
+  // 单元格
+  for (let r = 0; r < ME.rows; r++) {
+    for (let col = 0; col < ME.cols; col++) {
+      const v = ME.cells[r][col];
+      if (!v) continue;
+      const x = col * cw, y = r * ch;
+      if (v === 1) {
+        c.fillStyle = '#64748b';
+        c.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+        c.strokeStyle = '#334155';
+        c.lineWidth = 2;
+        c.strokeRect(x + 2, y + 2, cw - 4, ch - 4);
+      } else if (v === 2) {
+        c.fillStyle = 'rgba(185,28,28,0.75)';
+        c.beginPath();
+        c.arc(x + cw / 2, y + ch / 2, Math.min(cw, ch) * 0.34, 0, Math.PI * 2);
+        c.fill();
+        c.strokeStyle = '#f87171';
+        c.lineWidth = 2;
+        c.stroke();
+      }
+    }
+  }
+}
+function meCellAt(ev) {
+  const rect = ME.canvas.getBoundingClientRect();
+  const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+  const cy = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
+  const col = Math.floor(cx / rect.width * ME.cols);
+  const row = Math.floor(cy / rect.height * ME.rows);
+  if (col < 0 || col >= ME.cols || row < 0 || row >= ME.rows) return null;
+  return { row, col };
+}
+function mePaint(ev) {
+  const cell = meCellAt(ev);
+  if (!cell) return;
+  ME.cells[cell.row][cell.col] = ME.tool === 'wall' ? 1 : ME.tool === 'trap' ? 2 : 0;
+  meRender();
+}
+(function meInit() {
+  const cv = document.getElementById('map-editor-canvas');
+  const start = (ev) => { ev.preventDefault(); ME.drawing = true; mePaint(ev); };
+  const move = (ev) => { if (ME.drawing) { ev.preventDefault(); mePaint(ev); } };
+  const end = () => { ME.drawing = false; };
+  cv.addEventListener('mousedown', start);
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+  cv.addEventListener('touchstart', start, { passive: false });
+  cv.addEventListener('touchmove', move, { passive: false });
+  cv.addEventListener('touchend', end);
+})();
+document.getElementById('map-tool-wall').addEventListener('click', () => meSetTool('wall'));
+document.getElementById('map-tool-trap').addEventListener('click', () => meSetTool('trap'));
+document.getElementById('map-tool-erase').addEventListener('click', () => meSetTool('erase'));
+document.getElementById('map-clear-btn').addEventListener('click', () => { ME.cells = meBlank(); meRender(); });
+document.getElementById('map-save-btn').addEventListener('click', () => {
+  const name = (document.getElementById('map-name-input').value || '').trim() || ('我的地图' + (meLoad().length + 1));
+  const maps = meLoad();
+  const data = { name, cols: ME.cols, rows: ME.rows, cells: ME.cells.map(r => r.slice()) };
+  const idx = maps.findIndex(m => m.name === name);
+  if (idx >= 0) maps[idx] = data; else maps.push(data);
+  meSave(maps);
+  document.getElementById('map-name-input').value = name;
+  meRenderList();
+});
+document.getElementById('map-editor-close').addEventListener('click', () => {
+  document.getElementById('map-editor-modal').style.display = 'none';
+});
+document.getElementById('map-none-btn').addEventListener('click', () => {
+  G.customMap = null;
+  alert('已清除自定义地图，之后创建的房间将使用随机障碍');
+});
+function meRenderList() {
+  const el = document.getElementById('map-list');
+  if (!el) return;
+  const maps = meLoad();
+  if (!maps.length) {
+    el.innerHTML = '<div style="font-size:12px;color:#94a3b8;">暂无保存的地图 · 绘制墙壁/陷阱后点击「保存地图」</div>';
+    return;
+  }
+  el.innerHTML = maps.map((m, i) => `
+    <div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:6px 10px;margin-bottom:6px;">
+      <span style="flex:1;font-size:13px;color:#e2e8f0;">${escapeHtml(m.name || '未命名')}<span style="color:#64748b;font-size:11px;"> · ${(m.cells || []).flat().filter(v => v === 1).length} 墙 ${(m.cells || []).flat().filter(v => v === 2).length} 陷阱</span></span>
+      <button class="btn btn-small" data-meuse="${i}">使用</button>
+      <button class="btn btn-small btn-secondary" data-medel="${i}">删除</button>
+    </div>`).join('') + '<button class="btn btn-small btn-secondary" id="map-none-btn-2" style="margin-top:2px;">不使用自定义地图</button>';
+  for (const b of el.querySelectorAll('[data-meuse]')) {
+    b.addEventListener('click', () => meUse(maps[+b.dataset.meuse]));
+  }
+  for (const b of el.querySelectorAll('[data-medel]')) {
+    b.addEventListener('click', () => {
+      const maps2 = meLoad();
+      maps2.splice(+b.dataset.medel, 1);
+      meSave(maps2);
+      meRenderList();
+    });
+  }
+  const none = el.querySelector('#map-none-btn-2');
+  if (none) none.addEventListener('click', () => document.getElementById('map-none-btn').click());
+}
+function meUse(m) {
+  G.customMap = m;
+  document.getElementById('map-editor-modal').style.display = 'none';
+  if (NET.ws) return;
+  // 使用该地图创建房间
+  document.getElementById('room-setup-modal').style.display = 'flex';
+}
 
 // 顶部在线人数：真实数据（服务端统计最近 70 秒活跃访客）
 async function refreshOnline() {
@@ -2001,8 +2288,12 @@ async function reportResult() {
   try {
     const r = await api('/api/user/result', { score: G.score, kills: G.kills, wave: G.wave });
     if (r.ok) {
+      const hadPass = User.pass;
       applyUser(r.user);
       if (el) el.textContent = `💰 +${r.gainedCoins} 金币 · ⭐ +${r.gainedExp} 经验`;
+      if (r.passGained && !hadPass) {
+        setTimeout(() => alert('🎖 恭喜！累计击杀达到 10 个敌人，获得【战斗通行证】！现在可以解锁专属武器了。'), 600);
+      }
     }
   } catch (e) {}
 }
@@ -2372,6 +2663,8 @@ const G = {
   rapidBoost: 0,
   boss: null,
   obstacles: [],
+  traps: [],            // 陷阱（自定义地图）
+  customMap: null,      // 自定义地图 { name, cols, rows, cells }（地图编辑器选择）
   effects: [],          // 技能特效（闪电/冲击波）
   scoreSaved: false,
   reported: false,      // 本局是否已上报得分（登录用户局后结算金币/经验）
@@ -2837,6 +3130,99 @@ function hitObstacle(ob, dmg) {
   }
 }
 
+// ======================= 自定义地图 + 陷阱 =======================
+function applyCustomMap() {
+  const m = G.customMap;
+  if (!m || !m.cells) return;
+  const cols = m.cols || 16, rows = m.rows || 10;
+  const cw = W / cols, ch = H / rows;
+  const cr = Math.min(cw, ch);
+  for (let r = 0; r < rows; r++) {
+    const row = m.cells[r] || [];
+    for (let c = 0; c < cols; c++) {
+      const v = row[c] || 0;
+      if (!v) continue;
+      const x = (c + 0.5) * cw, y = (r + 0.5) * ch;
+      if (v === 1) {
+        // 墙壁：高耐久石块
+        G.obstacles.push({
+          x, y, r: cr * 0.46,
+          hp: (CFG.obstacleHp || 30) * 6,
+          maxHp: (CFG.obstacleHp || 30) * 6,
+          color: '#64748b', dark: '#334155',
+          anim: 0, flash: 0,
+        });
+      } else if (v === 2) {
+        // 陷阱：周期性伤害圈（伤害玩家与敌人）
+        G.traps.push({ x, y, r: cr * 0.42, tick: Math.random() * 0.4, pulse: 0 });
+      }
+    }
+  }
+}
+
+function updateTraps(dt) {
+  if (!G.traps || !G.traps.length) return;
+  for (const t of G.traps) {
+    t.tick += dt;
+    t.pulse = Math.max(0, (t.pulse || 0) - dt * 3);
+    if (t.tick < 0.8) continue;
+    t.tick = 0;
+    t.pulse = 1;
+    // 玩家踩陷阱受伤
+    for (const p of G.players) {
+      if (p.dead || (p.invuln || 0) > 0) continue;
+      if (dist2(p.x, p.y, t.x, t.y) < (t.r + p.r) ** 2) {
+        p.hp -= 1;
+        p.flash = 0.15;
+        p.invuln = 0.7;
+        addParticles(p.x, p.y, '#f87171', 8, 160, 3, 0.3);
+        addPopup(p.x, p.y - p.r - 10, '陷阱!', '#f87171');
+        updateHUD();
+      }
+    }
+    // 敌人也会被陷阱伤害
+    for (let i = G.enemies.length - 1; i >= 0; i--) {
+      const e = G.enemies[i];
+      if (dist2(e.x, e.y, t.x, t.y) < (t.r + e.r) ** 2) {
+        e.hp -= 2;
+        e.flash = 0.12;
+        if (e.hp <= 0) killEnemy(i);
+      }
+    }
+  }
+}
+
+function drawTraps() {
+  if (!G.traps || !G.traps.length) return;
+  for (const t of G.traps) {
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    const pr = t.r * (1 + (t.pulse || 0) * 0.18);
+    // 底座
+    ctx.fillStyle = 'rgba(127,29,29,0.5)';
+    ctx.beginPath();
+    ctx.arc(0, 0, pr, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = '#b91c1c';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // 旋转尖刺
+    const n = 6;
+    const rot = (G.time || 0) * 1.2;
+    ctx.fillStyle = '#f87171';
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + rot;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - 0.22) * pr * 0.35, Math.sin(a - 0.22) * pr * 0.35);
+      ctx.lineTo(Math.cos(a) * pr * 0.92, Math.sin(a) * pr * 0.92);
+      ctx.lineTo(Math.cos(a + 0.22) * pr * 0.35, Math.sin(a + 0.22) * pr * 0.35);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
 // ======================= 辅助 =======================
 function nearestAlivePlayer(x, y) {
   let best = null, bd = Infinity;
@@ -2864,6 +3250,9 @@ function nearestTarget(x, y) {
 // ======================= 更新逻辑 =======================
 function update(dt) {
   G.time += dt;
+
+  // --- 陷阱（自定义地图） ---
+  updateTraps(dt);
 
   // --- 玩家输入 & 移动 ---
   for (const p of G.players) {
@@ -3467,9 +3856,9 @@ function startWave() {
     Sfx.wave();
   }
   G.waveTimer = CFG.waveInterval;
-  // 补充可破坏障碍（每波补到目标数量）
+  // 补充可破坏障碍（每波补到目标数量）；自定义地图时不补充
   const obTarget = Math.min(CFG.obstacleMin + Math.floor(G.wave / 2), CFG.obstacleMax);
-  while (G.obstacles.length < obTarget) spawnObstacle();
+  if (!G.customMap) while (G.obstacles.length < obTarget) spawnObstacle();
   document.getElementById('wave-display').textContent = `第 ${G.wave} 波${isBoss ? ' · BOSS' : ''}`;
   if (CH) { CH.stats.waves = Math.max(CH.stats.waves, G.wave); checkTasks(); }
   updateHUD();
@@ -3671,6 +4060,7 @@ function draw() {
 
   drawPowerups();
   drawObstacles();
+  drawTraps();
   drawEnemies();
   drawBoss();
   for (const p of G.players) drawPlayer(p);
@@ -4706,6 +5096,14 @@ canvas.addEventListener('touchcancel', endTouch);
 // 手机自动检测 + 菜单手动切换按钮
 setMobile(detectMobile());
 document.getElementById('mode-switch-btn').addEventListener('click', () => setMobile(!Mobile.active));
+// 手机竖屏自动适配：旋转到竖屏时自动开启手机版操作
+function autoOrient() {
+  if (detectMobile() && window.matchMedia && matchMedia('(orientation: portrait)').matches && !Mobile.active) {
+    setMobile(true);
+  }
+}
+window.addEventListener('orientationchange', () => setTimeout(autoOrient, 300));
+window.addEventListener('resize', autoOrient);
 document.getElementById('mobile-pause-btn').addEventListener('click', () => {
   if (NET.role !== 'guest') {
     if (G.state === 'playing') pauseGame();
@@ -4719,6 +5117,7 @@ document.getElementById('mobile-pause-btn').addEventListener('click', () => {
 const NET = {
   ws: null,
   lobbyWs: null,   // 房间大厅连接（仅拉取公开房间列表，不进房间）
+  matchWs: null,   // 排位匹配连接（匹配成功后升级为 NET.ws）
   role: null,      // 'host' | 'guest' | null
   room: null,      // 房间号
   slot: 1,         // 我的玩家编号：host=1，guest=2..n（服务器分配）
@@ -4846,6 +5245,7 @@ function netClose() {
   clearTimeout(NET.createTimer);
   clearTimeout(NET.joinTimer);
   closeLobby();
+  if (NET.matchWs) { try { NET.matchWs.close(); } catch (e) {} NET.matchWs = null; }
   if (NET.ws) { try { NET.ws.close(); } catch (e) {} }
   NET.ws = null; NET.role = null; NET.room = null;
   NET.slot = 1; NET.connected = false;
@@ -5087,6 +5487,7 @@ function snapshotState() {
     bullets: G.bullets.map(b => ({ id: b.id, x: R(b.x), y: R(b.y), vx: R(b.vx), vy: R(b.vy), r: b.r, life: A(b.life), damage: b.damage, color: b.color })),
     ebullets: G.enemyBullets.map(b => ({ id: b.id, x: R(b.x), y: R(b.y), vx: R(b.vx), vy: R(b.vy), r: b.r, life: A(b.life), color: b.color })),
     obstacles: G.obstacles.map(o => ({ x: R(o.x), y: R(o.y), r: R(o.r), hp: o.hp, maxHp: o.maxHp, color: o.color, dark: o.dark, anim: A(o.anim), flash: A(o.flash) })),
+    traps: (G.traps || []).map(t => ({ x: R(t.x), y: R(t.y), r: R(t.r) })),
     powerups: G.powerups.map(pu => ({ x: R(pu.x), y: R(pu.y), type: pu.type, icon: pu.icon, color: pu.color, label: pu.label, life: A(pu.life), r: pu.r, anim: A(pu.anim) })),
     boss: G.boss ? {
       name: G.boss.name, x: R(G.boss.x), y: R(G.boss.y), r: R(G.boss.r),
@@ -5255,6 +5656,18 @@ function applyNetState(s) {
     o.anim = so.anim; o.flash = so.flash;
   }
   G.obstacles.length = s.obstacles.length;
+  // 陷阱（静态对象：全量替换）
+  if (Array.isArray(s.traps)) {
+    if (!G.traps || G.traps.length !== s.traps.length) {
+      G.traps = s.traps.map(t => ({ x: t.x, y: t.y, r: t.r, tick: 0, pulse: 0 }));
+    } else {
+      for (let i = 0; i < s.traps.length; i++) {
+        G.traps[i].x = s.traps[i].x; G.traps[i].y = s.traps[i].y; G.traps[i].r = s.traps[i].r;
+      }
+    }
+  } else if (!Array.isArray(s.traps) && G.traps) {
+    G.traps = [];
+  }
   // 道具
   for (let i = 0; i < s.powerups.length; i++) {
     const sp = s.powerups[i];
@@ -5485,6 +5898,7 @@ function startGame() {
   G.rapidBoost = 0;
   G.boss = null;
   G.obstacles = [];
+  G.traps = [];            // 陷阱（自定义地图）
   G.effects = [];
   G.scoreSaved = false;
   G.reported = false;
@@ -5508,6 +5922,8 @@ function startGame() {
     }
   }
   layoutPlayers();
+  // 自定义地图：注入墙壁与陷阱（替代随机障碍）
+  applyCustomMap();
   mouse.down = false;
   resetMobileInput();
   Mobile.aim = -Math.PI / 2; // 手机版：开局枪口朝上
@@ -5822,9 +6238,8 @@ const homeView = document.getElementById('home-view');
 const modeModal = document.getElementById('mode-modal');
 document.getElementById('home-start-btn').addEventListener('click', () => {
   ensureAudio();
-  G.mode = 'single';
-  netClose();
-  showLoadout();
+  if (NET.ws) return; // 已在房间中
+  modeModal.style.display = 'flex';
 });
 document.getElementById('home-room-btn').addEventListener('click', () => {
   ensureAudio();
@@ -5836,19 +6251,221 @@ document.getElementById('home-room-btn').addEventListener('click', () => {
 document.getElementById('mode-modal-close').addEventListener('click', () => {
   modeModal.style.display = 'none';
 });
-document.getElementById('pick-single').addEventListener('click', () => {
+// 快速游戏：拉取公开房间列表 → 随机加入一个；没有房间则自动创建公开房间
+document.getElementById('pick-quick').addEventListener('click', () => {
+  ensureAudio();
   modeModal.style.display = 'none';
-  G.mode = 'single';
-  netClose();
-  showLoadout();
+  netQuick();
 });
-document.getElementById('pick-net').addEventListener('click', () => {
+// 排位赛：进入 16 人匹配队列
+document.getElementById('pick-ranked').addEventListener('click', () => {
+  ensureAudio();
   modeModal.style.display = 'none';
-  G.mode = 'net';
-  homeView.style.display = 'none';
-  netPanel.style.display = 'block';
-  showNetView(true);
+  netRanked();
 });
+
+// ---------- 快速游戏 ----------
+function netQuick() {
+  if (NET.ws) return;
+  closeLobby();
+  closeLobbyWorld();
+  if (homeView.style.display !== 'none') {
+    G.mode = 'net';
+    homeView.style.display = 'none';
+    netPanel.style.display = 'block';
+    showNetView(false);
+  }
+  setNetStatus('join', '⚡ 正在寻找比赛…');
+  let done = false;
+  let ws;
+  try { ws = new WebSocket(wsURL()); } catch (e) {
+    setNetStatus('join', '无法连接服务器，请稍后重试。', 'err');
+    return;
+  }
+  const finish = () => { if (!done) { done = true; try { ws.close(); } catch (e) {} } };
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'list' }));
+  ws.onmessage = (e) => {
+    let m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === 'rooms') {
+      const list = (m.d || []).filter(r => !r.cap || r.n < r.cap);
+      finish();
+      if (list.length) {
+        const pick = list[Math.floor(Math.random() * list.length)];
+        netJoin(pick.room);
+      } else {
+        showNetView(true);
+        netCreate(8, 'public', 'coop');
+      }
+    }
+  };
+  ws.onerror = () => { finish(); setNetStatus('join', '❌ 连不上服务器，请稍后重试。', 'err'); };
+  ws.onclose = () => { if (!done) { done = true; setNetStatus('join', '连接已断开，请重试。', 'err'); } };
+}
+
+// ---------- 排位赛匹配 ----------
+function netRanked() {
+  if (NET.ws || NET.matchWs) return;
+  closeLobby();
+  closeLobbyWorld();
+  const modal = document.getElementById('match-modal');
+  const countEl = document.getElementById('match-count');
+  const barEl = document.getElementById('match-bar');
+  countEl.textContent = '0/16';
+  barEl.style.width = '0%';
+  modal.style.display = 'flex';
+  let ws;
+  try { ws = new WebSocket(wsURL()); } catch (e) {
+    modal.style.display = 'none';
+    return;
+  }
+  NET.matchWs = ws;
+  ws.onopen = () => ws.send(JSON.stringify({ t: 'match', name: User.name || '游客', skin: User.skin || 'skin_default' }));
+  ws.onmessage = (e) => {
+    let m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === 'match_status') {
+      const n = Math.max(0, Math.min(16, m.n | 0));
+      countEl.textContent = n + '/16';
+      barEl.style.width = (n / 16 * 100) + '%';
+    } else if (m.t === 'matched') {
+      // 匹配成功：这条连接已被服务器直接编入房间（host/guest 由 slot 决定）
+      NET.matchWs = null;
+      modal.style.display = 'none';
+      G.mode = 'net';
+      homeView.style.display = 'none';
+      netPanel.style.display = 'block';
+      NET.ws = ws;
+      NET.connected = true;
+      NET.room = m.room;
+      NET.gm = 'tdm';
+      NET.cap = 16;
+      NET.mode = 'public';
+      if (m.slot === 1) {
+        NET.role = 'host';
+        NET.slot = 1;
+        showNetView(true);
+        document.getElementById('net-room-code').textContent = m.room;
+        setNetStatus('create', '🏆 排位赛匹配成功！等待 16 名玩家就位后开始…', 'ok');
+        attachHostHandlers(ws);
+      } else {
+        NET.role = 'guest';
+        NET.slot = m.slot || 2;
+        showNetView(false);
+        setNetStatus('join', `🏆 已加入排位房间 ${m.room}，你是 P${NET.slot}，等待房主开始…`, 'ok');
+        attachGuestHandlers(ws);
+      }
+      updateNetHud();
+    } else if (m.t === 'error') {
+      NET.matchWs = null;
+      modal.style.display = 'none';
+      try { ws.close(); } catch (err) {}
+      alert(m.msg || '匹配失败');
+    }
+  };
+  ws.onerror = () => {
+    if (NET.matchWs === ws) NET.matchWs = null;
+    modal.style.display = 'none';
+  };
+  ws.onclose = () => {
+    if (NET.matchWs === ws) NET.matchWs = null;
+    if (modal.style.display !== 'none') modal.style.display = 'none';
+  };
+}
+document.getElementById('match-cancel-btn').addEventListener('click', () => {
+  const ws = NET.matchWs;
+  NET.matchWs = null;
+  if (ws) { try { ws.send(JSON.stringify({ t: 'match_cancel' })); } catch (e) {} try { ws.close(); } catch (e) {} }
+  document.getElementById('match-modal').style.display = 'none';
+  startLobbyWorld(); // 回到共享大厅
+});
+
+// ---------- 排位赛后已编入房间的 ws：挂载 host/guest 消息处理 ----------
+function attachHostHandlers(ws) {
+  ws.onmessage = (e) => {
+    let m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === 'peer') {
+      const slot = m.slot || 2;
+      if (m.state === 'connected') {
+        NET.peers.set(slot, { input: null, name: m.name || '', skin: m.skin || '' });
+        setNetStatus('create', `✅ ${m.name || ('P' + slot)} 已就位！（当前 ${NET.peers.size + 1}/16 人）`, 'ok');
+        document.getElementById('net-start-btn').style.display = 'inline-block';
+        Sfx.powerup();
+        if (G.state === 'playing' && !G.players.some(p => p.id === slot)) {
+          G.players.push(createPlayer(slot, { skin: m.skin || '', name: m.name || '' }));
+          layoutPlayers();
+          addPopup(W / 2, H * 0.3, `${m.name || ('P' + slot)} 加入了战斗！`, '#4ade80');
+          updateHUD();
+        }
+      } else {
+        const gi = NET.peers.get(slot);
+        const gname = (gi && gi.name) || ('P' + slot);
+        NET.peers.delete(slot);
+        const idx = G.players.findIndex(p => p.id === slot);
+        if (idx >= 0 && G.state !== 'menu') {
+          const pp = G.players[idx];
+          addPopup(pp.x, pp.y - 30, `${gname} 已断开`, '#ff6b6b');
+          addParticles(pp.x, pp.y, '#ff6b6b', 20, 250, 5, 0.6);
+          G.players.splice(idx, 1);
+          updateHUD();
+        }
+        if (NET.peers.size === 0) {
+          setNetStatus('create', '其他玩家已全部断开…', 'err');
+          document.getElementById('net-start-btn').style.display = 'none';
+        } else {
+          setNetStatus('create', `${gname} 已断开（剩 ${NET.peers.size + 1} 人）`, 'err');
+        }
+      }
+      updateNetHud();
+    } else if (m.t === 'input') {
+      const gi = NET.peers.get(m.slot);
+      if (gi) gi.input = m.d || null;
+    } else if (m.t === 'pong') {
+      NET.rtt = Math.round(performance.now() - m.d);
+      updateNetHud();
+    } else if (m.t === 'error') {
+      setNetStatus('create', m.msg, 'err');
+    }
+  };
+  ws.onclose = () => {
+    const wasHost = NET.role === 'host';
+    netClose();
+    if (wasHost) {
+      setNetStatus('create', '连接已断开，请重新匹配', 'err');
+      document.getElementById('net-room-code').textContent = '----';
+      document.getElementById('net-create-btn').style.display = 'inline-block';
+      document.getElementById('net-start-btn').style.display = 'none';
+    }
+  };
+}
+function attachGuestHandlers(ws) {
+  ws.onmessage = (e) => {
+    let m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === 'state') {
+      applyNetState(m.d);
+    } else if (m.t === 'pong') {
+      NET.rtt = Math.round(performance.now() - m.d);
+      updateNetHud();
+    } else if (m.t === 'peer') {
+      netClose();
+      setNetStatus('join', '房主已断开连接', 'err');
+      guestRoomGone();
+    } else if (m.t === 'error') {
+      setNetStatus('join', m.msg, 'err');
+      netClose();
+    }
+  };
+  ws.onclose = () => {
+    const wasGuest = NET.role === 'guest';
+    netClose();
+    if (wasGuest) {
+      setNetStatus('join', '与服务器的连接已断开', 'err');
+      guestRoomGone();
+    }
+  };
+}
 document.getElementById('net-back-btn').addEventListener('click', () => {
   netClose();
   closeLobbyWorld();
