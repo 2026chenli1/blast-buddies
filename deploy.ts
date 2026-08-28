@@ -1010,11 +1010,14 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     }
     const filled = (cells as number[][]).flat().filter((v) => v > 0).length;
     if (filled < 1) return jsonResp({ ok: false, msg: '先画点东西再分享吧' }, 400);
+    // 生命数（可选）：1~10 的有限值，不接受无限
+    const livesRaw = body.lives | 0;
+    const lives = (livesRaw >= 1 && livesRaw <= 10) ? livesRaw : 1;
     const e = await kv.get(['maps']);
     const list = (e.value as any[]) || [];
     // 同作者同名地图覆盖，防止刷屏
     const idx = list.findIndex((m: any) => m && m.author === author && m.name === name);
-    const rec = { id: crypto.randomUUID(), name, author, cols, rows, cells, ts: Date.now() };
+    const rec = { id: crypto.randomUUID(), name, author, cols, rows, cells, lives, ts: Date.now() };
     if (idx >= 0) list[idx] = rec; else list.push(rec);
     while (list.length > 200) list.shift(); // 池子上限 200 张，超出淘汰最旧的
     await kv.set(['maps'], list);
