@@ -663,26 +663,9 @@
   .top-icon-btn:hover { background: rgba(50,40,90,.75); }
   .top-icon-btn:active { transform: scale(0.92); }
 
-  /* 左侧奖励卡片 */
-  .reward-card {
-    position: absolute; top: 50%; left: 14px; transform: translateY(-50%);
-    width: 86px;
-    background: linear-gradient(180deg, rgba(251,191,36,.95), rgba(245,158,11,.95));
-    border: 2px solid rgba(255,255,255,.35);
-    border-radius: 18px;
-    padding: 12px 8px;
-    text-align: center;
-    box-shadow: 0 8px 22px rgba(0,0,0,.22);
-    cursor: pointer;
-  }
-  .reward-card:active { transform: translateY(-50%) scale(0.95); }
-  .reward-icon { display: flex; justify-content: center; margin-bottom: 6px; }
-  .reward-val { font-size: 18px; font-weight: 900; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.15); }
-  .reward-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,.9); margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 3px; }
-
-  /* 每日地图卡片（左侧，奖励卡下方） */
+  /* 每日地图卡片（左侧中部，避开手机摇杆区域） */
   .daily-map-card {
-    position: absolute; top: calc(50% + 82px); left: 14px;
+    position: absolute; top: 50%; left: 14px; transform: translateY(-50%);
     width: 112px;
     background: linear-gradient(180deg, rgba(139,92,246,.95), rgba(109,40,217,.95));
     border: 2px solid rgba(255,255,255,.35);
@@ -833,8 +816,7 @@
     #home-view .level-row .level-exp { font-size: 9px; }
     #home-view .coin-pill, #home-view .online-pill { font-size: 11px; padding: 4px 8px; }
     #home-view .chat-btn { font-size: 11px; padding: 6px 8px; }
-    #home-view .reward-card { transform: scale(.85); transform-origin: left center; }
-    #home-view .daily-map-card { top: auto; bottom: 148px; left: 8px; width: 98px; transform: scale(.92); transform-origin: left bottom; }
+    #home-view .daily-map-card { top: 50%; left: 8px; width: 98px; transform: translateY(-50%) scale(.92); transform-origin: left center; }
     #home-view .home-bottom { bottom: 10px; }
     #home-view .home-nav { gap: 8px; }
     #home-view .nav-icon { width: 48px; height: 48px; }
@@ -1029,13 +1011,6 @@
         <button class="chat-btn" id="home-task-btn" title="每日任务"><svg viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-3px;margin-right:4px;"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="2"/><path d="M9 15l2 2 4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg>任务</button>
         <button class="chat-btn" id="home-chat-btn">聊天</button>
       </div>
-    </div>
-
-    <!-- 左侧奖励卡片 -->
-    <div class="reward-card" id="home-reward-card">
-      <div class="reward-icon"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="11" fill="#ffd166"/><path d="M10 8l6 4-6 4V8z" fill="#4a3b00"/></svg></div>
-      <div class="reward-val">+500</div>
-      <div class="reward-label"><svg viewBox="0 0 24 24" width="10" height="10"><rect x="2" y="6" width="20" height="12" rx="2" fill="none" stroke="#fff" stroke-width="2"/><path d="M6 10h4M6 14h8" stroke="#fff" stroke-width="2"/></svg> 观看</div>
     </div>
 
     <!-- 每日地图卡片：每天随机展示一位玩家分享的地图 -->
@@ -2077,9 +2052,8 @@ document.getElementById('lb-tab-online').addEventListener('click', () => {
   loadOnlineRank();
 });
 
-// 顶部聊天 / 奖励 / 每日任务（右上角任务按钮开关挑战面板）
+// 顶部聊天 / 每日任务（右上角任务按钮开关挑战面板）
 document.getElementById('home-chat-btn').addEventListener('click', () => { ensureAudio(); alert('聊天功能即将上线'); });
-document.getElementById('home-reward-card').addEventListener('click', () => { ensureAudio(); alert('观看广告可获得 500 金币（功能即将上线）'); });
 document.getElementById('refresh-challenge-btn').addEventListener('click', () => { ensureAudio(); alert('每日挑战已刷新'); renderChallenge(); });
 document.getElementById('home-task-btn').addEventListener('click', () => {
   ensureAudio();
