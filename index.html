@@ -384,7 +384,20 @@
     padding: 12px 14px;
     width: min(420px, 88vw);
   }
-  .lb-title { font-size: 16px; font-weight: 800; color: #ffd166; margin-bottom: 8px; letter-spacing: 2px; }
+  /* 主界面排行榜默认隐藏（点「排名」展开，✕ 或再点「排名」关闭） */
+  #home-view > .lb-wrap { display: none; }
+  .lb-title { font-size: 16px; font-weight: 800; color: #ffd166; margin-bottom: 8px; letter-spacing: 2px; display: flex; align-items: center; gap: 8px; }
+  .lb-close {
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.25);
+    border-radius: 8px;
+    color: #fff;
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .lb-close:hover { background: rgba(255,255,255,.22); }
+  .lb-close:active { transform: scale(.92); }
   .lb-list { max-height: 200px; overflow-y: auto; }
   .lb-row {
     display: grid;
@@ -950,7 +963,7 @@
   .weapon-item canvas { width: 84px; height: 84px; }
   .weapon-stat { font-size: 11px; color: #9fb3c8; line-height: 1.5; text-align: center; }
   /* ---------- 排行榜 tab（本地 / 线上） ---------- */
-  .lb-tabs { float: right; display: inline-flex; gap: 6px; }
+  .lb-tabs { margin-left: auto; display: inline-flex; gap: 6px; }
   .lb-tab {
     background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
     color: #cbd5e1; border-radius: 999px; padding: 2px 12px; cursor: pointer;
@@ -1111,7 +1124,7 @@
       <div class="lb-title">排行榜<span class="lb-tabs">
         <button class="lb-tab active" id="lb-tab-local">本地</button>
         <button class="lb-tab" id="lb-tab-online">线上</button>
-      </span></div>
+      </span><button class="lb-close" id="lb-close-start" title="关闭排行榜"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></button></div>
       <div class="lb-list" id="lb-list-start"></div>
     </div>
   </div>
@@ -1931,11 +1944,12 @@ async function shopUpgrade(item) {
     else shopMsg(r.msg || '升级失败');
   } catch (e) { shopMsg('网络错误'); }
 }
-document.getElementById('shop-btn').addEventListener('click', () => {
+function openShop() {
   document.getElementById('shop-modal').style.display = 'flex';
   document.getElementById('shop-msg').textContent = '';
   renderShop();
-});
+}
+document.getElementById('shop-btn').addEventListener('click', openShop);
 document.getElementById('shop-close').addEventListener('click', () => {
   document.getElementById('shop-modal').style.display = 'none';
 });
@@ -2002,11 +2016,12 @@ async function weaponEquip(item) {
     else weaponMsg(r.msg || '装备失败');
   } catch (e) { weaponMsg('网络错误'); }
 }
-document.getElementById('weapon-btn').addEventListener('click', () => {
+function openWeaponSelect() {
   document.getElementById('weapon-modal').style.display = 'flex';
   weaponMsg('');
   renderWeaponSelect();
-});
+}
+document.getElementById('weapon-btn').addEventListener('click', openWeaponSelect);
 document.getElementById('weapon-close').addEventListener('click', () => {
   document.getElementById('weapon-modal').style.display = 'none';
 });
@@ -2068,8 +2083,12 @@ document.getElementById('nav-weapon').addEventListener('click', () => { ensureAu
 document.getElementById('nav-character').addEventListener('click', () => { ensureAudio(); shopTab = 'skin'; openShop(); renderShop(); });
 document.getElementById('nav-rank').addEventListener('click', () => {
   const el = document.getElementById('lb-list-start').parentElement;
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
-  if (el.style.display !== 'none') renderLeaderboard(document.getElementById('lb-list-start'));
+  const open = el.style.display === 'block';
+  el.style.display = open ? 'none' : 'block';
+  if (!open) renderLeaderboard(document.getElementById('lb-list-start'));
+});
+document.getElementById('lb-close-start').addEventListener('click', () => {
+  document.getElementById('lb-list-start').parentElement.style.display = 'none';
 });
 // 底部导航：地图编辑器（绘制墙壁 / 陷阱）
 document.getElementById('nav-create').addEventListener('click', () => {
