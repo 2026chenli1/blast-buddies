@@ -1226,6 +1226,15 @@
         <button class="btn btn-small btn-secondary" id="map-tool-spawn">重生点</button>
         <button class="btn btn-small btn-secondary" id="map-tool-erase">橡皮</button>
         <button class="btn btn-small btn-secondary" id="map-clear-btn">清空</button>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#94a3b8;">生命
+          <select id="map-lives-select" style="background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:4px 6px;color:#e2e8f0;font-size:12px;">
+            <option value="1">1 条</option>
+            <option value="2">2 条</option>
+            <option value="3" selected>3 条</option>
+            <option value="5">5 条</option>
+            <option value="10">10 条</option>
+          </select>
+        </label>
       </div>
       <canvas id="map-editor-canvas" width="480" height="300" style="width:100%;background:#0b1626;border:1px solid rgba(255,255,255,.15);border-radius:10px;touch-action:none;cursor:crosshair;"></canvas>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;">
@@ -2132,6 +2141,11 @@ const ME = {
 function meLoad() {
   try { return JSON.parse(localStorage.getItem('bb_maps') || '[]'); } catch (e) { return []; }
 }
+function meLives() {
+  const sel = document.getElementById('map-lives-select');
+  const v = sel ? parseInt(sel.value, 10) : 3;
+  return (v >= 1 && v <= 10) ? v : 3;
+}
 function meSave(maps) {
   try { localStorage.setItem('bb_maps', JSON.stringify(maps)); } catch (e) {}
 }
@@ -2249,7 +2263,7 @@ document.getElementById('map-clear-btn').addEventListener('click', () => { ME.ce
 document.getElementById('map-save-btn').addEventListener('click', () => {
   const name = (document.getElementById('map-name-input').value || '').trim() || ('我的地图' + (meLoad().length + 1));
   const maps = meLoad();
-  const data = { name, cols: ME.cols, rows: ME.rows, cells: ME.cells.map(r => r.slice()) };
+  const data = { name, cols: ME.cols, rows: ME.rows, cells: ME.cells.map(r => r.slice()), lives: meLives() };
   const idx = maps.findIndex(m => m.name === name);
   if (idx >= 0) maps[idx] = data; else maps.push(data);
   meSave(maps);
@@ -2260,7 +2274,7 @@ document.getElementById('map-save-btn').addEventListener('click', () => {
 document.getElementById('map-play-btn').addEventListener('click', () => {
   const name = (document.getElementById('map-name-input').value || '').trim() || ('我的地图' + (meLoad().length + 1));
   const maps = meLoad();
-  const data = { name, cols: ME.cols, rows: ME.rows, cells: ME.cells.map(r => r.slice()) };
+  const data = { name, cols: ME.cols, rows: ME.rows, cells: ME.cells.map(r => r.slice()), lives: meLives() };
   const idx = maps.findIndex(m => m.name === name);
   if (idx >= 0) maps[idx] = data; else maps.push(data);
   meSave(maps);
@@ -2271,7 +2285,7 @@ document.getElementById('map-play-btn').addEventListener('click', () => {
 document.getElementById('map-share-btn').addEventListener('click', async () => {
   const name = (document.getElementById('map-name-input').value || '').trim() || ('我的地图' + (meLoad().length + 1));
   const maps = meLoad();
-  const data = { name, cols: ME.cols, rows: ME.rows, cells: ME.cells.map(r => r.slice()) };
+  const data = { name, cols: ME.cols, rows: ME.rows, cells: ME.cells.map(r => r.slice()), lives: meLives() };
   const idx = maps.findIndex(m => m.name === name);
   if (idx >= 0) maps[idx] = data; else maps.push(data);
   meSave(maps);
@@ -2309,7 +2323,7 @@ function meRenderList() {
   }
   el.innerHTML = maps.map((m, i) => `
     <div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:6px 10px;margin-bottom:6px;">
-      <span style="flex:1;font-size:13px;color:#e2e8f0;">${escapeHtml(m.name || '未命名')}<span style="color:#64748b;font-size:11px;"> · ${(m.cells || []).flat().filter(v => v === 1).length} 墙 ${(m.cells || []).flat().filter(v => v === 2).length} 陷阱 ${(m.cells || []).flat().filter(v => v === 3).length} 重生点</span></span>
+      <span style="flex:1;font-size:13px;color:#e2e8f0;">${escapeHtml(m.name || '未命名')}<span style="color:#64748b;font-size:11px;"> · ${(m.cells || []).flat().filter(v => v === 1).length} 墙 ${(m.cells || []).flat().filter(v => v === 2).length} 陷阱 ${(m.cells || []).flat().filter(v => v === 3).length} 重生点 · ${m.lives || 1} 生命</span></span>
       <button class="btn btn-small" data-meuse="${i}">使用</button>
       <button class="btn btn-small" data-meplay="${i}" style="background:#22c55e;">游玩</button>
       <button class="btn btn-small btn-secondary" data-medel="${i}">删除</button>
@@ -2406,7 +2420,7 @@ function renderDailyMap() {
   const m = DailyMap;
   if (playBtn) playBtn.disabled = false;
   if (nameEl) nameEl.textContent = m.name || '未命名';
-  if (authorEl) authorEl.textContent = '作者：' + (m.author || '玩家');
+  if (authorEl) authorEl.textContent = '作者：' + (m.author || '玩家') + ' · ' + (m.lives || 1) + ' 生命';
   // 迷你预览：墙壁灰 / 陷阱红 / 重生点绿
   if (cv) {
     const c = cv.getContext('2d');
@@ -2828,6 +2842,7 @@ const G = {
   obstacles: [],
   traps: [],            // 陷阱（自定义地图）
   spawnPoints: [],      // 重生点（自定义地图，玩家出生/重生位置）
+  lives: null,          // 本局生命数（自定义地图设置；null=未设置，P1 阵亡即结束）
   customMap: null,      // 自定义地图 { name, cols, rows, cells }（地图编辑器选择）
   effects: [],          // 技能特效（闪电/冲击波）
   scoreSaved: false,
@@ -3351,16 +3366,13 @@ function updateTraps(dt) {
     if (t.tick < 0.8) continue;
     t.tick = 0;
     t.pulse = 1;
-    // 玩家踩陷阱受伤
+    // 玩家踩陷阱受伤（走统一伤害入口：致死会正确触发死亡/结算）
     for (const p of G.players) {
       if (p.dead || (p.invuln || 0) > 0) continue;
       if (dist2(p.x, p.y, t.x, t.y) < (t.r + p.r) ** 2) {
-        p.hp -= 1;
-        p.flash = 0.15;
-        p.invuln = 0.7;
         addParticles(p.x, p.y, '#f87171', 8, 160, 3, 0.3);
         addPopup(p.x, p.y - p.r - 10, '陷阱!', '#f87171');
-        updateHUD();
+        damagePlayer(p, 1);
       }
     }
     // 敌人也会被陷阱伤害
@@ -4116,6 +4128,14 @@ function damagePlayer(p, n) {
     addParticles(p.x, p.y, p.colors.body2, 24, 280, 6, 0.6);
     addRing(p.x, p.y, p.colors.body2, p.r);
     Sfx.boom();
+    // 生命数模式（自定义地图）：还有备用生命 → 消耗一条后重生
+    if (G.lives && (p.livesLeft || 1) > 1) {
+      p.livesLeft = (p.livesLeft || 1) - 1;
+      p.respawnTimer = CFG.respawnTime;
+      addPopup(p.x, p.y - 30, `阵亡 · 剩余生命 ${p.livesLeft}`, '#ffd166');
+      updateHUD();
+      return;
+    }
     // P1 阵亡无法重生：直接游戏结束
     if (p.id === 1) {
       gameOver();
@@ -4439,9 +4459,8 @@ function drawLobbyPlayer(x, y, angle, skinId, name, isMe = false) {
 
 function drawPlayer(p) {
   const labelOf = (q) => (q.name && String(q.name).trim()) ? q.name : `P${q.id}`;
-  // 阵亡重生倒计时（双人模式）
-  // 阵亡重生倒计时（联机/双人模式）
-  if (p.dead && G.mode !== 'single') {
+  // 阵亡重生倒计时（联机/双人/生命数模式）
+  if (p.dead && p.respawnTimer > 0) {
     ctx.save();
     ctx.globalAlpha = 0.8;
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
@@ -5727,6 +5746,7 @@ function renderHearts() {
     const c = playerColors(p.id);
     const tag = (p.name && String(p.name).trim()) ? p.name : `P${p.id}`;
     h += `<div class="hearts-row"><span class="p-tag" style="background:${c.body2}55;color:${c.body1};">${tag}</span>`;
+    if (G.lives) h += `<span style="color:#ffd166;font-size:11px;margin-right:4px;">×${p.livesLeft || 1}</span>`;
     for (let i = 0; i < p.maxHp; i++) {
       if (p.dead) h += '<span style="color:rgba(255,255,255,0.12);">✕</span>';
       else h += i < p.hp ? '<span style="color:#ff6b6b;">♥</span>' : '<span style="color:rgba(255,255,255,0.18);">♥</span>';
@@ -6022,6 +6042,9 @@ function showMenu() {
   G.players = [];
   G.boss = null;
   G.obstacles = [];
+  G.traps = [];            // 陷阱清空（自定义地图残留）
+  G.spawnPoints = [];      // 重生点清空
+  G.customMap = null;      // 退出对局不再携带自定义地图
   G.enemies = [];
   G.bullets = [];
   G.enemyBullets = [];
@@ -6044,6 +6067,14 @@ function showMenu() {
   hide(document.getElementById('over-overlay'));
   hide(document.getElementById('pause-overlay'));
   show(document.getElementById('start-overlay'));
+  // 立即清屏：确保主界面第一帧就是大厅背景，而不是残留的死亡画面
+  try {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#0b1626';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  } catch (e) {}
   // 回主界面：显示 home，收起联机面板与模式弹窗
   document.getElementById('home-view').style.display = 'block';
   document.getElementById('net-panel').style.display = 'none';
@@ -6092,6 +6123,7 @@ function startGame() {
   G.obstacles = [];
   G.traps = [];            // 陷阱（自定义地图）
   G.spawnPoints = [];      // 重生点（自定义地图）
+  G.lives = (G.customMap && G.customMap.lives) ? Math.max(1, Math.min(10, parseInt(G.customMap.lives, 10) || 1)) : null;
   G.effects = [];
   G.scoreSaved = false;
   G.reported = false;
@@ -6114,6 +6146,8 @@ function startGame() {
       G.players.push(createPlayer(s, { skin: pi && pi.skin, name: pi && pi.name }));
     }
   }
+  // 生命数模式：每个玩家开局满生命
+  if (G.lives) for (const p of G.players) p.livesLeft = G.lives;
   layoutPlayers();
   // 自定义地图：注入墙壁与陷阱（替代随机障碍）
   applyCustomMap();
@@ -6171,6 +6205,8 @@ function gameOver() {
   addRing(W / 2, H / 2, '#ff6b6b', 30);
 
   setTimeout(() => {
+    // 状态守卫：600ms 内玩家可能已重开或返回主菜单，不能弹旧结算
+    if (G.state !== 'over') return;
     let scoreText, statsHtml;
     if (G.gm === 'tdm') {
       const winner = G.teamScore[0] >= G.tdmTarget ? '红队' : '蓝队';
@@ -6258,6 +6294,15 @@ let lastTime = performance.now();
 let fpsFrames = 0, fpsAccum = 0, fpsShown = 0;
 const fpsEl = document.getElementById('hud-fps');
 function loop(now) {
+  try {
+    runFrame(now);
+  } catch (e) {
+    // 单帧异常绝不允许杀死 rAF 链（否则画面永久冻结在死亡瞬间）
+    console.error('[loop]', e);
+  }
+  requestAnimationFrame(loop);
+}
+function runFrame(now) {
   let dt = (now - lastTime) / 1000;
   lastTime = now;
   dt = Math.min(dt, 0.05);
@@ -6295,7 +6340,6 @@ function loop(now) {
     updateLobbyPlayer(dt);
   }
   draw();
-  requestAnimationFrame(loop);
 }
 
 // ---------- guest 本地视觉演化（粒子/飘字不跨网络传输） ----------
