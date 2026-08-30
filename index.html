@@ -1499,26 +1499,232 @@ function escapeHtml(s) {
 // ======================= 用户系统 =======================
 // 皮肤目录（与服务器 SHOP_ITEMS 对应）：配色 = body1 亮色 / body2 主色 / gun1·gun2 枪色 / glow 弹色
 // skill = 皮肤专属主动技能：icon 按钮图标 / name 技能名 / cd 冷却秒数 / desc 描述（按 Q 或点技能按钮释放）
-// texture = 该皮肤在角色身体上的细腻纹理标识（不再用外部挂件，只在圆身上绘制，商城/游戏/预览通用）
+// 皮肤造型三要素（蛋仔风格：简洁几何 + 强对比 + 粗描边，小图也一眼认得出）
+//   deco    = 角色后脑的主题装饰（帽/叶/蝴蝶结/皇冠/闪电/头带/火苗/冰柱/天线/独角）
+//   texture = 身体上的大色块（不是细线，都是够粗够大的形状）
+//   eye     = 眼睛样式（normal 普通眼 / narrow 眯眼 / visor 机甲目镜 / star 星星眼）
 const SKIN_DEFS = {
-  skin_default: { name: '蓝色战士', price: 0,   desc: '经典初始造型', body1: '#6ecbff', body2: '#2196f3', gun1: '#1565c0', gun2: '#0d47a1', glow: '#ffd166', texture: 'clean',   skill: { icon: '💨', name: '战术冲刺', cd: 8,  desc: '瞬间高速冲刺，冲刺中无敌' } },
-  skin_green:   { name: '翠绿战士', price: 200, desc: '森林迷彩配色', body1: '#86efac', body2: '#16a34a', gun1: '#15803d', gun2: '#14532d', glow: '#86efac', texture: 'camo',    skill: { icon: '💚', name: '生命绽放', cd: 20, desc: '立即恢复 2 点生命' } },
-  skin_pink:    { name: '樱花甜心', price: 200, desc: '甜美粉色系',   body1: '#f9a8d4', body2: '#db2777', gun1: '#9d174d', gun2: '#831843', glow: '#f9a8d4', texture: 'petal',   skill: { icon: '🌸', name: '樱花弹幕', cd: 10, desc: '向四周迸发 16 发花瓣弹' } },
-  skin_gold:    { name: '黄金武士', price: 500, desc: '闪亮土豪金',   body1: '#fde68a', body2: '#d97706', gun1: '#b45309', gun2: '#92400e', glow: '#fcd34d', texture: 'shine',   skill: { icon: '💰', name: '点石成金', cd: 25, desc: '天降金币，立即 +150 得分' } },
-  skin_purple:  { name: '紫电幻影', price: 500, desc: '神秘紫电光',   body1: '#c4b5fd', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#c4b5fd', texture: 'vein',    skill: { icon: '⚡', name: '闪电链',   cd: 12, desc: '闪电劈向最近的 4 个敌人' } },
-  skin_dark:    { name: '暗夜行者', price: 1000, desc: '低调暗黑忍者', body1: '#64748b', body2: '#1e293b', gun1: '#0f172a', gun2: '#020617', glow: '#94a3b8', texture: 'weave',   skill: { icon: '🌑', name: '暗影隐身', cd: 15, desc: '隐身 3 秒，敌人无法发现你' } },
-  skin_fire:    { name: '烈焰战神', price: 1500, desc: '炽热红焰，所向披靡', body1: '#ffb347', body2: '#e63946', gun1: '#9b2226', gun2: '#6a040f', glow: '#ffb703', texture: 'stripe',  skill: { icon: '🔥', name: '烈焰新星', cd: 12, desc: '火焰冲击波伤害并点燃周围敌人' } },
-  skin_ice:     { name: '寒冰射手', price: 1500, desc: '冰蓝冻结，冷静致命', body1: '#a5f3fc', body2: '#0ea5e9', gun1: '#075985', gun2: '#0c4a6e', glow: '#67e8f9', texture: 'crack',   skill: { icon: '❄️', name: '冰霜新星', cd: 14, desc: '冻结周围敌人 2.5 秒' } },
-  skin_mecha:   { name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc', texture: 'panel',   skill: { icon: '🛡️', name: '能量护盾', cd: 16, desc: '6 秒内抵挡 3 次伤害' } },
-  skin_rainbow: { name: '彩虹独角兽', price: 5000, desc: '七彩祥云，至尊限定', body1: '#fda4af', body2: '#f472b6', gun1: '#c026d3', gun2: '#a21caf', glow: '#f0abfc', texture: 'shimmer', skill: { icon: '🌈', name: '彩虹狂暴', cd: 18, desc: '5 秒射速翻倍，流光环绕' } },
+  skin_default: { name: '蓝色战士', price: 0,   desc: '经典初始造型', body1: '#6ecbff', body2: '#2196f3', gun1: '#1565c0', gun2: '#0d47a1', glow: '#ffd166', deco: 'cap',      texture: 'clean',   eye: 'normal', skill: { icon: '💨', name: '战术冲刺', cd: 8,  desc: '瞬间高速冲刺，冲刺中无敌' } },
+  skin_green:   { name: '翠绿战士', price: 200, desc: '森林迷彩配色', body1: '#86efac', body2: '#16a34a', gun1: '#15803d', gun2: '#14532d', glow: '#86efac', deco: 'leaf',     texture: 'camo',    eye: 'normal', skill: { icon: '💚', name: '生命绽放', cd: 20, desc: '立即恢复 2 点生命' } },
+  skin_pink:    { name: '樱花甜心', price: 200, desc: '甜美粉色系',   body1: '#f9a8d4', body2: '#db2777', gun1: '#9d174d', gun2: '#831843', glow: '#f9a8d4', deco: 'bow',      texture: 'petal',   eye: 'normal', skill: { icon: '🌸', name: '樱花弹幕', cd: 10, desc: '向四周迸发 16 发花瓣弹' } },
+  skin_gold:    { name: '黄金武士', price: 500, desc: '闪亮土豪金',   body1: '#fde68a', body2: '#d97706', gun1: '#b45309', gun2: '#92400e', glow: '#fcd34d', deco: 'crown',    texture: 'shine',   eye: 'normal', skill: { icon: '💰', name: '点石成金', cd: 25, desc: '天降金币，立即 +150 得分' } },
+  skin_purple:  { name: '紫电幻影', price: 500, desc: '神秘紫电光',   body1: '#c4b5fd', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#c4b5fd', deco: 'bolt',     texture: 'vein',    eye: 'normal', skill: { icon: '⚡', name: '闪电链',   cd: 12, desc: '闪电劈向最近的 4 个敌人' } },
+  skin_dark:    { name: '暗夜行者', price: 1000, desc: '低调暗黑忍者', body1: '#64748b', body2: '#1e293b', gun1: '#0f172a', gun2: '#020617', glow: '#94a3b8', deco: 'headband', texture: 'clean',   eye: 'narrow', skill: { icon: '🌑', name: '暗影隐身', cd: 15, desc: '隐身 3 秒，敌人无法发现你' } },
+  skin_fire:    { name: '烈焰战神', price: 1500, desc: '炽热红焰，所向披靡', body1: '#ffb347', body2: '#e63946', gun1: '#9b2226', gun2: '#6a040f', glow: '#ffb703', deco: 'flame',  texture: 'stripe',  eye: 'normal', skill: { icon: '🔥', name: '烈焰新星', cd: 12, desc: '火焰冲击波伤害并点燃周围敌人' } },
+  skin_ice:     { name: '寒冰射手', price: 1500, desc: '冰蓝冻结，冷静致命', body1: '#a5f3fc', body2: '#0ea5e9', gun1: '#075985', gun2: '#0c4a6e', glow: '#67e8f9', deco: 'icicle',  texture: 'crack',   eye: 'normal', skill: { icon: '❄️', name: '冰霜新星', cd: 14, desc: '冻结周围敌人 2.5 秒' } },
+  skin_mecha:   { name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc', deco: 'antenna',  texture: 'panel',   eye: 'visor',  skill: { icon: '🛡️', name: '能量护盾', cd: 16, desc: '6 秒内抵挡 3 次伤害' } },
+  skin_rainbow: { name: '彩虹独角兽', price: 5000, desc: '七彩祥云，至尊限定', body1: '#fda4af', body2: '#f472b6', gun1: '#c026d3', gun2: '#a21caf', glow: '#f0abfc', deco: 'horn',   texture: 'shimmer', eye: 'star',    skill: { icon: '🌈', name: '彩虹狂暴', cd: 18, desc: '5 秒射速翻倍，流光环绕' } },
 };
 
-// ---------- 皮肤细腻纹理（游戏内角色 / 主界面预览 / 商城预览 共用） ----------
-// 只在角色圆身「内部」绘制纹理，不遮挡眼睛与枪口，商城小图也看得清
-// 坐标系：调用前已完成 translate(角色中心) + rotate(朝向)，+x 为正前方
-// 注意：整体 save/restore + clip 到身体圆内；透明度用「当前 alpha 的比例」，
+// ---------- 皮肤造型（蛋仔风：简洁几何 + 强对比 + 粗描边，小图也一眼认得出） ----------
+//   drawSkinDeco  后脑主题装饰：画在身体「之前」，根部被身体盖住 → 像从头上长出来
+//   drawSkinMark  身体大色块：画在身体「之后」并 clip 在圆内，不遮五官
+//   drawSkinEyes  眼睛样式（普通 / 眯眼 / 机甲目镜 / 星星眼）
+// 坐标系：已 translate 到角色中心 + rotate 到朝向，+x 为正前方（眼睛那侧），-x 为后脑
+// 注意：一律 save/restore 包裹，透明度用「当前 alpha 的比例」，
 //       否则会覆盖掉无敌闪烁(0.45)与暗影隐身(0.32)的效果
-function drawSkinTexture(x, r, c, t) {
+const SKIN_OUTLINE = 'rgba(15,23,42,.9)'; // 统一深色描边：任何背景下轮廓都清晰
+
+function drawSkinDeco(x, r, c, t) {
+  const d = c && c.deco;
+  if (!d) return;
+  x.save();
+  x.lineJoin = 'round';
+  x.lineCap = 'round';
+  const OL = Math.max(1.5, r * 0.1); // 粗描边
+  const ol = () => { x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL; x.stroke(); };
+  switch (d) {
+    case 'cap': { // 军帽：后脑帽冠 + 金色帽徽
+      x.fillStyle = c.gun1;
+      x.beginPath(); x.ellipse(-r * 0.95, 0, r * 0.55, r * 0.74, 0, 0, TAU); x.fill(); ol();
+      x.fillStyle = c.glow;
+      x.beginPath(); x.arc(-r * 1.16, 0, r * 0.18, 0, TAU); x.fill(); ol();
+      break;
+    }
+    case 'leaf': { // 双叶：后脑两侧各一片
+      x.fillStyle = '#22c55e';
+      for (let s = -1; s <= 1; s += 2) {
+        x.save();
+        x.translate(-r * 0.5, s * r * 0.82);
+        x.rotate(s * 0.75);
+        x.beginPath(); x.ellipse(0, 0, r * 0.48, r * 0.21, 0, 0, TAU); x.fill(); ol();
+        x.restore();
+      }
+      break;
+    }
+    case 'bow': { // 蝴蝶结
+      x.fillStyle = '#f472b6';
+      for (let s = -1; s <= 1; s += 2) {
+        x.save();
+        x.translate(-r * 0.98, s * r * 0.42);
+        x.rotate(s * 0.42);
+        x.beginPath(); x.ellipse(0, 0, r * 0.38, r * 0.26, 0, 0, TAU); x.fill(); ol();
+        x.restore();
+      }
+      x.fillStyle = '#fbcfe8';
+      x.beginPath(); x.arc(-r * 0.98, 0, r * 0.18, 0, TAU); x.fill(); ol();
+      break;
+    }
+    case 'crown': { // 皇冠：三个尖
+      x.fillStyle = '#fcd34d';
+      x.beginPath();
+      x.moveTo(-r * 0.7, -r * 0.62);
+      x.lineTo(-r * 1.3, -r * 0.4);
+      x.lineTo(-r * 0.96, -r * 0.06);
+      x.lineTo(-r * 1.5, 0);
+      x.lineTo(-r * 0.96, r * 0.06);
+      x.lineTo(-r * 1.3, r * 0.4);
+      x.lineTo(-r * 0.7, r * 0.62);
+      x.closePath();
+      x.fill(); ol();
+      break;
+    }
+    case 'bolt': { // 闪电
+      x.fillStyle = '#fbbf24';
+      x.beginPath();
+      x.moveTo(-r * 0.6, -r * 0.52);
+      x.lineTo(-r * 1.14, -r * 0.52);
+      x.lineTo(-r * 0.9, -r * 0.08);
+      x.lineTo(-r * 1.42, -r * 0.08);
+      x.lineTo(-r * 0.72, r * 0.64);
+      x.lineTo(-r * 0.96, r * 0.08);
+      x.lineTo(-r * 0.58, r * 0.08);
+      x.closePath();
+      x.fill(); ol();
+      break;
+    }
+    case 'headband': { // 忍者头带 + 短飘带（不再有盖脸的面罩）
+      x.strokeStyle = '#7f1d1d'; x.lineWidth = r * 0.24;
+      x.beginPath(); x.arc(0, 0, r * 1.0, Math.PI * 0.68, Math.PI * 1.32); x.stroke();
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL;
+      x.beginPath(); x.arc(0, 0, r * 1.0, Math.PI * 0.68, Math.PI * 1.32); x.stroke();
+      x.strokeStyle = '#7f1d1d'; x.lineWidth = r * 0.13;
+      for (let s = -1; s <= 1; s += 2) {
+        const w = Math.sin(t * 3 + (s > 0 ? 0 : 1.2)) * r * 0.1;
+        x.beginPath();
+        x.moveTo(-r * 0.98, s * r * 0.32);
+        x.quadraticCurveTo(-r * 1.28, s * r * 0.46, -r * 1.48, s * r * 0.36 + w);
+        x.stroke();
+      }
+      break;
+    }
+    case 'flame': { // 三簇火苗
+      for (const a of [Math.PI * 0.86, Math.PI, Math.PI * 1.14]) {
+        x.save();
+        x.rotate(a - Math.PI);
+        x.fillStyle = '#f97316';
+        x.beginPath();
+        x.moveTo(-r * 0.66, -r * 0.3);
+        x.quadraticCurveTo(-r * 1.1, -r * 0.32, -r * 1.34, 0);
+        x.quadraticCurveTo(-r * 1.1, r * 0.32, -r * 0.66, r * 0.3);
+        x.closePath();
+        x.fill(); ol();
+        x.fillStyle = '#ffd166';
+        x.beginPath();
+        x.moveTo(-r * 0.7, -r * 0.15);
+        x.quadraticCurveTo(-r * 1.0, -r * 0.16, -r * 1.16, 0);
+        x.quadraticCurveTo(-r * 1.0, r * 0.16, -r * 0.7, r * 0.15);
+        x.closePath();
+        x.fill();
+        x.restore();
+      }
+      break;
+    }
+    case 'icicle': { // 三根冰柱
+      for (const a of [Math.PI * 0.84, Math.PI, Math.PI * 1.16]) {
+        x.save();
+        x.rotate(a - Math.PI);
+        x.fillStyle = '#e0f2fe';
+        x.beginPath();
+        x.moveTo(-r * 0.6, -r * 0.21);
+        x.lineTo(-r * 1.44, 0);
+        x.lineTo(-r * 0.6, r * 0.21);
+        x.closePath();
+        x.fill(); ol();
+        x.restore();
+      }
+      break;
+    }
+    case 'antenna': { // 机甲天线
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = r * 0.15;
+      x.beginPath(); x.moveTo(-r * 0.78, r * 0.12); x.lineTo(-r * 1.18, -r * 0.44); x.stroke();
+      x.strokeStyle = c.gun2; x.lineWidth = r * 0.08;
+      x.beginPath(); x.moveTo(-r * 0.78, r * 0.12); x.lineTo(-r * 1.18, -r * 0.44); x.stroke();
+      x.fillStyle = '#fb7185';
+      x.beginPath(); x.arc(-r * 1.22, -r * 0.48, r * 0.17, 0, TAU); x.fill(); ol();
+      break;
+    }
+    case 'horn': { // 独角（朝前）+ 彩虹鬃毛
+      const cols = ['#ff6b6b', '#ffd166', '#86efac'];
+      for (let i = 0; i < 3; i++) {
+        x.strokeStyle = cols[i]; x.lineWidth = r * 0.13;
+        x.beginPath(); x.arc(0, 0, r * (1.04 + i * 0.15), Math.PI * 0.62, Math.PI * 1.38); x.stroke();
+      }
+      const g = x.createLinearGradient(r * 0.42, 0, r * 1.5, 0);
+      g.addColorStop(0, '#fde68a'); g.addColorStop(1, '#f9a8d4');
+      x.fillStyle = g;
+      x.beginPath();
+      x.moveTo(r * 0.42, -r * 0.2); x.lineTo(r * 1.5, 0); x.lineTo(r * 0.42, r * 0.2);
+      x.closePath();
+      x.fill(); ol();
+      break;
+    }
+  }
+  x.restore();
+}
+
+// 眼睛样式：bob 为走路时的上下浮动（预览传 0）
+function drawSkinEyes(x, r, c, bob) {
+  const style = (c && c.eye) || 'normal';
+  const ex = r * 0.34, ey = r * 0.3, by = (bob || 0) * 0.3;
+  const DARK = '#0d1b2a';
+  if (style === 'narrow') { // 眯眼：一条斜横杠
+    x.strokeStyle = DARK; x.lineWidth = Math.max(1.8, r * 0.13); x.lineCap = 'round';
+    for (let s = -1; s <= 1; s += 2) {
+      x.beginPath();
+      x.moveTo(ex - r * 0.13, s * ey + by);
+      x.lineTo(ex + r * 0.15, s * (ey - r * 0.06) + by);
+      x.stroke();
+    }
+    return;
+  }
+  if (style === 'star') { // 星星眼
+    x.fillStyle = DARK;
+    for (let s = -1; s <= 1; s += 2) {
+      const cy = s * ey + by;
+      x.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4 - Math.PI / 2;
+        const rr = (i % 2 === 0) ? r * 0.15 : r * 0.065;
+        const px = ex + Math.cos(a) * rr, py = cy + Math.sin(a) * rr;
+        if (i === 0) x.moveTo(px, py); else x.lineTo(px, py);
+      }
+      x.closePath(); x.fill();
+    }
+    return;
+  }
+  // normal / visor 都先画眼珠
+  x.fillStyle = DARK;
+  x.beginPath();
+  x.arc(ex, -ey + by, r * 0.13, 0, TAU);
+  x.arc(ex, ey + by, r * 0.13, 0, TAU);
+  x.fill();
+  if (style === 'visor') { // 机甲：外面套一个发光目镜框（不遮眼珠）
+    x.strokeStyle = c.glow; x.lineWidth = Math.max(1.4, r * 0.09);
+    x.beginPath();
+    x.roundRect(ex - r * 0.22, -ey - r * 0.22 + by, r * 0.46, r * 0.44, r * 0.12);
+    x.stroke();
+    return;
+  }
+  x.fillStyle = '#fff'; // 高光点
+  x.beginPath();
+  x.arc(ex + r * 0.045, -ey - r * 0.045 + by, r * 0.05, 0, TAU);
+  x.arc(ex + r * 0.045, ey - r * 0.045 + by, r * 0.05, 0, TAU);
+  x.fill();
+}
+
+// 身体上的大色块（clip 在圆身内，不遮五官与枪口）
+function drawSkinMark(x, r, c, t) {
   const tex = c && c.texture;
   if (!tex || tex === 'clean') return;
   const A0 = x.globalAlpha;
@@ -1586,7 +1792,7 @@ function drawSkinTexture(x, r, c, t) {
       break;
     }
     case 'vein': { // 紫电幻影：电脉纹路（随时间明暗）
-      x.strokeStyle = c.glow; x.lineWidth = Math.max(1.2, r * 0.055);
+      x.strokeStyle = c.glow; x.lineWidth = Math.max(2, r * 0.1);
       x.globalAlpha = A0 * (0.45 + 0.25 * Math.abs(Math.sin(t * 3)));
       const veins = [[-0.7, -0.3, -0.2, -0.5, 0.3, -0.2],
                      [-0.6, 0.35, 0.1, 0.1, 0.65, 0.4],
@@ -1644,7 +1850,7 @@ function drawSkinTexture(x, r, c, t) {
     }
     case 'crack': { // 寒冰射手：冰裂纹 + 霜点
       x.globalAlpha = A0 * 0.55;
-      x.strokeStyle = '#e0f2fe'; x.lineWidth = Math.max(1, r * 0.045);
+      x.strokeStyle = '#e0f2fe'; x.lineWidth = Math.max(2, r * 0.085);
       const cracks = [[-0.2, -0.75, -0.35, -0.2, -0.75, 0.15],
                       [0.15, 0.7, 0.45, 0.2, 0.8, -0.15],
                       [-0.6, 0.5, -0.1, 0.35, 0.25, 0.6]];
@@ -1660,14 +1866,14 @@ function drawSkinTexture(x, r, c, t) {
       for (let i = 0; i < 6; i++) {
         const ang = i * TAU / 6 + 0.4;
         x.beginPath();
-        x.arc(Math.cos(ang) * r * 0.55, Math.sin(ang) * r * 0.55, r * 0.045, 0, TAU);
+        x.arc(Math.cos(ang) * r * 0.55, Math.sin(ang) * r * 0.55, r * 0.09, 0, TAU);
         x.fill();
       }
       break;
     }
     case 'panel': { // 机甲武装：装甲板缝 + 铆钉
       x.globalAlpha = A0 * 0.45;
-      x.strokeStyle = c.gun2; x.lineWidth = Math.max(1, r * 0.045);
+      x.strokeStyle = c.gun2; x.lineWidth = Math.max(2, r * 0.085);
       x.beginPath();
       x.moveTo(-r * 0.85, -r * 0.3); x.lineTo(-r * 0.2, -r * 0.55); x.lineTo(r * 0.55, -r * 0.35);
       x.moveTo(-r * 0.85, r * 0.35); x.lineTo(-r * 0.1, r * 0.6); x.lineTo(r * 0.6, r * 0.3);
@@ -1678,7 +1884,7 @@ function drawSkinTexture(x, r, c, t) {
       for (let i = 0; i < 8; i++) {
         const ang = i * TAU / 8;
         x.beginPath();
-        x.arc(Math.cos(ang) * r * 0.75, Math.sin(ang) * r * 0.75, r * 0.045, 0, TAU);
+        x.arc(Math.cos(ang) * r * 0.75, Math.sin(ang) * r * 0.75, r * 0.085, 0, TAU);
         x.fill();
       }
       x.globalAlpha = A0 * 0.35;
@@ -2072,7 +2278,7 @@ function drawMiniPlayer(cv, def, isGun) {
   const w = cv.width, h = cv.height;
   x.clearRect(0, 0, w, h);
   const cx = w / 2, cy = h / 2 + 4;
-  const r = isGun ? 20 : 24;
+  const r = isGun ? 18 : 22; // 略缩小：给头顶装饰留出外扩空间，避免被 72x72 画布裁掉
   const col = isGun ? skinDef() : def;
   // 枪械预览：用当前皮肤的小人 + 该枪的炮管（长度/颜色随枪变化）
   const gunLen = isGun ? ((def.barrel || 16) / 16) * 20 : 18;
@@ -2083,22 +2289,20 @@ function drawMiniPlayer(cv, def, isGun) {
   x.save();
   x.translate(cx, cy);
   x.rotate(-Math.PI / 2); // 朝上
+  drawSkinDeco(x, r, col, 0); // 皮肤主题装饰（静态预览用 t=0）
   // 身体
   const grad = x.createRadialGradient(-r * .3, -r * .3, r * .2, 0, 0, r);
   grad.addColorStop(0, col.body1);
   grad.addColorStop(1, col.body2);
   x.fillStyle = grad;
   x.beginPath(); x.arc(0, 0, r, 0, TAU); x.fill();
-  drawSkinTexture(x, r, col, 0); // 皮肤细腻纹理（静态预览用 t=0）
+  drawSkinMark(x, r, col, 0); // 皮肤身体大色块（静态预览用 t=0）
   x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 2; x.stroke();
   // 高光
   x.fillStyle = 'rgba(255,255,255,.4)';
   x.beginPath(); x.ellipse(-r * .3, -r * .33, r * .26, r * .16, -.6, 0, TAU); x.fill();
-  // 眼睛
-  x.fillStyle = '#0d1b2a';
-  x.beginPath(); x.arc(r * .34, -r * .28, 2.6, 0, TAU); x.arc(r * .34, r * .28, 2.6, 0, TAU); x.fill();
-  x.fillStyle = '#fff';
-  x.beginPath(); x.arc(r * .34 + 1, -r * .28 - 1, .9, 0, TAU); x.arc(r * .34 + 1, r * .28 - 1, .9, 0, TAU); x.fill();
+  // 眼睛（样式随皮肤）
+  drawSkinEyes(x, r, col, 0);
   // 炮口
   x.fillStyle = isGun ? (def.c1 || '#334155') : col.gun1;
   x.beginPath(); x.roundRect(r * .5, -gunW / 2, gunLen, gunW, 3); x.fill();
@@ -2900,22 +3104,20 @@ function drawPreview(dt) {
   x.rotate(previewT * 0.9); // 缓慢旋转展示
   const gunLen = 22 + (gd === GUN_DEFS.gun_sniper ? 14 : gd === GUN_DEFS.gun_shotgun ? 4 : 8);
   const gunW = gd === GUN_DEFS.gun_sniper ? 6 : 9;
+  drawSkinDeco(x, r, col, previewT); // 皮肤主题装饰
   // 身体
   const grad = x.createRadialGradient(-r * .3, -r * .3, r * .2, 0, 0, r);
   grad.addColorStop(0, col.body1);
   grad.addColorStop(1, col.body2);
   x.fillStyle = grad;
   x.beginPath(); x.arc(0, 0, r, 0, TAU); x.fill();
-  drawSkinTexture(x, r, col, previewT); // 皮肤细腻纹理
+  drawSkinMark(x, r, col, previewT); // 皮肤身体大色块
   x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 3; x.stroke();
   // 高光
   x.fillStyle = 'rgba(255,255,255,.45)';
   x.beginPath(); x.ellipse(-r * .3, -r * .33, r * .26, r * .15, -.6, 0, TAU); x.fill();
-  // 眼睛
-  x.fillStyle = '#0d1b2a';
-  x.beginPath(); x.arc(r * .34, -r * .3, 5.2, 0, TAU); x.arc(r * .34, r * .3, 5.2, 0, TAU); x.fill();
-  x.fillStyle = '#fff';
-  x.beginPath(); x.arc(r * .34 + 1.8, -r * .3 - 1.8, 1.8, 0, TAU); x.arc(r * .34 + 1.8, r * .3 - 1.8, 1.8, 0, TAU); x.fill();
+  // 眼睛（样式随皮肤）
+  drawSkinEyes(x, r, col, 0);
   // 炮口（按装备的枪变化）
   x.fillStyle = col.gun1;
   x.beginPath(); x.roundRect(r * .5, -gunW / 2, gunLen, gunW, 4); x.fill();
@@ -4901,6 +5103,8 @@ function drawPlayer(p) {
   ctx.ellipse(0, 4, p.r, p.r * 0.8, 0, 0, TAU);
   ctx.fill();
 
+  drawSkinDeco(ctx, p.r, c, G.time); // 皮肤主题装饰（画在身体下层 → 像从头顶长出来）
+
   // 身体
   const grad = ctx.createRadialGradient(-p.r*0.3, -p.r*0.3, p.r*0.2, 0, 0, p.r);
   grad.addColorStop(0, c.body1);
@@ -4909,7 +5113,7 @@ function drawPlayer(p) {
   ctx.beginPath();
   ctx.arc(0, 0, p.r, 0, TAU);
   ctx.fill();
-  drawSkinTexture(ctx, p.r, c, G.time); // 皮肤细腻纹理（画在身体上，不遮挡五官与枪口）
+  drawSkinMark(ctx, p.r, c, G.time); // 皮肤身体大色块（clip 在圆内，不遮五官与枪口）
   ctx.strokeStyle = 'rgba(0,0,0,0.25)';
   ctx.lineWidth = 2;
   ctx.stroke();
@@ -4920,18 +5124,9 @@ function drawPlayer(p) {
   ctx.ellipse(-p.r*0.3, -p.r*0.35, p.r*0.28, p.r*0.18, -0.6, 0, TAU);
   ctx.fill();
 
-  // 眼睛
+  // 眼睛（样式随皮肤：普通 / 眯眼 / 机甲目镜 / 星星眼）
   const bob = p.moving ? Math.sin(p.anim) * 1.2 : 0;
-  ctx.fillStyle = '#0d1b2a';
-  ctx.beginPath();
-  ctx.arc(p.r*0.34, -p.r*0.3 + bob*0.3, 3.4, 0, TAU);
-  ctx.arc(p.r*0.34, p.r*0.3 + bob*0.3, 3.4, 0, TAU);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(p.r*0.34 + 1.2, -p.r*0.3 + bob*0.3 - 1.2, 1.2, 0, TAU);
-  ctx.arc(p.r*0.34 + 1.2, p.r*0.3 + bob*0.3 - 1.2, 1.2, 0, TAU);
-  ctx.fill();
+  drawSkinEyes(ctx, p.r, c, bob);
 
   // 炮口
   ctx.fillStyle = c.gun1;
