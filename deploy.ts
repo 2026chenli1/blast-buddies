@@ -746,6 +746,7 @@ function pubUser(u: Record<string, any>) {
     upgrades: u.upgrades || {},
     expSpent: u.expSpent || 0,
     spendableExp: Math.max(0, (u.exp || 0) - (u.expSpent || 0)),
+    mapPlays: (u.mapPlays as number) || 0, // 自己的地图被别人玩过的次数
   };
 }
 
@@ -978,15 +979,39 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
   }
 
   // GET /api/maps/daily —— 今日地图：按日期确定性随机挑选一张玩家分享的地图（每天更换）
+  // ?author=xxx —— 优先挑选「别人」的地图（排除该作者自己的），池子里只有自己的地图时才回退
+  // 下发前用 pubMap() 剔除 authorId（作者身份属于内部字段，不能暴露给客户端）
+  function pubMap(m: any) {
+    if (!m) return m;
+    const { authorId, ...rest } = m;
+    return rest;
+  }
   if (path === '/api/maps/daily' && req.method === 'GET') {
     const e = await kv.get(['maps']);
     const list = (e.value as any[]) || [];
     const date = new Date().toISOString().slice(0, 10);
     if (!list.length) return jsonResp({ ok: true, map: null, date });
+    const u = new URL(req.url);
+    const author = (u.searchParams.get('author') || '').trim();
+    let pool = list;
+    if (author) {
+      const others = list.filter((m: any) => m && m.author !== author);
+      if (others.length) pool = others; // 有别人的地图就优先展示别人的
+    }
     let h = 0;
     for (let i = 0; i < date.length; i++) h = (h * 31 + date.charCodeAt(i)) >>> 0;
-    const map = list[h % list.length];
-    return jsonResp({ ok: true, map, date });
+    const map = pool[h % pool.length];
+    return jsonResp({ ok: true, map: pubMap(map), date });
+  }
+
+  // GET /api/maps/list —— 分享地图池列表（游玩别人的地图）
+  if (path === '/api/maps/list' && req.method === 'GET') {
+    const e = await kv.get(['maps']);
+    const list = ((e.value as any[]) || [])
+      .filter((m: any) => m && Array.isArray(m.cells))
+      .sort((a: any, b: any) => (b.ts || 0) - (a.ts || 0))
+      .slice(0, 100);
+    return jsonResp({ ok: true, list: list.map(pubMap), total: list.length });
   }
 
   // POST /api/maps/publish —— 分享自定义地图进「每日地图池」
@@ -1017,7 +1042,9 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     const list = (e.value as any[]) || [];
     // 同作者同名地图覆盖，防止刷屏
     const idx = list.findIndex((m: any) => m && m.author === author && m.name === name);
-    const rec = { id: crypto.randomUUID(), name, author, cols, rows, cells, lives, ts: Date.now() };
+    // 作者身份（登录时记录）：用于「别人玩你的地图 → 给你加钱加经验」。内部字段，不下发客户端
+    const am = await authUser(req);
+    const rec = { id: crypto.randomUUID(), name, author, cols, rows, cells, lives, ts: Date.now(), authorId: am ? am.phone : null };
     if (idx >= 0) list[idx] = rec; else list.push(rec);
     while (list.length > 200) list.shift(); // 池子上限 200 张，超出淘汰最旧的
     await kv.set(['maps'], list);
@@ -1170,12 +1197,48 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
 
   // POST /api/user/result { score, kills, wave } —— 局后结算金币/经验/击杀（累计击杀达标发战斗通行证）
   if (path === '/api/user/result' && req.method === 'POST') {
-    const { score, wave, kills } = await readBody(req);
+    const b = await readBody(req);
+    const { score, wave, kills } = b;
     const s = Math.max(0, Math.min(1000000, Math.floor(Number(score) || 0)));
     const w = Math.max(0, Math.min(999, Math.floor(Number(wave) || 0)));
     const k = Math.max(0, Math.min(9999, Math.floor(Number(kills) || 0)));
-    const gainedCoins = Math.floor(s / 10) + w * 5;
-    const gainedExp = Math.floor(s / 2);
+    let gainedCoins = Math.floor(s / 10) + w * 5;
+    let gainedExp = Math.floor(s / 2);
+    // ---------- 地图收益规则 ----------
+    // 1) 玩自己创造的地图：收益降为 1/3（防止自己刷自己的图刷分）
+    // 2) 玩别人分享的地图：给该地图作者分成（作者被动增收）
+    const mapId = String(b.mapId || '').slice(0, 64);
+    let ownMap = !!b.ownMap;
+    let authorBonus: { coins: number; exp: number } | null = null;
+    if (mapId) {
+      const me = await kv.get(['maps']);
+      const list = (me.value as any[]) || [];
+      const map = list.find((m: any) => m && m.id === mapId);
+      if (map) {
+        if (map.authorId && map.authorId === auth.phone) {
+          ownMap = true;
+        } else if (map.authorId && map.authorId !== auth.phone) {
+          const ab = {
+            coins: Math.max(1, Math.floor(gainedCoins / 4)),
+            exp: Math.max(1, Math.floor(gainedExp / 5)),
+          };
+          const ae = await kv.get(['user', map.authorId as string]);
+          const au = ae.value as Record<string, any> | null;
+          if (au) {
+            au.coins = ((au.coins as number) || 0) + ab.coins;
+            au.exp = ((au.exp as number) || 0) + ab.exp;
+            au.level = 1 + Math.floor(((au.exp as number) || 0) / 180);
+            au.mapPlays = ((au.mapPlays as number) || 0) + 1;
+            await kv.set(['user', map.authorId as string], au);
+            authorBonus = ab;
+          }
+        }
+      }
+    }
+    if (ownMap) {
+      gainedCoins = Math.floor(gainedCoins / 3);
+      gainedExp = Math.floor(gainedExp / 3);
+    }
     u.coins = (u.coins as number) + gainedCoins;
     u.exp = (u.exp as number) + gainedExp;
     u.kills = ((u.kills as number) || 0) + k;
@@ -1186,7 +1249,7 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
       passGained = true;
     }
     await kv.set(['user', auth.phone], u);
-    return jsonResp({ ok: true, user: pubUser(u), gainedCoins, gainedExp, passGained });
+    return jsonResp({ ok: true, user: pubUser(u), gainedCoins, gainedExp, passGained, ownMap, authorBonus });
   }
 
   return jsonResp({ ok: false, msg: 'Not Found' }, 404);
