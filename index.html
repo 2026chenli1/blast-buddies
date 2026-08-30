@@ -692,6 +692,34 @@
   .daily-map-card .dm-name { font-size: 11px; font-weight: 700; color: #fff; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .daily-map-card .dm-author { font-size: 9px; color: rgba(255,255,255,.85); margin: 2px 0 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* 地图菜单：创建地图 / 游玩地图 两个大按钮 */
+  .map-menu-opts { display: flex; flex-direction: column; gap: 10px; }
+  .map-menu-opt {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    background: rgba(0,0,0,.3);
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 14px;
+    padding: 16px 12px;
+    cursor: pointer;
+    color: #e2e8f0;
+  }
+  .map-menu-opt:active { transform: scale(.97); }
+  .map-menu-opt-title { font-size: 15px; font-weight: 800; }
+  .map-menu-opt-desc { font-size: 11px; color: #94a3b8; }
+
+  /* 游玩地图列表行 */
+  .mb-row {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,0,0,.25);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px;
+    padding: 6px 10px;
+    margin-bottom: 6px;
+  }
+  .mb-row .mb-info { flex: 1; min-width: 0; }
+  .mb-row .mb-name { font-size: 13px; font-weight: 700; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mb-row .mb-meta { font-size: 11px; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   /* 右侧挑战面板 */
   .challenge-card {
     position: absolute; top: 14px; right: 14px;
@@ -747,8 +775,10 @@
 
   /* 底部操作 */
   .home-bottom {
-    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%);
     display: flex; flex-direction: column; align-items: center; gap: 12px;
+    width: max-content; max-width: calc(100vw - 24px);
+    box-sizing: border-box; padding: 0 8px;
   }
   .home-actions { display: flex; align-items: center; gap: 12px; }
   .btn.home-start {
@@ -773,13 +803,15 @@
   .btn.home-room:active { transform: translateY(3px); box-shadow: 0 2px 0 #0f766e; }
 
   .home-nav {
-    display: flex; gap: 10px;
+    display: flex; gap: 8px;
     background: rgba(0,0,0,.25);
     border-radius: 999px;
-    padding: 6px;
+    padding: 6px 10px 24px; /* 底部留白：容纳圆形按钮下方的文字标签 */
   }
   .nav-icon {
+    position: relative;
     width: 44px; height: 44px;
+    flex: 0 0 auto;
     border-radius: 50%;
     background: rgba(255,255,255,.12);
     border: 1.5px solid rgba(255,255,255,.2);
@@ -787,6 +819,22 @@
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
     transition: transform .08s ease, background .15s ease;
+  }
+  /* 标签移到圆形按钮下方：文字不再被圆框裁切、也不会撑破按钮 */
+  .nav-label {
+    position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    margin-top: 4px;
+    font-size: 10px; line-height: 1; font-weight: 600;
+    white-space: nowrap;
+    color: rgba(255,255,255,.9);
+    text-shadow: 0 1px 2px rgba(0,0,0,.6);
+    pointer-events: none;
+  }
+  /* 手机版开启时，切换按钮高亮（用配色表达状态，不用文字挤爆按钮） */
+  .top-icon-btn.is-mobile {
+    background: rgba(56,189,248,.28);
+    border-color: rgba(56,189,248,.6);
+    color: #38bdf8;
   }
   .nav-icon:hover { background: rgba(255,255,255,.22); }
   .nav-icon:active { transform: scale(0.9); }
@@ -1237,6 +1285,35 @@
     </div>
   </div>
 
+  <!-- 地图菜单弹窗：创建地图 / 游玩地图（别人的地图） -->
+  <div class="modal-mask" id="map-menu-modal" style="display:none;">
+    <div class="modal-box" style="max-width:360px;">
+      <div class="modal-title">🗺 地图</div>
+      <div class="map-menu-opts">
+        <button class="map-menu-opt" id="map-menu-create">
+          <svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 5v14M5 12h14" stroke="#c4b5fd" stroke-width="2.5" stroke-linecap="round"/><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="#a78bfa" stroke-width="2"/></svg>
+          <span class="map-menu-opt-title">创建地图</span>
+          <span class="map-menu-opt-desc">绘制墙壁 / 陷阱 / 重生点</span>
+        </button>
+        <button class="map-menu-opt" id="map-menu-browse">
+          <svg viewBox="0 0 24 24" width="30" height="30"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z" fill="none" stroke="#6ee7b7" stroke-width="2" stroke-linejoin="round"/><path d="M9 3v15M15 6v15" stroke="#6ee7b7" stroke-width="2"/></svg>
+          <span class="map-menu-opt-title">游玩地图</span>
+          <span class="map-menu-opt-desc">挑战其他玩家分享的地图</span>
+        </button>
+      </div>
+      <button class="btn btn-secondary btn-small" id="map-menu-close" style="width:100%;margin-top:10px;">关闭</button>
+    </div>
+  </div>
+
+  <!-- 游玩地图弹窗：其他玩家分享的地图列表 -->
+  <div class="modal-mask" id="map-browse-modal" style="display:none;">
+    <div class="modal-box" style="max-width:480px;max-height:86vh;overflow:auto;">
+      <div class="modal-title">🎮 游玩地图 <button class="btn btn-small btn-secondary" id="map-browse-refresh" style="float:right;margin-top:-4px;">刷新</button></div>
+      <div id="map-browse-list">加载中…</div>
+      <button class="btn btn-secondary btn-small" id="map-browse-close" style="width:100%;margin-top:10px;">关闭</button>
+    </div>
+  </div>
+
   <!-- 建房设置弹窗：最多人数 + 公开/私有 + 游戏模式 -->
   <div id="room-setup-modal" style="display:none;">
     <div class="room-setup-box">
@@ -1482,6 +1559,20 @@ function userLevel(exp) { return 1 + Math.floor(exp / 180); } // 升级放缓：
 const UPG_MAX_LV = 5;
 function upgLv(id) { return (User.upgrades && User.upgrades[id]) || 0; }
 function upgCost(id) { return 100 + upgLv(id) * 100; }
+
+// ---------- 陷阱升级（在经验升级页花经验升级） ----------
+const TRAP_UPG_ID = 'trap';
+function trapUpg() {
+  const lv = upgLv(TRAP_UPG_ID);   // 0 ~ UPG_MAX_LV
+  return {
+    lv,
+    radius: 1 + lv * 0.16,         // 每级伤害面积 +16%
+    dmgPlayer: 1,                  // 对玩家固定 1 点，避免自伤过重
+    dmgEnemy: 2 + lv,              // 对普通敌人每级 +1
+    dmgBoss: 2 + lv * 2,           // 对 BOSS 的伤害
+    hitBoss: lv >= 3,              // 3 级起陷阱才能伤到 BOSS
+  };
+}
 function spendableExp() { return Math.max(0, User.exp - (User.expSpent || 0)); }
 function gunUpg(id) { const l = upgLv(id); return { dmg: 1 + l * 0.1, rate: 1 - l * 0.04 }; }        // 伤害+10%/级 射速+4%/级
 function skillUpg(id) { const l = upgLv(id); return { cd: 1 - l * 0.08 }; }                           // 冷却-8%/级
@@ -1523,6 +1614,11 @@ function applyUser(u) {
   User.gun = GUN_DEFS[u.gun] ? u.gun : 'gun_pistol';
   try { localStorage.setItem('bb_name', User.name); } catch (e) {}
   renderHomeUser();
+  // 登录拿到昵称后，用最新作者重新拉今日地图（优先展示别人的地图）
+  if (User.name && User.name !== DailyAuthor) {
+    DailyAuthor = User.name;
+    loadDailyMap();
+  }
   // 登录/资料刷新后，把最新昵称与皮肤同步到在线大厅
   if (Lobby.ws && Lobby.ws.readyState === 1) {
     try {
@@ -1897,6 +1993,13 @@ function upgEffectText(id) {
     s += ` · 冷却 ${Math.round(d.cd * g.cd)}s`;
     return s;
   }
+  // 陷阱
+  if (id === TRAP_UPG_ID) {
+    const g = trapUpg();
+    let s = `伤害面积 ×<b>${g.radius.toFixed(2)}</b> · 敌人伤害 <b>${g.dmgEnemy}</b> · 玩家伤害 <b>${g.dmgPlayer}</b>`;
+    s += g.hitBoss ? ` · BOSS 伤害 <b>${g.dmgBoss}</b>` : ' · <b>升到 3 级可伤 BOSS</b>';
+    return s;
+  }
   // 皮肤技能
   const d = SKIN_DEFS[id];
   if (d && d.skill) {
@@ -1910,13 +2013,14 @@ function renderUpgradeTab() {
   const rows = [];
   // 分组：已拥有的武器 → 已拥有皮肤的技能 → 全部手榴弹
   const groups = [
+    { cat: '陷阱', ids: [TRAP_UPG_ID] },
     { cat: '武器', ids: Object.keys(GUN_DEFS).filter(id => User.ownedGuns.includes(id)) },
     { cat: '技能', ids: Object.keys(SKIN_DEFS).filter(id => User.ownedSkins.includes(id)) },
     { cat: '手榴弹', ids: Object.keys(GRENADE_DEFS) },
   ];
   for (const grp of groups) {
     for (const id of grp.ids) {
-      const name = GUN_DEFS[id] ? GUN_DEFS[id].name : (GRENADE_DEFS[id] ? GRENADE_DEFS[id].name : (SKIN_DEFS[id] ? SKIN_DEFS[id].skill.name : id));
+      const name = id === TRAP_UPG_ID ? '陷阱强化' : (GUN_DEFS[id] ? GUN_DEFS[id].name : (GRENADE_DEFS[id] ? GRENADE_DEFS[id].name : (SKIN_DEFS[id] ? SKIN_DEFS[id].skill.name : id)));
       const lv = upgLv(id);
       const cost = upgCost(id);
       const isAdmin = User.role === 'admin'; // 管理员：升级不消耗经验
@@ -2090,11 +2194,75 @@ document.getElementById('nav-rank').addEventListener('click', () => {
 document.getElementById('lb-close-start').addEventListener('click', () => {
   document.getElementById('lb-list-start').parentElement.style.display = 'none';
 });
-// 底部导航：地图编辑器（绘制墙壁 / 陷阱）
+// 底部导航：地图 —— 先弹菜单（创建地图 / 游玩地图）
 document.getElementById('nav-create').addEventListener('click', () => {
   ensureAudio();
   if (NET.ws) return;
+  document.getElementById('map-menu-modal').style.display = 'flex';
+});
+// 地图菜单：创建地图
+document.getElementById('map-menu-create').addEventListener('click', () => {
+  ensureAudio();
+  document.getElementById('map-menu-modal').style.display = 'none';
   openMapEditor();
+});
+// 地图菜单：游玩地图（别人的地图）
+document.getElementById('map-menu-browse').addEventListener('click', () => {
+  ensureAudio();
+  document.getElementById('map-menu-modal').style.display = 'none';
+  openMapBrowse();
+});
+document.getElementById('map-menu-close').addEventListener('click', () => {
+  document.getElementById('map-menu-modal').style.display = 'none';
+});
+
+// ---------- 游玩地图：其他玩家分享的地图列表 ----------
+function mapBrowseRow(m, idx) {
+  const flat = (m.cells || []).flat();
+  const walls = flat.filter(v => v === 1).length;
+  const traps = flat.filter(v => v === 2).length;
+  const spawns = flat.filter(v => v === 3).length;
+  const mine = (m.author || '') === (User.name || '');
+  return `
+    <div class="mb-row">
+      <div class="mb-info">
+        <div class="mb-name">${escapeHtml(m.name || '未命名')}</div>
+        <div class="mb-meta">作者：${escapeHtml(m.author || '玩家')}${mine ? '（我）' : ''} · ${walls} 墙 ${traps} 陷阱 ${spawns} 重生点 · ${m.lives || 1} 生命</div>
+      </div>
+      <button class="btn btn-small" data-mbplay="${idx}" style="background:#22c55e;">游玩</button>
+    </div>`;
+}
+async function openMapBrowse() {
+  const modal = document.getElementById('map-browse-modal');
+  const listEl = document.getElementById('map-browse-list');
+  modal.style.display = 'flex';
+  listEl.innerHTML = '<div style="font-size:13px;color:#94a3b8;">加载中…</div>';
+  let maps = null, online = false;
+  // 1) 优先服务器：所有玩家分享的地图池
+  try {
+    const r = await fetch('/api/maps/list');
+    const d = await r.json();
+    if (d.ok && Array.isArray(d.list) && d.list.length) { maps = d.list; online = true; }
+  } catch (e) {}
+  // 2) 服务器不可用：回退到本地「我的地图」
+  if (!maps) maps = meLoad().map(m => ({ ...m, author: User.name || '我' }));
+  if (!maps.length) {
+    listEl.innerHTML = '<div style="font-size:13px;color:#94a3b8;">暂无地图 · 去「创建地图」画一张，或在编辑器里点「分享」让大家玩到你的地图</div>';
+    return;
+  }
+  listEl.innerHTML =
+    (online ? '' : '<div style="font-size:11px;color:#fbbf24;margin-bottom:8px;">服务器暂不可用，当前显示本地保存的我的地图</div>')
+    + maps.map((m, i) => mapBrowseRow(m, i)).join('');
+  for (const b of listEl.querySelectorAll('[data-mbplay]')) {
+    b.addEventListener('click', () => {
+      const m = maps[+b.dataset.mbplay];
+      if (m) mePlay({ id: m.id, name: m.name, cols: m.cols, rows: m.rows, cells: m.cells, lives: m.lives, author: m.author });
+    });
+  }
+}
+document.getElementById('map-browse-refresh').addEventListener('click', () => openMapBrowse());
+document.getElementById('map-browse-close').addEventListener('click', () => {
+  document.getElementById('map-browse-modal').style.display = 'none';
 });
 // 底部导航：战斗通行证（击杀解锁专属武器）
 document.getElementById('nav-fav').addEventListener('click', () => {
@@ -2191,11 +2359,17 @@ function meRender() {
       if (!v) continue;
       const x = col * cw, y = r * ch;
       if (v === 1) {
+        // 墙体铺满整格：相邻墙壁之间不留缝隙，只描没有相邻墙体的外边
         c.fillStyle = '#64748b';
-        c.fillRect(x + 2, y + 2, cw - 4, ch - 4);
+        c.fillRect(x, y, cw, ch);
         c.strokeStyle = '#334155';
         c.lineWidth = 2;
-        c.strokeRect(x + 2, y + 2, cw - 4, ch - 4);
+        c.beginPath();
+        if (!(ME.cells[r - 1] && ME.cells[r - 1][col] === 1)) { c.moveTo(x, y); c.lineTo(x + cw, y); }
+        if (!(ME.cells[r + 1] && ME.cells[r + 1][col] === 1)) { c.moveTo(x, y + ch); c.lineTo(x + cw, y + ch); }
+        if (ME.cells[r][col - 1] !== 1) { c.moveTo(x, y); c.lineTo(x, y + ch); }
+        if (ME.cells[r][col + 1] !== 1) { c.moveTo(x + cw, y); c.lineTo(x + cw, y + ch); }
+        c.stroke();
       } else if (v === 2) {
         c.fillStyle = 'rgba(185,28,28,0.75)';
         c.beginPath();
@@ -2287,10 +2461,13 @@ document.getElementById('map-share-btn').addEventListener('click', async () => {
   const filled = data.cells.flat().filter(v => v > 0).length;
   if (!filled) { alert('先画点墙壁/陷阱/重生点再分享吧'); return; }
   try {
+    // 带上登录 token 与生命数：服务端据此记录地图作者，别人玩你的图时给你结算收益
+    const hd = { 'Content-Type': 'application/json' };
+    if (User.token) hd['authorization'] = 'Bearer ' + User.token;
     const r = await fetch('/api/maps/publish', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: data.name, cols: data.cols, rows: data.rows, cells: data.cells, author: User.name || '玩家' })
+      headers: hd,
+      body: JSON.stringify({ name: data.name, cols: data.cols, rows: data.rows, cells: data.cells, lives: data.lives, author: User.name || '玩家' })
     });
     const d = await r.json();
     if (d.ok) alert('✅ 已分享！你的地图有机会成为其他玩家的「今日地图」');
@@ -2349,6 +2526,8 @@ function meUse(m) {
 function mePlay(m) {
   G.customMap = m;
   document.getElementById('map-editor-modal').style.display = 'none';
+  document.getElementById('map-menu-modal').style.display = 'none';
+  document.getElementById('map-browse-modal').style.display = 'none';
   closeLobby();
   closeLobbyWorld();
   // 服务器维护期间：直接单人开局（点击即玩，不等联机）
@@ -2380,11 +2559,12 @@ function dailySeed() {
   return h;
 }
 let DailyMap = null; // 当前展示的地图 { name, author, cols, rows, cells }
+let DailyAuthor = ''; // 上次加载今日地图时使用的作者（登录拿到昵称后重新加载一次）
 async function loadDailyMap() {
   let map = null;
-  // 1) 优先服务器：所有玩家分享的地图池，按日期确定性随机
+  // 1) 优先服务器：所有玩家分享的地图池，按日期确定性随机（带作者参数：优先展示「别人」的地图）
   try {
-    const r = await fetch('/api/maps/daily');
+    const r = await fetch('/api/maps/daily?author=' + encodeURIComponent(User.name || ''));
     const d = await r.json();
     if (d.ok && d.map && d.map.cells) map = d.map;
   } catch (e) {}
@@ -2427,7 +2607,8 @@ function renderDailyMap() {
         const v = row[col] || 0;
         if (!v) continue;
         const x = col * cw, y = r * ch;
-        if (v === 1) { c.fillStyle = '#64748b'; c.fillRect(x + 1, y + 1, cw - 2, ch - 2); }
+        // 墙壁铺满整格（多画 1px 消除格子间的亚像素缝隙）
+        if (v === 1) { c.fillStyle = '#64748b'; c.fillRect(x - 0.5, y - 0.5, cw + 1, ch + 1); }
         else if (v === 2) { c.fillStyle = '#ef4444'; c.beginPath(); c.arc(x + cw / 2, y + ch / 2, Math.min(cw, ch) * 0.32, 0, Math.PI * 2); c.fill(); }
         else if (v === 3) { c.fillStyle = '#22c55e'; c.beginPath(); c.arc(x + cw / 2, y + ch / 2, Math.min(cw, ch) * 0.34, 0, Math.PI * 2); c.fill(); }
       }
@@ -2436,7 +2617,8 @@ function renderDailyMap() {
 }
 document.getElementById('daily-map-play').addEventListener('click', () => {
   if (!DailyMap || !DailyMap.cells) return;
-  mePlay({ name: DailyMap.name, cols: DailyMap.cols, rows: DailyMap.rows, cells: DailyMap.cells });
+  // 带上 id / lives：作者分成与生命数都依赖这些字段
+  mePlay({ id: DailyMap.id, name: DailyMap.name, cols: DailyMap.cols, rows: DailyMap.rows, cells: DailyMap.cells, lives: DailyMap.lives, author: DailyMap.author });
 });
 loadDailyMap();
 
@@ -2456,11 +2638,22 @@ async function reportResult() {
   if (G.reported) return;
   G.reported = true;
   try {
-    const r = await api('/api/user/result', { score: G.score, kills: G.kills, wave: G.wave });
+    // 带上当前地图信息：自己的地图收益 ×1/3，玩别人的地图会给作者分成
+    const cm = G.customMap;
+    const mapId = (cm && cm.id) ? cm.id : null;
+    const mapAuthor = (cm && cm.author) ? cm.author : null;
+    // 本地「我的地图」没有服务器 id，一律算自己的地图；服务器地图按作者名判断
+    const ownMap = !!cm && (!mapId || (!!mapAuthor && !!User.name && mapAuthor === User.name));
+    const r = await api('/api/user/result', { score: G.score, kills: G.kills, wave: G.wave, mapId, ownMap });
     if (r.ok) {
       const hadPass = User.pass;
       applyUser(r.user);
-      if (el) el.textContent = `💰 +${r.gainedCoins} 金币 · ⭐ +${r.gainedExp} 经验`;
+      if (el) {
+        let txt = `💰 +${r.gainedCoins} 金币 · ⭐ +${r.gainedExp} 经验`;
+        if (r.ownMap) txt += '（自己的地图 · 收益 ×1/3）';
+        else if (r.authorBonus) txt += `（已给地图作者 +${r.authorBonus.coins} 金币 / +${r.authorBonus.exp} 经验）`;
+        el.textContent = txt;
+      }
       if (r.passGained && !hadPass) {
         setTimeout(() => alert('🎖 恭喜！累计击杀达到 10 个敌人，获得【战斗通行证】！现在可以解锁专属武器了。'), 600);
       }
@@ -3324,13 +3517,21 @@ function applyCustomMap() {
       if (!v) continue;
       const x = (c + 0.5) * cw, y = (r + 0.5) * ch;
       if (v === 1) {
-        // 墙壁：高耐久石块
+        // 墙壁：高耐久石块（铺满整格，相邻墙块之间不留缝隙）
         G.obstacles.push({
-          x, y, r: cr * 0.46,
+          x, y, r: cr * 0.5,
           hp: (CFG.obstacleHp || 30) * 6,
           maxHp: (CFG.obstacleHp || 30) * 6,
           color: '#64748b', dark: '#334155',
           anim: 0, flash: 0,
+          wall: true,
+          // 四邻是否也是墙：绘制时只描没有相邻墙体的边，保证墙体内无缝
+          wn: {
+            u: (m.cells[r - 1] || [])[c] === 1,
+            d: (m.cells[r + 1] || [])[c] === 1,
+            l: row[c - 1] === 1,
+            rt: row[c + 1] === 1,
+          },
         });
       } else if (v === 2) {
         // 陷阱：周期性伤害圈（伤害玩家与敌人）
@@ -3353,39 +3554,50 @@ function applyCustomMap() {
 
 function updateTraps(dt) {
   if (!G.traps || !G.traps.length) return;
+  const tg = trapUpg(); // 陷阱等级：决定伤害面积与伤害值
   for (const t of G.traps) {
     t.tick += dt;
     t.pulse = Math.max(0, (t.pulse || 0) - dt * 3);
+    const R = t.r * tg.radius; // 升级后伤害面积变大
     if (t.tick < 0.8) continue;
     t.tick = 0;
     t.pulse = 1;
     // 玩家踩陷阱受伤（走统一伤害入口：致死会正确触发死亡/结算）
     for (const p of G.players) {
       if (p.dead || (p.invuln || 0) > 0) continue;
-      if (dist2(p.x, p.y, t.x, t.y) < (t.r + p.r) ** 2) {
+      if (dist2(p.x, p.y, t.x, t.y) < (R + p.r) ** 2) {
         addParticles(p.x, p.y, '#f87171', 8, 160, 3, 0.3);
         addPopup(p.x, p.y - p.r - 10, '陷阱!', '#f87171');
-        damagePlayer(p, 1);
+        damagePlayer(p, tg.dmgPlayer);
       }
     }
     // 敌人也会被陷阱伤害
     for (let i = G.enemies.length - 1; i >= 0; i--) {
       const e = G.enemies[i];
-      if (dist2(e.x, e.y, t.x, t.y) < (t.r + e.r) ** 2) {
-        e.hp -= 2;
+      if (dist2(e.x, e.y, t.x, t.y) < (R + e.r) ** 2) {
+        e.hp -= tg.dmgEnemy;
         e.flash = 0.12;
         if (e.hp <= 0) killEnemy(i);
       }
+    }
+    // BOSS：陷阱升到 3 级才能伤到 BOSS
+    if (tg.hitBoss && G.boss && G.boss.hp > 0 && dist2(G.boss.x, G.boss.y, t.x, t.y) < (R + G.boss.r) ** 2) {
+      G.boss.hp -= tg.dmgBoss;
+      G.boss.flash = 0.12;
+      addParticles(G.boss.x, G.boss.y, '#ff6b35', 6, 180, 4, 0.35);
+      addPopup(G.boss.x, G.boss.y - G.boss.r - 18, '陷阱 -' + tg.dmgBoss, '#f87171');
+      if (G.boss.hp <= 0) killBoss();
     }
   }
 }
 
 function drawTraps() {
   if (!G.traps || !G.traps.length) return;
+  const tg = trapUpg(); // 视觉半径跟随陷阱等级，与伤害范围保持一致
   for (const t of G.traps) {
     ctx.save();
     ctx.translate(t.x, t.y);
-    const pr = t.r * (1 + (t.pulse || 0) * 0.18);
+    const pr = t.r * tg.radius * (1 + (t.pulse || 0) * 0.18);
     // 底座
     ctx.fillStyle = 'rgba(127,29,29,0.5)';
     ctx.beginPath();
@@ -4602,6 +4814,24 @@ function drawObstacles() {
     ctx.fill();
     ctx.rotate(ob.anim * 0.4);
     const s = ob.r;
+    if (ob.wall) {
+      // 自定义地图的墙体：铺满整格，只在没有相邻墙体的边描边 → 墙块之间完全无缝
+      const b = s + 0.5;
+      const wg = ctx.createLinearGradient(-b, -b, b, b);
+      wg.addColorStop(0, ob.color);
+      wg.addColorStop(1, ob.dark);
+      ctx.fillStyle = wg;
+      ctx.fillRect(-b, -b, b * 2, b * 2);
+      const wn = ob.wn || {};
+      ctx.strokeStyle = ob.dark;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      if (!wn.u) { ctx.moveTo(-b, -b); ctx.lineTo(b, -b); }
+      if (!wn.d) { ctx.moveTo(-b, b); ctx.lineTo(b, b); }
+      if (!wn.l) { ctx.moveTo(-b, -b); ctx.lineTo(-b, b); }
+      if (!wn.rt) { ctx.moveTo(b, -b); ctx.lineTo(b, b); }
+      ctx.stroke();
+    } else {
     // 箱体
     const grad = ctx.createRadialGradient(-s * 0.3, -s * 0.3, s * 0.2, 0, 0, s * 1.5);
     grad.addColorStop(0, '#e6b98a');
@@ -4625,6 +4855,7 @@ function drawObstacles() {
     ctx.beginPath();
     ctx.ellipse(-s * 0.3, -s * 0.35, s * 0.3, s * 0.16, -0.6, 0, TAU);
     ctx.fill();
+    }
     // 裂纹（随血量加深）
     const frac = ob.hp / ob.maxHp;
     if (frac < 0.67) {
@@ -5129,8 +5360,14 @@ function setMobile(on) {
   const m = document.getElementById('controls-mobile');
   if (d) d.style.display = on ? 'none' : '';
   if (m) m.style.display = on ? '' : 'none';
+  // 注意：不要往这个图标按钮里塞文字（会撑破圆框溢出），只改提示与高亮
   const btn = document.getElementById('mode-switch-btn');
-  if (btn) btn.textContent = on ? '🖥 切换电脑版' : '📱 切换手机版';
+  if (btn) {
+    const label = on ? '切换电脑版' : '切换手机版';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.classList.toggle('is-mobile', !!on);
+  }
 }
 
 function localPlayer() {
