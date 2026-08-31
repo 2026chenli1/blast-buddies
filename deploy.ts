@@ -66,6 +66,7 @@ const bc = new BroadcastChannel('blast-relay');
 // ---------- 战斗通行证 ----------
 const PASS_KILLS = 10; // 累计击杀 10 个敌人获得战斗通行证
 const PASS_GUNS = new Set(['gun_laser', 'gun_dual', 'gun_plasma']); // 通行证专属武器
+const PASS_SKINS = new Set(['skin_void', 'skin_crimson', 'skin_astral']); // 通行证专属皮肤
 
 function send(ws, obj) {
   try {
@@ -651,6 +652,9 @@ const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: nu
   skin_ice:     { type: 'skin', name: '寒冰射手', price: 1500 },
   skin_mecha:   { type: 'skin', name: '机甲武装', price: 3000 },
   skin_rainbow: { type: 'skin', name: '彩虹独角兽', price: 5000 },
+  skin_void:    { type: 'skin', name: '虚空行者', price: 6000 },
+  skin_crimson: { type: 'skin', name: '猩红裁决', price: 9000 },
+  skin_astral:  { type: 'skin', name: '星辰主宰', price: 15000 },
   gun_pistol:   { type: 'gun', name: '标准手枪', price: 0,   lv: 1 },
   gun_rapid:    { type: 'gun', name: '冲锋枪',   price: 300, lv: 2 },
   gun_shotgun:  { type: 'gun', name: '散弹枪',   price: 600, lv: 4 },
@@ -1138,8 +1142,10 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     if ((def.lv || 1) > (u.level as number)) {
       return jsonResp({ ok: false, msg: `需要 Lv.${def.lv} 才能解锁该武器` }, 400);
     }
-    // 通行证专属武器：未获得战斗通行证不可购买
-    if (def.type === 'gun' && PASS_GUNS.has(String(item)) && !u.pass) {
+    // 通行证专属武器/皮肤：未获得战斗通行证不可购买
+    const needPass = (def.type === 'gun' && PASS_GUNS.has(String(item))) ||
+                     (def.type === 'skin' && PASS_SKINS.has(String(item)));
+    if (needPass && !u.pass) {
       return jsonResp({ ok: false, msg: `需要战斗通行证（累计击杀 ${PASS_KILLS} 个敌人）才能解锁` }, 400);
     }
     const owned: string[] = def.type === 'skin' ? u.ownedSkins : u.ownedGuns;
