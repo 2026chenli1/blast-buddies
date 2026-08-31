@@ -1512,7 +1512,7 @@ const SKIN_DEFS = {
   skin_dark:    { name: '暗夜行者', price: 1000, desc: '低调暗黑忍者', body1: '#64748b', body2: '#1e293b', gun1: '#0f172a', gun2: '#020617', glow: '#94a3b8', deco: 'headband', texture: 'clean',   eye: 'narrow', trail: 'smoke',   skill: { icon: '🌑', name: '暗影隐身', cd: 15, desc: '隐身 3 秒，敌人无法发现你' } },
   skin_fire:    { name: '烈焰战神', price: 1500, desc: '炽热红焰，所向披靡', body1: '#ffb347', body2: '#e63946', gun1: '#9b2226', gun2: '#6a040f', glow: '#ffb703', deco: 'flame',  texture: 'stripe',  eye: 'normal', trail: 'ember',   skill: { icon: '🔥', name: '烈焰新星', cd: 12, desc: '火焰冲击波伤害并点燃周围敌人' } },
   skin_ice:     { name: '寒冰射手', price: 1500, desc: '冰蓝冻结，冷静致命', body1: '#a5f3fc', body2: '#0ea5e9', gun1: '#075985', gun2: '#0c4a6e', glow: '#67e8f9', deco: 'icicle',  texture: 'crack',   eye: 'normal', trail: 'frost',   skill: { icon: '❄️', name: '冰霜新星', cd: 14, desc: '冻结周围敌人 2.5 秒' } },
-  skin_mecha:   { name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc', deco: 'mecha',    texture: 'panel',   eye: 'visor',  trail: 'thrust',  skill: { icon: '🛡️', name: '能量护盾', cd: 16, desc: '6 秒内抵挡 3 次伤害' } },
+  skin_mecha:   { name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc', visorCol: '#22d3ee', deco: 'mecha',    texture: 'metal',   eye: 'visor',  trail: 'thrust',  skill: { icon: '🛡️', name: '能量护盾', cd: 16, desc: '6 秒内抵挡 3 次伤害' } },
   skin_rainbow: { name: '彩虹独角兽', price: 5000, desc: '七彩祥云，至尊限定', body1: '#fda4af', body2: '#f472b6', gun1: '#c026d3', gun2: '#a21caf', glow: '#f0abfc', deco: 'horn',   texture: 'shimmer', eye: 'star',    trail: 'rainbow', skill: { icon: '🌈', name: '彩虹狂暴', cd: 18, desc: '5 秒射速翻倍，流光环绕' } },
 };
 
@@ -1668,53 +1668,37 @@ function drawSkinDeco(x, r, c, t) {
       }
       break;
     }
-    case 'mecha': { // 机甲头盔：两侧耳甲 + 后脑盔壳 + 发光条 + 天线
+    case 'mecha': { // 机甲头盔：一整块深色盔壳 + 一道高对比红鳍（只有两个实心块，小图不糊）
       x.fillStyle = c.gun2;
-      for (let s = -1; s <= 1; s += 2) {
-        x.save();
-        x.translate(-r * 0.3, s * r * 0.92);
-        x.rotate(s * 0.28);
-        x.beginPath(); x.ellipse(0, 0, r * 0.36, r * 0.23, 0, 0, TAU); x.fill(); ol();
-        x.restore();
-      }
-      x.fillStyle = c.gun1;
-      x.beginPath(); x.ellipse(-r * 0.82, 0, r * 0.5, r * 0.64, 0, 0, TAU); x.fill(); ol();
-      x.strokeStyle = c.glow; x.lineWidth = Math.max(1.2, r * 0.08);
-      x.beginPath(); x.arc(-r * 0.85, 0, r * 0.36, Math.PI * 0.58, Math.PI * 1.42); x.stroke();
-      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = r * 0.15;
-      x.beginPath(); x.moveTo(-r * 0.98, -r * 0.38); x.lineTo(-r * 1.24, -r * 0.72); x.stroke();
-      x.strokeStyle = c.gun2; x.lineWidth = r * 0.08;
-      x.beginPath(); x.moveTo(-r * 0.98, -r * 0.38); x.lineTo(-r * 1.24, -r * 0.72); x.stroke();
+      x.beginPath(); x.ellipse(-r * 0.7, 0, r * 0.64, r * 0.8, 0, 0, TAU); x.fill(); ol();
       x.fillStyle = '#fb7185';
-      x.beginPath(); x.arc(-r * 1.26, -r * 0.74, r * 0.16, 0, TAU); x.fill(); ol();
+      x.beginPath();
+      x.moveTo(-r * 0.6, -r * 0.62);
+      x.lineTo(-r * 1.2, -r * 0.3);
+      x.lineTo(-r * 1.18, -r * 0.95);
+      x.closePath();
+      x.fill(); ol();
       break;
     }
-    case 'horn': { // 独角（朝前）+ 蓬松彩虹鬃毛
-      const cols = ['#ff6b6b', '#ffd166', '#86efac', '#67e8f9'];
-      for (let i = 0; i < 4; i++) {
-        const a = Math.PI * (0.62 + i * 0.19);
-        const rr = r * (0.98 + (i % 2) * 0.12);
+    case 'horn': { // 独角（朝前）+ 3 团拉开间距的高对比鬃毛（三色，不挤在一起）
+      const cols = ['#ff6b6b', '#ffd166', '#67e8f9'];
+      for (let i = 0; i < 3; i++) {
+        const a = Math.PI * (0.58 + i * 0.3);
+        const rr = r * (i === 1 ? 1.1 : 1);
         x.fillStyle = cols[i];
         x.save();
         x.translate(Math.cos(a) * rr, Math.sin(a) * rr);
         x.rotate(a);
-        x.beginPath(); x.ellipse(0, 0, r * 0.34, r * 0.26, 0, 0, TAU); x.fill(); ol();
+        x.beginPath(); x.ellipse(0, 0, r * 0.44, r * 0.34, 0, 0, TAU); x.fill(); ol();
         x.restore();
       }
-      const g = x.createLinearGradient(r * 0.42, 0, r * 1.52, 0);
+      const g = x.createLinearGradient(r * 0.6, 0, r * 1.42, 0);
       g.addColorStop(0, '#fde68a'); g.addColorStop(1, '#f9a8d4');
       x.fillStyle = g;
       x.beginPath();
-      x.moveTo(r * 0.4, -r * 0.22); x.lineTo(r * 1.52, 0); x.lineTo(r * 0.4, r * 0.22);
+      x.moveTo(r * 0.6, -r * 0.3); x.lineTo(r * 1.42, 0); x.lineTo(r * 0.6, r * 0.3);
       x.closePath();
       x.fill(); ol();
-      x.strokeStyle = 'rgba(255,255,255,.8)'; x.lineWidth = Math.max(1, r * 0.05);
-      for (let i = 1; i <= 2; i++) {
-        x.beginPath();
-        x.moveTo(r * (0.42 + i * 0.3), -r * 0.16 + i * r * 0.055);
-        x.lineTo(r * (0.42 + i * 0.3), r * 0.16 - i * r * 0.055);
-        x.stroke();
-      }
       break;
     }
   }
@@ -1758,7 +1742,7 @@ function drawSkinEyes(x, r, c, bob) {
   x.arc(ex, ey + by, r * 0.13, 0, TAU);
   x.fill();
   if (style === 'visor') { // 机甲：外面套一个发光目镜框（不遮眼珠）
-    x.strokeStyle = c.glow; x.lineWidth = Math.max(1.4, r * 0.09);
+    x.strokeStyle = c.visorCol || c.glow; x.lineWidth = Math.max(1.4, r * 0.09);
     x.beginPath();
     x.roundRect(ex - r * 0.22, -ey - r * 0.22 + by, r * 0.46, r * 0.44, r * 0.12);
     x.stroke();
@@ -1919,41 +1903,28 @@ function drawSkinMark(x, r, c, t) {
       }
       break;
     }
-    case 'panel': { // 机甲武装：装甲板缝 + 铆钉
-      x.globalAlpha = A0 * 0.45;
-      x.strokeStyle = c.gun2; x.lineWidth = Math.max(2, r * 0.085);
-      x.beginPath();
-      x.moveTo(-r * 0.85, -r * 0.3); x.lineTo(-r * 0.2, -r * 0.55); x.lineTo(r * 0.55, -r * 0.35);
-      x.moveTo(-r * 0.85, r * 0.35); x.lineTo(-r * 0.1, r * 0.6); x.lineTo(r * 0.6, r * 0.3);
-      x.stroke();
-      x.beginPath(); x.arc(0, 0, r * 0.42, 0, TAU); x.stroke();
-      x.globalAlpha = A0 * 0.7;
+    case 'metal': { // 机甲武装：大块装甲斜分 + 顶部高光（只有两块色，不用板缝铆钉）
+      x.globalAlpha = A0 * 0.5;
       x.fillStyle = c.gun1;
-      for (let i = 0; i < 8; i++) {
-        const ang = i * TAU / 8;
-        x.beginPath();
-        x.arc(Math.cos(ang) * r * 0.75, Math.sin(ang) * r * 0.75, r * 0.085, 0, TAU);
-        x.fill();
-      }
-      x.globalAlpha = A0 * 0.35;
+      x.beginPath();
+      x.moveTo(-r, -r * 0.15); x.lineTo(-r, r); x.lineTo(r, r); x.lineTo(r, r * 0.3);
+      x.closePath();
+      x.fill();
+      x.globalAlpha = A0 * 0.25;
       x.fillStyle = c.glow;
-      x.beginPath(); x.ellipse(-r * 0.35, -r * 0.35, r * 0.22, r * 0.12, -0.6, 0, TAU); x.fill();
+      x.beginPath();
+      x.moveTo(-r, -r); x.lineTo(r, -r); x.lineTo(r * 0.2, -r * 0.5); x.lineTo(-r, -r * 0.25);
+      x.closePath();
+      x.fill();
       break;
     }
-    case 'shimmer': { // 彩虹独角兽：虹彩流光带
-      const cols = ['#ff6b6b', '#ffd166', '#86efac', '#67e8f9', '#c4b5fd'];
-      x.globalAlpha = A0 * 0.26;
-      x.lineWidth = r * 0.19;
-      for (let i = 0; i < 5; i++) {
-        x.strokeStyle = cols[i];
-        const off = Math.sin(t * 0.8 + i * 0.7) * r * 0.24;
-        x.beginPath();
-        x.ellipse(off, 0, r * 0.9, r * 0.55, -0.45, 0, TAU);
-        x.stroke();
+    case 'shimmer': { // 彩虹独角兽：3 道粗彩虹横带（不再叠 5 层细线）
+      const cols = ['#ff6b6b', '#ffd166', '#67e8f9'];
+      x.globalAlpha = A0 * 0.32;
+      for (let i = 0; i < 3; i++) {
+        x.fillStyle = cols[i];
+        x.fillRect(-r, -r * 0.85 + i * r * 0.55, r * 2, r * 0.42);
       }
-      x.globalAlpha = A0 * 0.45;
-      x.strokeStyle = '#ffffff'; x.lineWidth = Math.max(1, r * 0.03);
-      x.beginPath(); x.ellipse(0, 0, r * 0.5, r * 0.3, -0.45, 0, TAU); x.stroke();
       break;
     }
   }
