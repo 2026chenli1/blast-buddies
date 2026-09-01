@@ -1170,8 +1170,8 @@
     <!-- 排行榜 -->
     <div class="lb-wrap">
       <div class="lb-title">排行榜<span class="lb-tabs">
-        <button class="lb-tab active" id="lb-tab-local">本地</button>
-        <button class="lb-tab" id="lb-tab-online">线上</button>
+        <button class="lb-tab" id="lb-tab-local">本地</button>
+        <button class="lb-tab active" id="lb-tab-online">线上</button>
       </span><button class="lb-close" id="lb-close-start" title="关闭排行榜"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></button></div>
       <div class="lb-list" id="lb-list-start"></div>
     </div>
@@ -2638,7 +2638,7 @@ document.getElementById('weapon-close').addEventListener('click', () => {
 });
 
 // ======================= 线上排名 =======================
-let lbOnline = false;
+let lbOnline = true;   // 默认展示线上排名（线上数据比本机单机记录更有意义）
 async function loadOnlineRank() {
   const el = document.getElementById('lb-list-start');
   if (!el) return;
@@ -2696,7 +2696,7 @@ document.getElementById('nav-rank').addEventListener('click', () => {
   const el = document.getElementById('lb-list-start').parentElement;
   const open = el.style.display === 'block';
   el.style.display = open ? 'none' : 'block';
-  if (!open) renderLeaderboard(document.getElementById('lb-list-start'));
+  if (!open) { const le = document.getElementById('lb-list-start'); if (lbOnline) loadOnlineRank(); else renderLeaderboard(le); }
 });
 document.getElementById('lb-close-start').addEventListener('click', () => {
   document.getElementById('lb-list-start').parentElement.style.display = 'none';

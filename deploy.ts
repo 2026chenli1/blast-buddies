@@ -1060,6 +1060,22 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
   if (!auth) return jsonResp({ ok: false, msg: '请先登录' }, 401);
   const u = auth.user;
 
+  // POST /api/maps/delete { id } —— 从分享池删除地图（管理员，或该地图的发布者本人）
+  if (path === '/api/maps/delete' && req.method === 'POST') {
+    const { id } = await readBody(req);
+    const e = await kv.get(['maps']);
+    const list = (e.value as any[]) || [];
+    const idx = list.findIndex((m: any) => m && m.id === id);
+    if (idx < 0) return jsonResp({ ok: false, msg: '地图不存在' }, 404);
+    const m = list[idx];
+    const isAdmin = u.role === 'admin';
+    const isAuthor = !!(m.authorId && m.authorId === u.phone);
+    if (!isAdmin && !isAuthor) return jsonResp({ ok: false, msg: '只能删除自己发布的地图' }, 403);
+    list.splice(idx, 1);
+    await kv.set(['maps'], list);
+    return jsonResp({ ok: true, total: list.length });
+  }
+
   // POST /api/auth/qr/confirm { ticket, name?, captcha?, captchaId? } —— 手机确认登录
   // 新账号（还是默认名 玩家XXXX）必须先创建全局唯一的用户名，并过数学验证码（防AI刷号）
   if (path === '/api/auth/qr/confirm' && req.method === 'POST') {
