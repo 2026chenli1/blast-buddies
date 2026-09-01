@@ -1209,6 +1209,7 @@
   <div class="modal-mask" id="mode-modal" style="display:none;">
     <div class="modal-box">
       <div class="modal-title">选择模式</div>
+      <button class="mode-big-btn" id="pick-solo">🎮 单人游戏<small>离线即玩 · 无障碍空场</small></button>
       <button class="mode-big-btn" id="pick-quick">⚡ 快速游戏<small>加入随机比赛 · 所有房间都是公开的</small></button>
       <button class="mode-big-btn" id="pick-ranked">🏆 排位赛<small>16 名玩家陆续匹配 · 凑齐即开局</small></button>
       <button class="btn btn-secondary btn-small" id="mode-modal-close" style="margin-top:0;">取消</button>
@@ -2998,7 +2999,7 @@ document.getElementById('map-editor-close').addEventListener('click', () => {
   document.getElementById('map-editor-modal').style.display = 'none';
 });
 document.getElementById('map-none-btn').addEventListener('click', () => {
-  G.customMap = null;
+  G.customMap = null; G.noObstacles = false;
   alert('已清除自定义地图，之后创建的房间将使用随机障碍');
 });
 function meRenderList() {
@@ -3521,6 +3522,7 @@ const G = {
   state: 'menu',        // menu | playing | paused | over
   mode: 'single',       // single | net
   gm: 'coop',           // 游戏模式：coop | stronghold | tdm
+  noObstacles: false,    // 无障碍模式：不生成可破坏障碍（单人游戏选项）
   score: 0,
   wave: 0,
   time: 0,
@@ -4978,7 +4980,7 @@ function startWave() {
   G.waveTimer = CFG.waveInterval;
   // 补充可破坏障碍（每波补到目标数量）；自定义地图时不补充
   const obTarget = Math.min(CFG.obstacleMin + Math.floor(G.wave / 2), CFG.obstacleMax);
-  if (!G.customMap) while (G.obstacles.length < obTarget) spawnObstacle();
+  if (!G.customMap && !G.noObstacles) while (G.obstacles.length < obTarget) spawnObstacle();
   document.getElementById('wave-display').textContent = `第 ${G.wave} 波${isBoss ? ' · BOSS' : ''}`;
   if (CH) { CH.stats.waves = Math.max(CH.stats.waves, G.wave); checkTasks(); }
   updateHUD();
@@ -7109,7 +7111,7 @@ function showMenu() {
   G.obstacles = [];
   G.traps = [];            // 陷阱清空（自定义地图残留）
   G.spawnPoints = [];      // 重生点清空
-  G.customMap = null;      // 退出对局不再携带自定义地图
+  G.customMap = null; G.noObstacles = false;      // 退出对局不再携带自定义地图
   G.enemies = [];
   G.bullets = [];
   G.enemyBullets = [];
@@ -7551,6 +7553,7 @@ document.getElementById('home-start-btn').addEventListener('click', () => {
 });
 document.getElementById('home-room-btn').addEventListener('click', () => {
   ensureAudio();
+  G.noObstacles = false;   // 联机正常生成障碍
   G.mode = 'net';
   homeView.style.display = 'none';
   netPanel.style.display = 'block';
@@ -7559,15 +7562,32 @@ document.getElementById('home-room-btn').addEventListener('click', () => {
 document.getElementById('mode-modal-close').addEventListener('click', () => {
   modeModal.style.display = 'none';
 });
+// 单人游戏：不依赖服务器、不进房间，点击即玩；无障碍 = 不生成可破坏障碍（空场）
+function startSolo() {
+  closeLobby();
+  closeLobbyWorld();
+  modeModal.style.display = 'none';
+  G.customMap = null;     // 用标准随机地图，不沿用上次选的自定义图
+  G.noObstacles = true;   // 无障碍：场地全空，专心打怪
+  G.mode = 'single';
+  homeView.style.display = 'none';
+  startGame();
+}
+document.getElementById('pick-solo').addEventListener('click', () => {
+  ensureAudio();
+  startSolo();
+});
 // 快速游戏：拉取公开房间列表 → 随机加入一个；没有房间则自动创建公开房间
 document.getElementById('pick-quick').addEventListener('click', () => {
   ensureAudio();
+  G.noObstacles = false;   // 联机正常生成障碍
   modeModal.style.display = 'none';
   netQuick();
 });
 // 排位赛：进入 16 人匹配队列
 document.getElementById('pick-ranked').addEventListener('click', () => {
   ensureAudio();
+  G.noObstacles = false;   // 联机正常生成障碍
   modeModal.style.display = 'none';
   netRanked();
 });
