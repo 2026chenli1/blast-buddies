@@ -64,7 +64,7 @@ function withMatchLock<T>(fn: () => Promise<T>): Promise<T> {
 const bc = new BroadcastChannel('blast-relay');
 
 // ---------- 战斗通行证 ----------
-const PASS_KILLS = 10; // 累计击杀 10 个敌人获得战斗通行证
+const PASS_KILLS = 300; // 累计击杀 300 个敌人获得战斗通行证（与客户端 index.html 保持一致）
 const PASS_GUNS = new Set(['gun_laser', 'gun_dual', 'gun_plasma']); // 通行证专属武器
 const PASS_SKINS = new Set(['skin_void', 'skin_crimson', 'skin_astral']); // 通行证专属皮肤
 
@@ -506,12 +506,15 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       break;
     }
     case 'match': {
-      // 排位赛：加入匹配队列；凑齐 MATCH_PLAYERS 人后自动建房开局
+      // 匹配：加入队列，凑齐目标人数后自动建房开局。
+      // size = 想要的房间人数（自由匹配 2~16 自选，排位赛固定 MATCH_PLAYERS）。
+      // 队列里每人记下自己的 size，只有「同样 size」的人才会被凑到一起。
       if (c && c.room) {
         send(ws, { t: 'error', msg: '你已经在房间里了' });
         return;
       }
       if (matchLocal.has(connId)) return;
+      const want = Math.max(2, Math.min(MATCH_PLAYERS, (msg.size as number) | 0 || MATCH_PLAYERS));
       await withMatchLock(async () => {
         matchLocal.add(connId);
         lobbyPlayers.delete(connId);
@@ -521,13 +524,16 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
           matchLocal.delete(connId);
           return;
         }
-        q.push({ id: connId, name: String(msg.name || '').slice(0, 12), skin: String(msg.skin || ''), ts: Date.now() });
-        if (q.length >= MATCH_PLAYERS) {
-          // 凑齐：前 16 人成团，其余留在队列
-          const batch = q.slice(0, MATCH_PLAYERS);
-          const rest = q.slice(MATCH_PLAYERS);
+        q.push({ id: connId, name: String(msg.name || '').slice(0, 12), skin: String(msg.skin || ''), size: want, ts: Date.now() });
+        // 只和「想要同样人数」的人凑在一起（排位赛固定 16，自由匹配按各自选择）
+        const sameSize = q.filter((x: any) => (x.size || MATCH_PLAYERS) === want);
+        if (sameSize.length >= want) {
+          // 凑齐：取前 want 人成团，其余留在队列
+          const batch = sameSize.slice(0, want);
+          const batchIds = new Set(batch.map((b: any) => b.id));
+          const rest = q.filter((x: any) => !batchIds.has(x.id));
           await saveMatchQueue(rest);
-          const room = await createRoom(batch[0].id, MATCH_PLAYERS, 'public', 'tdm');
+          const room = await createRoom(batch[0].id, want, 'public', 'tdm');
           // KV 注册表补上其余 15 人（guest），并广播 joined 让各 isolate 的 rooms 镜像同步、房主收到 peer
           const reg = await roomReg(room);
           for (let i = 1; i < batch.length; i++) {
@@ -544,7 +550,7 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
               name: batch[i].name,
               skin: batch[i].skin,
               created: Date.now(),
-              cap: MATCH_PLAYERS,
+              cap: want,
               mode: 'public',
             });
           }
@@ -553,7 +559,8 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
           broadcast({ type: 'match', action: 'found', room, players: batch.map((b: any, i: number) => ({ id: b.id, slot: i + 1 })) });
         } else {
           await saveMatchQueue(q);
-          broadcast({ type: 'match', action: 'count', n: q.length });
+          // 计数只报「同样人数」的队列长度，否则自由匹配会看到排位赛的人数
+          broadcast({ type: 'match', action: 'count', n: sameSize.length, size: want });
         }
       });
       break;
