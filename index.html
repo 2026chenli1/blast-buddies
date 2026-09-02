@@ -7718,8 +7718,12 @@ function netQuick() {
 // 匹配：size = 目标人数（自由匹配自选，排位赛固定 16）
 let MATCH_SIZE = 16;   // 当前匹配的目标人数
 // 匹配等待反馈：只显示计数会让人以为「点了没反应」，加上等待秒数和在线人数才知道在动
-let matchWaitTimer = null, matchWaitSec = 0;
+// matchWaitToken 是防泄漏的关键：单次 clearInterval 只能清掉「最后一次记住的那个」id，
+// 一旦有计时器漏掉就会永久堆积（实测过：几个残留计时器能把页面拖到无响应）。
+// 每次停表都递增 token，旧计时器回调发现 token 变了就自行退出，不依赖外部清理。
+let matchWaitTimer = null, matchWaitSec = 0, matchWaitToken = 0;
 function stopMatchWait() {
+  matchWaitToken++;
   if (matchWaitTimer) { clearInterval(matchWaitTimer); matchWaitTimer = null; }
   matchWaitSec = 0;
 }
@@ -7764,7 +7768,9 @@ function netMatch(size) {
   stopMatchWait();
   updateMatchWait();
   refreshMatchOnline(want);
+  const myToken = matchWaitToken;   // 记住本次匹配的 token
   matchWaitTimer = setInterval(() => {
+    if (matchWaitToken !== myToken) { clearInterval(matchWaitTimer); return; } // 已作废，自行退出
     matchWaitSec++;
     updateMatchWait();
     if (matchWaitSec % 5 === 0) refreshMatchOnline(want);
