@@ -7718,18 +7718,24 @@ function netQuick() {
 // 匹配：size = 目标人数（自由匹配自选，排位赛固定 16）
 let MATCH_SIZE = 16;   // 当前匹配的目标人数
 // 匹配等待反馈：只显示计数会让人以为「点了没反应」，加上等待秒数和在线人数才知道在动
-// matchWaitToken 是防泄漏的关键：单次 clearInterval 只能清掉「最后一次记住的那个」id，
-// 一旦有计时器漏掉就会永久堆积（实测过：几个残留计时器能把页面拖到无响应）。
-// 每次停表都递增 token，旧计时器回调发现 token 变了就自行退出，不依赖外部清理。
-let matchWaitTimer = null, matchWaitSec = 0, matchWaitToken = 0;
+//
+// 两个防坑设计：
+// 1) 秒数用「时间戳差值」算，而不是每秒 ++ 累加。累加方式一旦有计时器泄漏就会成倍
+//    虚高（实测过 6 秒/秒），换成 Date.now() 差值后，哪怕真有残留计时器也只是重复
+//    刷新同一个正确数字，不会算错。
+// 2) token 让旧计时器自行退出：clearInterval 只能清掉「最后一次记住的那个」id，
+//    漏掉的会永久堆积。每次停表递增 token，旧回调发现 token 变了就自己 return。
+let matchWaitTimer = null, matchWaitStart = 0, matchWaitToken = 0;
 function stopMatchWait() {
   matchWaitToken++;
   if (matchWaitTimer) { clearInterval(matchWaitTimer); matchWaitTimer = null; }
-  matchWaitSec = 0;
+  matchWaitStart = 0;
 }
 function updateMatchWait() {
   const el = document.getElementById('match-wait');
-  if (el) el.textContent = `已等待 ${matchWaitSec} 秒`;
+  if (!el) return;
+  const sec = matchWaitStart ? Math.floor((Date.now() - matchWaitStart) / 1000) : 0;
+  el.textContent = `已等待 ${sec} 秒`;
 }
 // 在线人数：帮助判断还要等多久；不足目标人数时给出明确提示
 async function refreshMatchOnline(need) {
@@ -7764,16 +7770,17 @@ function netMatch(size) {
   countEl.textContent = '0/' + want;
   barEl.style.width = '0%';
   modal.style.display = 'flex';
-  // 开始计时 + 拉在线人数（每 5 秒刷新一次）
+  // 开始计时 + 拉在线人数（每 5 次 tick 刷新一次）
   stopMatchWait();
+  matchWaitStart = Date.now();
   updateMatchWait();
   refreshMatchOnline(want);
   const myToken = matchWaitToken;   // 记住本次匹配的 token
+  let tick = 0;
   matchWaitTimer = setInterval(() => {
     if (matchWaitToken !== myToken) { clearInterval(matchWaitTimer); return; } // 已作废，自行退出
-    matchWaitSec++;
     updateMatchWait();
-    if (matchWaitSec % 5 === 0) refreshMatchOnline(want);
+    if (++tick % 5 === 0) refreshMatchOnline(want);
   }, 1000);
   let ws;
   try { ws = new WebSocket(wsURL()); } catch (e) {
