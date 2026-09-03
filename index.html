@@ -1108,6 +1108,7 @@
         <button class="nav-icon" id="nav-rank" title="排行榜（点击开关）"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="4" y="10" width="5" height="10" rx="1" fill="#fbbf24"/><rect x="9.5" y="5" width="5" height="15" rx="1" fill="#f472b6"/><rect x="15" y="13" width="5" height="7" rx="1" fill="#60a5fa"/></svg><span class="nav-label">排名</span></button>
         <button class="nav-icon" id="nav-create" title="创建地图"><svg viewBox="0 0 24 24" width="24" height="24"><path d="M9 3L3 6v15l6-3 6 3 6-3V3l-6 3-6-3z" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/><path d="M9 3v15M15 6v15" stroke="#a78bfa" stroke-width="2"/></svg><span class="nav-label">地图</span></button>
         <button class="nav-icon" id="nav-fav" title="战斗通行证"><svg viewBox="0 0 24 24" width="24" height="24"><polygon points="12,2 15,9 22,9 16.5,14 18.5,21 12,17 5.5,21 7.5,14 2,9 9,9" fill="#fbbf24"/></svg><span class="nav-label">通行证</span></button>
+        <button class="nav-icon" id="nav-box" title="盲盒"><svg viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="8" width="18" height="13" rx="1.5" fill="#f472b6"/><rect x="2" y="5" width="20" height="5" rx="1.5" fill="#fbbf24"/><rect x="10.5" y="5" width="3" height="16" fill="#fbbf24"/></svg><span class="nav-label">盲盒</span></button>
       </div>
       <div class="home-actions">
         <button class="btn home-start" id="home-start-btn">游戏</button>
@@ -1242,6 +1243,27 @@
       </div>
       <div id="freematch-sizes" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;"></div>
       <button class="btn btn-secondary btn-small" id="freematch-close-btn" style="margin-top:16px;">取消</button>
+    </div>
+  </div>
+
+  <!-- 盲盒：B 币抽奖 -->
+  <div class="modal-mask" id="box-modal" style="display:none;">
+    <div class="modal-box" style="max-width:380px;">
+      <div class="modal-title">🎁 神秘盲盒</div>
+      <div style="text-align:center;padding:6px 0 2px;">
+        <div style="font-size:13px;color:#94a3b8;margin-bottom:8px;">
+          每 <b style="color:#fbbf24;">6</b> 枚 B 币抽一次 · 你有 <b id="box-bcoin" style="color:#fbbf24;">0</b> 枚
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:12px;line-height:1.8;">
+          奖池：额外技能 60% · 空奖 20% · 金币 10% · 盲盒专属皮肤 10%<br>累计击杀每 300 个敌人得 1 枚 B 币
+        </div>
+        <div id="box-result" style="min-height:130px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.25);border-radius:12px;margin-bottom:12px;">
+          <div style="font-size:54px;" id="box-result-icon">🎁</div>
+          <div style="font-size:14px;color:#94a3b8;margin-top:6px;" id="box-result-text">试试手气</div>
+        </div>
+        <button class="btn" id="box-draw-btn" style="margin-top:0;">🎲 抽一次（6 B币）</button>
+      </div>
+      <button class="btn btn-secondary btn-small" id="box-close-btn">关闭</button>
     </div>
   </div>
 
@@ -1533,11 +1555,37 @@ const SKIN_DEFS = {
   skin_ice:     { name: '寒冰射手', price: 1500, desc: '冰蓝冻结，冷静致命', body1: '#a5f3fc', body2: '#0ea5e9', gun1: '#075985', gun2: '#0c4a6e', glow: '#67e8f9', deco: 'icicle',  texture: 'crack',   eye: 'normal', trail: 'frost',   skill: { icon: '❄️', name: '冰霜陷阱', cd: 14, desc: '埋下 3 根冰刺（持续 8 秒），敌人踩中冻结 2 秒并受 3 伤', power: 13 } },
   skin_mecha:   { name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc', visorCol: '#22d3ee', deco: 'mecha',    texture: 'metal',   eye: 'visor',  trail: 'thrust',  skill: { icon: '🛡️', name: '能量护盾', cd: 15, desc: '6 秒抵挡 4 次；护盾破碎时释放冲击波造成 4 点伤害', power: 15 } },
   skin_rainbow: { name: '彩虹独角兽', price: 5000, desc: '七彩祥云，至尊限定', body1: '#fda4af', body2: '#f472b6', gun1: '#c026d3', gun2: '#a21caf', glow: '#f0abfc', deco: 'horn',   texture: 'shimmer', eye: 'star',    trail: 'rainbow', skill: { icon: '🌈', name: '彩虹狂暴', cd: 18, desc: '6 秒射速翻倍 + 移速 30%；期间每击杀延长 1 秒（上限 10 秒）', power: 18 } },
-  // ↓ 战斗通行证专属（累计击杀 300 个敌人解锁购买资格），技能强度远超普通皮肤
-  skin_void:    { name: '虚空行者', price: 6000, desc: '★通行证 掌控虚空之力', body1: '#c4b5fd', body2: '#4c1d95', gun1: '#3b0764', gun2: '#1e1b4b', glow: '#a78bfa', pass: 1, deco: 'void',    texture: 'void',    eye: 'glow',   trail: 'void',    skill: { icon: '🌀', name: '虚空坍缩', cd: 22, desc: '召唤黑洞 4 秒，持续吸引周围敌人并每 0.4 秒造成 2 点伤害', power: 20 } },
-  skin_crimson: { name: '猩红裁决', price: 9000, desc: '★通行证 一刀断罪，血染战场', body1: '#fca5a5', body2: '#b91c1c', gun1: '#7f1d1d', gun2: '#450a0a', glow: '#ef4444', pass: 1, deco: 'crimson', texture: 'crimson', eye: 'narrow', trail: 'blood',   skill: { icon: '⚔️', name: '裁决天罚', cd: 28, desc: '一刀断罪：瞬杀全场所有敌人，BOSS 受到 25 点伤害', power: 26 } },
-  skin_astral:  { name: '星辰主宰', price: 15000, desc: '★通行证 星辰之力，逆转战局', body1: '#e0e7ff', body2: '#312e81', gun1: '#1e1b4b', gun2: '#0f172a', glow: '#fbbf24', visorCol: '#fbbf24', pass: 1, deco: 'astral',  texture: 'astral',  eye: 'star',   trail: 'astral',  skill: { icon: '✨', name: '星辰崩解', cd: 32, desc: '时间凝滞 4 秒（含 BOSS），期间自身无敌且射速提升至 3 倍', power: 34 } },
+  // ↓ 战斗通行证专属：每款有独立的累计击杀门槛（killReq），达标才解锁购买资格
+  skin_void:    { name: '虚空行者', price: 6000, desc: '★通行证 掌控虚空之力', body1: '#c4b5fd', body2: '#4c1d95', gun1: '#3b0764', gun2: '#1e1b4b', glow: '#a78bfa', pass: 1, killReq: 1000, deco: 'void',    texture: 'void',    eye: 'glow',   trail: 'void',    skill: { icon: '🌀', name: '虚空坍缩', cd: 22, desc: '召唤黑洞 4 秒，持续吸引周围敌人并每 0.4 秒造成 2 点伤害', power: 20 } },
+  skin_crimson: { name: '猩红裁决', price: 9000, desc: '★通行证 一刀断罪，血染战场', body1: '#fca5a5', body2: '#b91c1c', gun1: '#7f1d1d', gun2: '#450a0a', glow: '#ef4444', pass: 1, killReq: 3000, deco: 'crimson', texture: 'crimson', eye: 'narrow', trail: 'blood',   skill: { icon: '⚔️', name: '裁决天罚', cd: 28, desc: '一刀断罪：瞬杀全场所有敌人，BOSS 受到 25 点伤害', power: 26 } },
+  skin_astral:  { name: '星辰主宰', price: 15000, desc: '★通行证 星辰之力，逆转战局', body1: '#e0e7ff', body2: '#312e81', gun1: '#1e1b4b', gun2: '#0f172a', glow: '#fbbf24', visorCol: '#fbbf24', pass: 1, killReq: 4000, deco: 'astral',  texture: 'astral',  eye: 'star',   trail: 'astral',  skill: { icon: '✨', name: '星辰崩解', cd: 32, desc: '时间凝滞 4 秒（含 BOSS），期间自身无敌且射速提升至 3 倍', power: 34 } },
+  skin_phoenix: { name: '不死凤凰', price: 22000, desc: '★通行证 浴火重生，涅槃不息', body1: '#fed7aa', body2: '#ea580c', gun1: '#9a3412', gun2: '#7c2d12', glow: '#fb923c', pass: 1, killReq: 8000, deco: 'phoenix', texture: 'ember', eye: 'blaze', trail: 'ember', skill: { icon: '🕊️', name: '涅槃重生', cd: 40, desc: '主动释放立即回满血并清除负面；携带时阵亡会自动原地复活一次', power: 38 } },
+  skin_abyss:   { name: '深渊泰坦', price: 28000, desc: '★通行证 深海霸主，吞噬一切', body1: '#5eead4', body2: '#0f766e', gun1: '#115e59', gun2: '#134e4a', glow: '#2dd4bf', pass: 1, killReq: 10000, deco: 'abyss', texture: 'wave', eye: 'glow', trail: 'bubble', skill: { icon: '🌊', name: '深海漩涡', cd: 20, desc: '掀起巨浪击退全场敌人并造成 4 点伤害，被击退撞墙的敌人额外受 2 伤', power: 42 } },
+  skin_storm:   { name: '雷霆之主', price: 36000, desc: '★通行证 掌控天雷，审判众生', body1: '#fef08a', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#fde047', pass: 1, killReq: 15000, deco: 'storm', texture: 'vein', eye: 'glow', trail: 'spark', skill: { icon: '🌩️', name: '天雷审判', cd: 24, desc: '天降 8 道落雷随机轰击全场，每道 5 点伤害并附带 1 秒麻痹', power: 46 } },
+  skin_necro:   { name: '亡灵君主', price: 45000, desc: '★通行证 号令亡者，生生不息', body1: '#bef264', body2: '#365314', gun1: '#1a2e05', gun2: '#0f172a', glow: '#84cc16', pass: 1, killReq: 20000, deco: 'necro', texture: 'bone', eye: 'hollow', trail: 'soul', skill: { icon: '💀', name: '亡者行军', cd: 26, desc: '召唤 4 只骷髅战士为你作战，持续 12 秒；骷髅击杀的敌人也计入你的得分', power: 50 } },
+  skin_celestial:{ name: '天界圣骑', price: 60000, desc: '★通行证 圣光庇佑，邪祟退散', body1: '#fef9c3', body2: '#a16207', gun1: '#854d0e', gun2: '#713f12', glow: '#fef08a', visorCol: '#fde047', pass: 1, killReq: 30000, deco: 'halo', texture: 'shine', eye: 'visor', trail: 'holy', skill: { icon: '🗡️', name: '圣光裁决', cd: 22, desc: '展开圣光领域 8 秒：领域内队友无敌，敌人持续受到 2 点/秒伤害', power: 55 } },
+  skin_chaos:   { name: '混沌魔神', price: 80000, desc: '★通行证 无序即真理，混乱即力量', body1: '#f0abfc', body2: '#581c87', gun1: '#3b0764', gun2: '#0f172a', glow: '#d946ef', pass: 1, killReq: 50000, deco: 'chaos', texture: 'chaos', eye: 'chaos', trail: 'chaos', skill: { icon: '🌀', name: '混沌崩坏', cd: 30, desc: '扭曲空间 6 秒：敌人随机传送且互相伤害，期间自身射速翻倍', power: 60 } },
+  skin_eternal: { name: '永恒至尊', price: 120000, desc: '★通行证 超越时空，永恒不灭', body1: '#ffffff', body2: '#1e1b4b', gun1: '#312e81', gun2: '#0f172a', glow: '#fde047', visorCol: '#ffffff', pass: 1, killReq: 80000, deco: 'eternal', texture: 'astral', eye: 'star', trail: 'eternal', skill: { icon: '♾️', name: '永恒领域', cd: 35, desc: '展开永恒领域 10 秒：全场敌人被冻结，自身无敌且射速 3 倍，每击杀延长 1 秒', power: 66 } },
+  // ↓ 盲盒专属：商城不卖，只能用 B 币在盲盒里抽到
+  skin_jester:  { name: '诡笑小丑', price: 0, box: 1, desc: '🎁盲盒 猜猜盒子里是什么', body1: '#fca5a5', body2: '#be123c', gun1: '#4c0519', gun2: '#0f172a', glow: '#fda4af', deco: 'jester', texture: 'harlequin', eye: 'jester', trail: 'confetti', skill: { icon: '🃏', name: '诡术扑克', cd: 16, desc: '掷出 5 张扑克随机造成 1~6 点伤害；抽到王牌则全场敌人受到 8 点伤害', power: 10 } },
+  skin_ghost:   { name: '幽灵旅者', price: 0, box: 1, desc: '🎁盲盒 飘忽不定，来去无踪', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#cbd5e1', deco: 'ghost', texture: 'ghost', eye: 'hollow', trail: 'smoke', skill: { icon: '👻', name: '灵体穿梭', cd: 14, desc: '进入灵体状态 5 秒：可穿过墙壁与障碍，期间移速 +50%', power: 11 } },
+  skin_robot:   { name: '报废机器人', price: 0, box: 1, desc: '🎁盲盒 零件散落，勉强能跑', body1: '#d6d3d1', body2: '#78716c', gun1: '#44403c', gun2: '#1c1917', glow: '#f59e0b', visorCol: '#f59e0b', deco: 'scrap', texture: 'rust', eye: 'visor', trail: 'spark', skill: { icon: '🔧', name: '过载自毁', cd: 25, desc: '引燃自身零件：对周围造成 12 点伤害，随后以半血复活', power: 14 } },
+  skin_candy:   { name: '糖果恶魔', price: 0, box: 1, desc: '🎁盲盒 甜到蛀牙，毒到致命', body1: '#fbcfe8', body2: '#db2777', gun1: '#831843', gun2: '#500724', glow: '#f9a8d4', deco: 'candy', texture: 'candy', eye: 'star', trail: 'confetti', skill: { icon: '🍬', name: '糖霜爆破', cd: 15, desc: '抛洒 6 颗糖果炸弹，爆炸造成 3 点伤害并留下减速糖浆 4 秒', power: 12 } },
+  skin_samurai: { name: '浪人剑客', price: 0, box: 1, desc: '🎁盲盒 一斩断念，无牵无挂', body1: '#fecaca', body2: '#991b1b', gun1: '#450a0a', gun2: '#1c1917', glow: '#fca5a5', deco: 'samurai', texture: 'clean', eye: 'narrow', trail: 'slash', skill: { icon: '🗡️', name: '拔刀术', cd: 18, desc: '瞬移到最近敌人身后并造成 10 点伤害；若击杀则立即重置冷却', power: 16 } },
+  skin_alien:   { name: '异星来客', price: 0, box: 1, desc: '🎁盲盒 来自银河彼端的问候', body1: '#86efac', body2: '#047857', gun1: '#064e3b', gun2: '#022c22', glow: '#6ee7b7', deco: 'alien', texture: 'scale', eye: 'alien', trail: 'void', skill: { icon: '🛸', name: '母舰召唤', cd: 28, desc: '召唤母舰扫射 8 秒，每 0.5 秒对随机敌人造成 2 点伤害', power: 18 } },
+  skin_mummy:   { name: '诅咒木乃伊', price: 0, box: 1, desc: '🎁盲盒 三千年的怨念缠身', body1: '#fef3c7', body2: '#92400e', gun1: '#78350f', gun2: '#451a03', glow: '#fcd34d', deco: 'mummy', texture: 'bandage', eye: 'glow', trail: 'dust', skill: { icon: '🪦', name: '亡者诅咒', cd: 20, desc: '诅咒全场敌人 6 秒：受诅咒的敌人死亡时会爆炸，对周围造成 3 点伤害', power: 15 } },
+  skin_dragon:  { name: '幼龙术士', price: 0, box: 1, desc: '🎁盲盒 还没长大的喷火高手', body1: '#bbf7d0', body2: '#15803d', gun1: '#14532d', gun2: '#052e16', glow: '#4ade80', deco: 'dragon', texture: 'scale', eye: 'dragon', trail: 'ember', skill: { icon: '🐉', name: '龙息吐焰', cd: 17, desc: '喷出锥形龙息 3 秒，持续造成 3 点/秒伤害并点燃敌人', power: 17 } },
+  skin_glitch:  { name: '故障幻影', price: 0, box: 1, desc: '🎁盲盒 数据错乱中的幽灵', body1: '#a5f3fc', body2: '#0e7490', gun1: '#155e75', gun2: '#083344', glow: '#22d3ee', deco: 'glitch', texture: 'glitch', eye: 'glitch', trail: 'glitch', skill: { icon: '📺', name: '数据错乱', cd: 19, desc: '撕裂画面 5 秒：敌人随机瞬移且无法攻击，自身射速 +80%', power: 19 } },
 };
+
+// 通行证皮肤解锁门槛：每款独立分档（原本统一 PASS_KILLS，现在按各自的 killReq 判定）
+function passKillsOk(skinId, kills) {
+  const d = SKIN_DEFS[skinId];
+  if (!d || !d.pass) return true;                       // 非通行证皮肤不限制
+  return (kills | 0) >= (d.killReq || PASS_KILLS);
+}
+// 盲盒专属皮肤：商城不卖，只能抽
+const BOX_SKINS = Object.keys(SKIN_DEFS).filter((k) => SKIN_DEFS[k].box);
 
 // 移动特效（紫电幻影及以后的皮肤才有）：移动时脚下/身后持续冒出主题粒子
 const TRAIL_DEFS = {
@@ -1551,6 +1599,17 @@ const TRAIL_DEFS = {
   void:    { cols: ['#a78bfa', '#7c3aed', '#4c1d95'], n: 2, speed: 60, size: 4.5, life: 0.5,  gap: 0.07 },
   blood:   { cols: ['#ef4444', '#b91c1c', '#7f1d1d'], n: 2, speed: 80, size: 3.5, life: 0.4,  gap: 0.06 },
   astral:  { cols: ['#fbbf24', '#fde68a', '#a5b4fc'], n: 3, speed: 70, size: 4,   life: 0.6,  gap: 0.06 },
+  // ↓ 新增通行证皮肤
+  bubble:  { cols: ['#5eead4', '#2dd4bf', '#0f766e'], n: 2, speed: 40, size: 4.5, life: 0.6,  gap: 0.1  },
+  soul:    { cols: ['#84cc16', '#bef264', '#365314'], n: 2, speed: 50, size: 4,   life: 0.55, gap: 0.08 },
+  holy:    { cols: ['#fef9c3', '#fde047', '#a16207'], n: 3, speed: 65, size: 4,   life: 0.5,  gap: 0.07 },
+  chaos:   { cols: ['#d946ef', '#22d3ee', '#f43f5e'], n: 3, speed: 90, size: 4.5, life: 0.45, gap: 0.06 },
+  eternal: { cols: ['#ffffff', '#fde047', '#a78bfa'], n: 3, speed: 75, size: 4.5, life: 0.65, gap: 0.06 },
+  // ↓ 盲盒专属皮肤
+  confetti:{ cols: ['#fca5a5', '#fde047', '#86efac', '#67e8f9'], n: 3, speed: 60, size: 4, life: 0.5, gap: 0.07 },
+  slash:   { cols: ['#fecaca', '#fca5a5', '#991b1b'], n: 2, speed: 110, size: 3.5, life: 0.28, gap: 0.05 },
+  dust:    { cols: ['#fef3c7', '#fcd34d', '#92400e'], n: 2, speed: 35, size: 5,   life: 0.55, gap: 0.1  },
+  glitch:  { cols: ['#22d3ee', '#f43f5e', '#a5f3fc'], n: 3, speed: 100, size: 3.5, life: 0.25, gap: 0.05 },
 };
 function updateSkinTrail(p, dt) {
   if (p.dead || !p.moving) { p.trailT = 0; return; }
@@ -1745,6 +1804,162 @@ function drawSkinDeco(x, r, c, t) {
       x.fill(); ol();
       break;
     }
+    case 'phoenix': { // 不死凤凰：火焰羽冠 + 展开的双翼
+      x.fillStyle = '#fb923c';
+      x.beginPath(); x.moveTo(-r * 0.2, -r * 0.95); x.lineTo(r * 0.1, -r * 1.85); x.lineTo(r * 0.55, -r * 0.9); x.closePath(); x.fill(); ol();
+      x.fillStyle = '#f97316';
+      x.beginPath(); x.ellipse(-r * 1.05, 0, r * 0.42, r * 0.95, -0.5, 0, TAU); x.fill(); ol();
+      x.fillStyle = '#fed7aa';
+      x.beginPath(); x.ellipse(-r * 1.0, r * 0.15, r * 0.22, r * 0.6, -0.4, 0, TAU); x.fill();
+      break;
+    }
+    case 'abyss': { // 深渊泰坦：头顶水母伞盖 + 垂下的触须
+      x.fillStyle = '#0f766e';
+      x.beginPath(); x.ellipse(0, -r * 1.05, r * 1.05, r * 0.62, 0, Math.PI, TAU); x.fill(); ol();
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL; x.beginPath();
+      for (let i = -2; i <= 2; i++) { x.moveTo(i * r * 0.35, -r * 0.95); x.quadraticCurveTo(i * r * 0.5, -r * 0.4, i * r * 0.3, -r * 0.05); }
+      x.stroke();
+      x.fillStyle = '#5eead4';
+      for (let i = 0; i < 3; i++) { x.beginPath(); x.arc(-r * 0.6 + i * r * 0.5, -r * 1.25 - i * r * 0.12, r * 0.12, 0, TAU); x.fill(); }
+      break;
+    }
+    case 'storm': { // 雷霆之主：闪电双角 + 环绕电弧
+      x.fillStyle = '#fde047';
+      x.beginPath(); x.moveTo(-r * 0.65, -r * 0.85); x.lineTo(-r * 1.0, -r * 1.9); x.lineTo(-r * 0.35, -r * 1.3); x.lineTo(-r * 0.15, -r * 0.9); x.closePath(); x.fill(); ol();
+      x.beginPath(); x.moveTo(r * 0.65, -r * 0.85); x.lineTo(r * 1.0, -r * 1.9); x.lineTo(r * 0.35, -r * 1.3); x.lineTo(r * 0.15, -r * 0.9); x.closePath(); x.fill(); ol();
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL; x.beginPath();
+      x.moveTo(-r * 1.1, r * 0.2); x.lineTo(-r * 0.75, r * 0.05); x.moveTo(r * 1.1, r * 0.2); x.lineTo(r * 0.75, r * 0.05);
+      x.stroke();
+      break;
+    }
+    case 'necro': { // 亡灵君主：骨质王冠 + 肩甲骨刺
+      x.fillStyle = '#fef3c7';
+      x.beginPath();
+      x.moveTo(-r * 0.9, -r * 0.7); x.lineTo(-r * 0.9, -r * 1.5); x.lineTo(-r * 0.5, -r * 1.0);
+      x.lineTo(-r * 0.1, -r * 1.7); x.lineTo(r * 0.3, -r * 1.0); x.lineTo(r * 0.7, -r * 1.5); x.lineTo(r * 0.9, -r * 0.7);
+      x.closePath(); x.fill(); ol();
+      x.fillStyle = '#84cc16';
+      for (const sx of [-1, 1]) { x.beginPath(); x.arc(sx * r * 0.35, -r * 1.15, r * 0.13, 0, TAU); x.fill(); }
+      break;
+    }
+    case 'halo': { // 天界圣骑：悬浮光环 + 圣光双翼
+      x.strokeStyle = '#fde047'; x.lineWidth = Math.max(2, r * 0.16);
+      x.beginPath(); x.ellipse(0, -r * 1.55, r * 0.72, r * 0.22, 0, 0, TAU); x.stroke();
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL * 0.6;
+      x.beginPath(); x.ellipse(0, -r * 1.55, r * 0.72, r * 0.22, 0, 0, TAU); x.stroke();
+      x.fillStyle = '#fef9c3';
+      for (const sx of [-1, 1]) {
+        x.beginPath(); x.ellipse(sx * r * 1.15, -r * 0.1, r * 0.4, r * 0.9, sx * 0.35, 0, TAU); x.fill(); ol();
+      }
+      break;
+    }
+    case 'chaos': { // 混沌魔神：不对称扭曲触角
+      x.strokeStyle = c.glow; x.lineWidth = Math.max(2, r * 0.15); x.lineCap = 'round';
+      x.beginPath(); x.moveTo(-r * 0.4, -r * 0.85); x.quadraticCurveTo(-r * 1.3, -r * 1.5, -r * 0.75, -r * 2.05); x.stroke();
+      x.beginPath(); x.moveTo(r * 0.4, -r * 0.85); x.quadraticCurveTo(r * 1.45, -r * 1.15, r * 1.0, -r * 1.85); x.stroke();
+      x.fillStyle = '#d946ef';
+      x.beginPath(); x.arc(-r * 0.75, -r * 2.05, r * 0.18, 0, TAU); x.fill();
+      x.fillStyle = '#22d3ee';
+      x.beginPath(); x.arc(r * 1.0, -r * 1.85, r * 0.15, 0, TAU); x.fill();
+      break;
+    }
+    case 'eternal': { // 永恒至尊：三层旋转光环 + 星辰冠
+      x.lineWidth = Math.max(1.5, r * 0.1);
+      for (let i = 0; i < 3; i++) {
+        x.strokeStyle = ['#fde047', '#ffffff', '#a78bfa'][i];
+        x.beginPath(); x.ellipse(0, -r * (1.25 + i * 0.28), r * (0.85 - i * 0.16), r * (0.26 - i * 0.05), i * 0.4, 0, TAU); x.stroke();
+      }
+      x.fillStyle = '#ffffff';
+      x.beginPath();
+      for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * (TAU / 5); const px = Math.cos(a) * r * 1.15, py = -r * 1.0 + Math.sin(a) * r * 0.55; x.moveTo(px, py); x.lineTo(px + r * 0.16, py - r * 0.3); x.lineTo(px - r * 0.16, py - r * 0.3); x.closePath(); }
+      x.fill();
+      break;
+    }
+    case 'jester': { // 诡笑小丑：三尖软帽 + 铃铛
+      x.fillStyle = '#be123c';
+      x.beginPath(); x.moveTo(-r * 0.85, -r * 0.75); x.lineTo(-r * 0.55, -r * 1.75); x.lineTo(0, -r * 1.05); x.lineTo(r * 0.55, -r * 1.75); x.lineTo(r * 0.85, -r * 0.75); x.closePath(); x.fill(); ol();
+      x.fillStyle = '#fde047';
+      for (const px of [-r * 0.55, r * 0.55]) { x.beginPath(); x.arc(px, -r * 1.8, r * 0.17, 0, TAU); x.fill(); ol(); }
+      x.fillStyle = '#fca5a5';
+      x.beginPath(); x.arc(0, -r * 0.35, r * 0.2, 0, TAU); x.fill();
+      break;
+    }
+    case 'ghost': { // 幽灵旅者：破碎下摆 + 飘带
+      x.fillStyle = '#e2e8f0';
+      x.beginPath();
+      x.moveTo(-r * 1.0, r * 0.4);
+      for (let i = 0; i < 4; i++) { x.quadraticCurveTo(-r * 0.9 + i * r * 0.5, r * 1.5, -r * 0.45 + i * r * 0.5, r * 0.5); }
+      x.closePath(); x.fill(); ol();
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL; x.beginPath();
+      x.moveTo(-r * 0.8, -r * 0.6); x.quadraticCurveTo(-r * 1.5, -r * 0.1, -r * 1.2, r * 0.5); x.stroke();
+      break;
+    }
+    case 'scrap': { // 报废机器人：歪斜天线 + 外露螺栓
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL;
+      x.beginPath(); x.moveTo(r * 0.2, -r * 0.9); x.lineTo(r * 0.55, -r * 1.75); x.stroke();
+      x.fillStyle = '#f59e0b';
+      x.beginPath(); x.arc(r * 0.55, -r * 1.8, r * 0.17, 0, TAU); x.fill(); ol();
+      x.fillStyle = '#78716c';
+      x.beginPath(); x.roundRect(-r * 1.05, -r * 0.35, r * 0.42, r * 0.42, 3); x.fill(); ol();
+      x.fillStyle = '#d6d3d1';
+      for (const py of [-r * 0.1, r * 0.5]) { x.beginPath(); x.arc(-r * 0.84, py, r * 0.09, 0, TAU); x.fill(); }
+      break;
+    }
+    case 'candy': { // 糖果恶魔：棒棒糖犄角
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL;
+      for (const sx of [-1, 1]) { x.beginPath(); x.moveTo(sx * r * 0.35, -r * 0.85); x.lineTo(sx * r * 0.6, -r * 1.6); x.stroke(); }
+      x.fillStyle = '#fbcfe8';
+      x.beginPath(); x.arc(-r * 0.62, -r * 1.7, r * 0.28, 0, TAU); x.fill(); ol();
+      x.fillStyle = '#f9a8d4';
+      x.beginPath(); x.arc(r * 0.62, -r * 1.7, r * 0.28, 0, TAU); x.fill(); ol();
+      break;
+    }
+    case 'samurai': { // 浪人剑客：斗笠 + 背后的刀
+      x.fillStyle = '#78350f';
+      x.beginPath(); x.ellipse(0, -r * 1.0, r * 1.35, r * 0.34, 0, 0, TAU); x.fill(); ol();
+      x.fillStyle = '#92400e';
+      x.beginPath(); x.ellipse(0, -r * 1.25, r * 0.6, r * 0.32, 0, Math.PI, TAU); x.fill(); ol();
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL;
+      x.beginPath(); x.moveTo(-r * 1.15, r * 0.3); x.lineTo(r * 0.6, -r * 0.9); x.stroke();
+      break;
+    }
+    case 'alien': { // 异星来客：细长触角 + 第三只眼
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL;
+      for (const sx of [-1, 1]) { x.beginPath(); x.moveTo(sx * r * 0.3, -r * 0.9); x.quadraticCurveTo(sx * r * 0.85, -r * 1.6, sx * r * 0.5, -r * 1.95); x.stroke(); }
+      x.fillStyle = '#6ee7b7';
+      for (const sx of [-1, 1]) { x.beginPath(); x.arc(sx * r * 0.5, -r * 2.0, r * 0.15, 0, TAU); x.fill(); }
+      x.fillStyle = '#047857';
+      x.beginPath(); x.ellipse(0, -r * 1.05, r * 0.16, r * 0.24, 0, 0, TAU); x.fill(); ol();
+      break;
+    }
+    case 'mummy': { // 诅咒木乃伊：交错绷带 + 垂下的绷带条
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL * 0.9;
+      x.strokeStyle = '#fef3c7'; x.lineWidth = Math.max(2, r * 0.2);
+      for (let i = 0; i < 3; i++) { x.beginPath(); x.moveTo(-r * 0.95, -r * 0.7 + i * r * 0.45); x.lineTo(r * 0.95, -r * 0.5 + i * r * 0.45); x.stroke(); }
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL;
+      x.beginPath(); x.moveTo(-r * 0.85, r * 0.55); x.quadraticCurveTo(-r * 1.25, r * 1.1, -r * 0.7, r * 1.45); x.stroke();
+      break;
+    }
+    case 'dragon': { // 幼龙术士：小龙角 + 稚嫩翅膀
+      x.fillStyle = '#4ade80';
+      for (const sx of [-1, 1]) { x.beginPath(); x.moveTo(sx * r * 0.35, -r * 0.9); x.lineTo(sx * r * 0.75, -r * 1.7); x.lineTo(sx * r * 0.15, -r * 1.1); x.closePath(); x.fill(); ol(); }
+      x.fillStyle = '#86efac';
+      for (const sx of [-1, 1]) { x.beginPath(); x.ellipse(sx * r * 1.1, -r * 0.15, r * 0.35, r * 0.68, sx * 0.4, 0, TAU); x.fill(); ol(); }
+      break;
+    }
+    case 'glitch': { // 故障幻影：RGB 分离重影
+      x.globalAlpha = 0.55;
+      x.fillStyle = '#f43f5e';
+      x.beginPath(); x.ellipse(-r * 0.9, r * 0.1, r * 0.42, r * 0.85, 0, 0, TAU); x.fill();
+      x.fillStyle = '#22d3ee';
+      x.beginPath(); x.ellipse(r * 0.9, -r * 0.1, r * 0.42, r * 0.85, 0, 0, TAU); x.fill();
+      x.globalAlpha = 1;
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = OL;
+      x.beginPath();
+      for (let i = 0; i < 3; i++) { const y = -r * 0.9 + i * r * 0.55; x.moveTo(-r * 1.05, y); x.lineTo(r * 1.05, y + r * 0.12); }
+      x.stroke();
+      break;
+    }
     case 'astral': { // 星辰之环：后脑一圈金色粗环 + 顶部一颗四角星（两个大符号）
       x.strokeStyle = c.glow; x.lineWidth = Math.max(2, r * 0.16);
       x.beginPath(); x.arc(-r * 0.78, 0, r * 0.52, 0, TAU); x.stroke();
@@ -1760,6 +1975,12 @@ function drawSkinDeco(x, r, c, t) {
       x.lineTo(sx - ss, sy); x.lineTo(sx - ss * 0.32, sy - ss * 0.32);
       x.closePath();
       x.fill(); ol();
+      break;
+    }
+    default: { // 兜底：未定义的 deco 至少给一圈主题色光环，不至于空着
+      x.strokeStyle = c.glow || '#94a3b8';
+      x.lineWidth = Math.max(2, r * 0.12);
+      x.beginPath(); x.ellipse(0, -r * 1.35, r * 0.8, r * 0.26, 0, 0, TAU); x.stroke();
       break;
     }
   }
@@ -1801,6 +2022,75 @@ function drawSkinEyes(x, r, c, bob) {
       }
       x.closePath(); x.fill();
     }
+    return;
+  }
+  if (style === 'blaze') { // 不死凤凰：燃烧的竖瞳
+    for (const sy of [-1, 1]) {
+      x.fillStyle = '#fb923c';
+      x.beginPath(); x.ellipse(ex, sy * ey + by, r * 0.16, r * 0.2, 0, 0, TAU); x.fill();
+      x.fillStyle = '#fef08a';
+      x.beginPath(); x.ellipse(ex, sy * ey + by, r * 0.07, r * 0.13, 0, 0, TAU); x.fill();
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = Math.max(1, r * 0.05);
+      x.beginPath(); x.ellipse(ex, sy * ey + by, r * 0.16, r * 0.2, 0, 0, TAU); x.stroke();
+    }
+    return;
+  }
+  if (style === 'hollow') { // 幽灵/亡灵：空洞眼窝，只有一点幽光
+    for (const sy of [-1, 1]) {
+      x.fillStyle = DARK;
+      x.beginPath(); x.ellipse(ex, sy * ey + by, r * 0.18, r * 0.22, 0, 0, TAU); x.fill();
+      x.fillStyle = c.glow;
+      x.beginPath(); x.arc(ex, sy * ey + by, r * 0.055, 0, TAU); x.fill();
+    }
+    return;
+  }
+  if (style === 'chaos') { // 混沌魔神：双眼大小与颜色都不对称
+    x.fillStyle = '#d946ef';
+    x.beginPath(); x.arc(ex, -ey + by, r * 0.21, 0, TAU); x.fill();
+    x.fillStyle = '#22d3ee';
+    x.beginPath(); x.arc(ex, ey + by, r * 0.13, 0, TAU); x.fill();
+    x.fillStyle = '#0f172a';
+    x.beginPath(); x.arc(ex + r * 0.04, -ey + by, r * 0.08, 0, TAU); x.fill();
+    return;
+  }
+  if (style === 'jester') { // 诡笑小丑：一高一低的斜吊眼
+    x.fillStyle = DARK;
+    x.beginPath(); x.ellipse(ex, -ey - r * 0.06 + by, r * 0.16, r * 0.1, 0.5, 0, TAU); x.fill();
+    x.beginPath(); x.ellipse(ex, ey + r * 0.06 + by, r * 0.16, r * 0.1, -0.5, 0, TAU); x.fill();
+    x.strokeStyle = c.glow; x.lineWidth = Math.max(1, r * 0.06);
+    x.beginPath(); x.arc(ex, by, r * 0.42, 0.35, Math.PI - 0.35); x.stroke();
+    return;
+  }
+  if (style === 'alien') { // 异星来客：硕大的黑色杏仁眼
+    for (const sy of [-1, 1]) {
+      x.fillStyle = '#022c22';
+      x.beginPath(); x.ellipse(ex + r * 0.04, sy * ey + by, r * 0.24, r * 0.28, sy * 0.35, 0, TAU); x.fill();
+      x.fillStyle = '#6ee7b7';
+      x.beginPath(); x.arc(ex + r * 0.1, sy * ey - r * 0.08 + by, r * 0.07, 0, TAU); x.fill();
+    }
+    return;
+  }
+  if (style === 'dragon') { // 幼龙术士：竖瞳蛇眼
+    for (const sy of [-1, 1]) {
+      x.fillStyle = '#fef9c3';
+      x.beginPath(); x.ellipse(ex, sy * ey + by, r * 0.17, r * 0.15, 0, 0, TAU); x.fill();
+      x.fillStyle = '#15803d';
+      x.beginPath(); x.ellipse(ex, sy * ey + by, r * 0.05, r * 0.13, 0, 0, TAU); x.fill();
+      x.strokeStyle = SKIN_OUTLINE; x.lineWidth = Math.max(1, r * 0.05);
+      x.beginPath(); x.ellipse(ex, sy * ey + by, r * 0.17, r * 0.15, 0, 0, TAU); x.stroke();
+    }
+    return;
+  }
+  if (style === 'glitch') { // 故障幻影：RGB 分离错位的眼睛
+    const off = r * 0.07;
+    x.globalAlpha = 0.75;
+    x.fillStyle = '#f43f5e';
+    x.beginPath(); x.arc(ex - off, -ey + by, r * 0.14, 0, TAU); x.arc(ex - off, ey + by, r * 0.14, 0, TAU); x.fill();
+    x.fillStyle = '#22d3ee';
+    x.beginPath(); x.arc(ex + off, -ey + by, r * 0.14, 0, TAU); x.arc(ex + off, ey + by, r * 0.14, 0, TAU); x.fill();
+    x.globalAlpha = 1;
+    x.fillStyle = DARK;
+    x.beginPath(); x.arc(ex, -ey + by, r * 0.09, 0, TAU); x.arc(ex, ey + by, r * 0.09, 0, TAU); x.fill();
     return;
   }
   // normal / visor 都先画眼珠
@@ -2145,6 +2435,8 @@ function applyUser(u) {
   if (!u) return;
   User.logged = true;
   User.name = u.name || User.name;
+  User.bcoin = u.bcoin || 0;      // B 币：盲盒抽奖货币
+  User.skills = u.skills || [];  // 盲盒抽到的额外技能
   User.role = u.role || 'player';
   User.coins = u.coins ?? User.coins;
   User.exp = u.exp ?? User.exp;
@@ -2824,11 +3116,24 @@ const PASS_KILLS = 300; // 累计击杀达标才给通行证（太低会让 6000
 function renderPassModal() {
   const kills = User.kills || 0;
   const has = !!User.pass;
-  document.getElementById('pass-kills').textContent = `${Math.min(kills, PASS_KILLS)} / ${PASS_KILLS}`;
-  document.getElementById('pass-bar').style.width = Math.min(100, kills / PASS_KILLS * 100) + '%';
+  // 通行证皮肤分 10 档，每款有独立击杀门槛：进度指向「下一个还没解锁的档位」
+  const passSkins = Object.entries(SKIN_DEFS).filter(([, d]) => d.pass)
+    .sort((a, b) => (a[1].killReq || 0) - (b[1].killReq || 0));
+  const next = passSkins.find(([, d]) => kills < (d.killReq || PASS_KILLS));
+  const nextReq = next ? (next[1].killReq || PASS_KILLS)
+    : (passSkins.length ? (passSkins[passSkins.length - 1][1].killReq || PASS_KILLS) : PASS_KILLS);
+  const lower = passSkins.filter(([, d]) => (d.killReq || 0) < nextReq);
+  const prevReq = next && lower.length ? (lower[lower.length - 1][1].killReq || 0) : 0;
+  const span = Math.max(1, nextReq - prevReq);
+  const pct = next ? Math.min(100, Math.max(0, (kills - prevReq) / span * 100)) : 100;
+  document.getElementById('pass-kills').textContent = `${kills} / ${nextReq}`;
+  document.getElementById('pass-bar').style.width = pct + '%';
   document.getElementById('pass-status').innerHTML = has
-    ? '<span style="color:#4ade80;font-weight:800;">🎖 已获得战斗通行证 · 专属武器已解锁购买资格</span>'
-    : `<span style="color:#fbbf24;">再击杀 ${PASS_KILLS - Math.min(kills, PASS_KILLS)} 个敌人即可获得通行证</span>`;
+    ? (next
+        ? '<span style="color:#4ade80;font-weight:800;">🎖 已获得战斗通行证 · 专属武器已解锁购买资格</span>'
+          + `<div style="font-size:11px;color:#94a3b8;margin-top:3px;">下一档「${next[1].name}」还需再击杀 ${nextReq - kills} 个敌人</div>`
+        : '<span style="color:#4ade80;font-weight:800;">🎖 已获得战斗通行证 · 全部通行证皮肤档位已解锁</span>')
+    : `<span style="color:#fbbf24;">再击杀 ${Math.max(0, PASS_KILLS - kills)} 个敌人即可获得通行证</span>`;
   const guns = Object.entries(GUN_DEFS).filter(([, d]) => d.pass);
   document.getElementById('pass-guns').innerHTML = guns.map(([id, d]) => {
     const owned = User.ownedGuns.includes(id);
@@ -2837,15 +3142,21 @@ function renderPassModal() {
       <span style="font-size:12px;font-weight:700;color:${owned ? '#4ade80' : (has ? '#fbbf24' : '#64748b')}">${owned ? '已拥有' : (has ? '可购买' : '未解锁')}</span>
     </div>`;
   }).join('');
-  const skins = Object.entries(SKIN_DEFS).filter(([, d]) => d.pass);
+  // 每款通行证皮肤按自己的 killReq 判定，而不是共用一个「是否已获得通行证」
+  const skins = passSkins;
   document.getElementById('pass-skins').innerHTML = skins.map(([id, d]) => {
     const owned = User.ownedSkins.includes(id);
-    return `<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.25);border:1px solid rgba(251,191,36,.22);border-radius:10px;padding:8px 10px;">
+    const req = d.killReq || PASS_KILLS;
+    const unlocked = passKillsOk(id, kills);
+    const tip = owned ? '已拥有' : unlocked ? '可购买' : `还差 ${req - kills} 杀`;
+    const col = owned ? '#4ade80' : unlocked ? '#fbbf24' : '#64748b';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;background:rgba(0,0,0,.25);border:1px solid rgba(251,191,36,${unlocked ? '.28' : '.1'});border-radius:10px;padding:8px 10px;">
       <span style="font-size:13px;color:#e2e8f0;">${d.skill.icon} ${d.name}
         <span style="color:#94a3b8;font-size:11px;">💰${d.price} · ${d.skill.name}</span>
         <div style="font-size:11px;color:#cbd5e1;margin-top:2px;">${d.skill.desc}</div>
+        <div style="font-size:11px;color:${unlocked ? '#4ade80' : '#94a3b8'};margin-top:3px;">解锁门槛：累计击杀 ${req}（当前 ${kills}）</div>
       </span>
-      <span style="font-size:12px;font-weight:700;white-space:nowrap;color:${owned ? '#4ade80' : (has ? '#fbbf24' : '#64748b')}">${owned ? '已拥有' : (has ? '可购买' : '未解锁')}</span>
+      <span style="font-size:12px;font-weight:700;white-space:nowrap;color:${col}">${tip}</span>
     </div>`;
   }).join('');
 }
@@ -3189,6 +3500,56 @@ function updateChallengeTime() {
 }
 setInterval(updateChallengeTime, 1000);
 updateChallengeTime();
+
+
+// ---------- 盲盒：B 币抽奖 ----------
+let boxBusy = false;
+function updateBoxBcoin() {
+  const el = document.getElementById('box-bcoin');
+  if (el) el.textContent = User.bcoin || 0;
+  const btn = document.getElementById('box-draw-btn');
+  if (btn) btn.disabled = (User.bcoin || 0) < 6;
+}
+function renderBoxResult(prize) {
+  const ic = document.getElementById('box-result-icon');
+  const tx = document.getElementById('box-result-text');
+  if (!ic || !tx) return;
+  if (prize.type === 'skill') { ic.textContent = '⚡'; tx.innerHTML = `获得额外技能 <b style="color:#fbbf24">${escapeHtml(prize.name)}</b>`; }
+  else if (prize.type === 'coins') { ic.textContent = '🪙'; tx.innerHTML = `获得 <b style="color:#fbbf24">${prize.amount}</b> 金币${prize.fallback ? '（重复奖励折算）' : ''}`; }
+  else if (prize.type === 'skin') { ic.textContent = '🎨'; tx.innerHTML = `获得盲盒专属皮肤 <b style="color:#f472b6">${escapeHtml(prize.name)}</b>`; }
+  else { ic.textContent = '😢'; tx.textContent = '空奖，再试一次'; }
+  Sfx.powerup();
+}
+async function drawBox() {
+  if (boxBusy) return;
+  if (!User.logged) { alert('登录后才能抽盲盒'); return; }
+  if ((User.bcoin || 0) < 6) { alert('B 币不足，继续击杀敌人即可获得'); return; }
+  boxBusy = true;
+  const btn = document.getElementById('box-draw-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await api('/api/box/draw', {});
+    if (!r.ok) { alert(r.msg || '抽奖失败'); return; }
+    applyUser(r.user);
+    renderBoxResult(r.prize);
+    updateBoxBcoin();
+    renderHomeUser();
+  } catch (e) {
+    alert('网络异常，请稍后重试');
+  } finally {
+    boxBusy = false;
+    updateBoxBcoin();
+  }
+}
+document.getElementById('nav-box').addEventListener('click', () => {
+  ensureAudio();
+  updateBoxBcoin();
+  document.getElementById('box-modal').style.display = 'flex';
+});
+document.getElementById('box-draw-btn').addEventListener('click', () => { ensureAudio(); drawBox(); });
+document.getElementById('box-close-btn').addEventListener('click', () => {
+  document.getElementById('box-modal').style.display = 'none';
+});
 
 // ---------- 局后结算：上报得分，发金币/经验 ----------
 async function reportResult() {
@@ -5601,11 +5962,15 @@ function drawObstacles() {
     }
     ctx.rotate(ob.anim * 0.4);
     const s = ob.r;
-    if (ob.wall) {
+    // 半宽/半高统一在这里算：墙体按格子实际尺寸（手机竖屏下格子是竖长方形），
+    // 普通砖块则仍是正方形。后面主体、裂纹、受击闪白都复用 hw/hh，
+    // 否则闪白会画成正方形、从细长的墙体两侧露出来（竖屏下尤其明显）。
+    const isWall = !!ob.wall;
+    const hw = isWall ? (ob.bw || s * 2) / 2 + 0.5 : s;
+    const hh = isWall ? (ob.bh || s * 2) / 2 + 0.5 : s;
+    if (isWall) {
       // 自定义地图的墙体：按格子实际尺寸画矩形（多铺 0.5px 压掉接缝），
       // 只在没有相邻墙体的边描边 → 墙块之间横竖都完全无缝
-      const hw = (ob.bw || s * 2) / 2 + 0.5;
-      const hh = (ob.bh || s * 2) / 2 + 0.5;
       const wg = ctx.createLinearGradient(-hw, -hh, hw, hh);
       wg.addColorStop(0, ob.color);
       wg.addColorStop(1, ob.dark);
@@ -5628,7 +5993,7 @@ function drawObstacles() {
     grad.addColorStop(1, ob.dark);
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.roundRect(-s, -s, s * 2, s * 2, 7);
+    ctx.roundRect(-hw, -hh, hw * 2, hh * 2, 7);
     ctx.fill();
     ctx.strokeStyle = ob.dark;
     ctx.lineWidth = 3;
@@ -5637,36 +6002,37 @@ function drawObstacles() {
     ctx.strokeStyle = 'rgba(0,0,0,0.28)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(-s * 0.62, -s * 0.62, s * 1.24, s * 1.24, 4);
+    ctx.roundRect(-hw * 0.62, -hh * 0.62, hw * 1.24, hh * 1.24, 4);
     ctx.stroke();
     // 高光
     ctx.fillStyle = 'rgba(255,255,255,0.28)';
     ctx.beginPath();
-    ctx.ellipse(-s * 0.3, -s * 0.35, s * 0.3, s * 0.16, -0.6, 0, TAU);
+    ctx.ellipse(-hw * 0.3, -hh * 0.35, hw * 0.3, hh * 0.16, -0.6, 0, TAU);
     ctx.fill();
     }
-    // 裂纹（随血量加深）
+    // 裂纹（随血量加深）——按 hw/hh 缩放，细长墙体上的裂纹才不会跑出边界
     const frac = ob.hp / ob.maxHp;
     if (frac < 0.67) {
       ctx.strokeStyle = 'rgba(0,0,0,0.45)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(-s * 0.5, -s * 0.15);
-      ctx.lineTo(-s * 0.1, s * 0.1);
-      ctx.lineTo(-s * 0.42, s * 0.42);
+      ctx.moveTo(-hw * 0.5, -hh * 0.15);
+      ctx.lineTo(-hw * 0.1, hh * 0.1);
+      ctx.lineTo(-hw * 0.42, hh * 0.42);
       if (frac < 0.34) {
-        ctx.moveTo(s * 0.45, -s * 0.4);
-        ctx.lineTo(s * 0.15, -s * 0.05);
-        ctx.lineTo(s * 0.45, s * 0.3);
+        ctx.moveTo(hw * 0.45, -hh * 0.4);
+        ctx.lineTo(hw * 0.15, -hh * 0.05);
+        ctx.lineTo(hw * 0.45, hh * 0.3);
       }
       ctx.stroke();
     }
-    // 受击闪白
+    // 受击闪白——必须跟本体同形状：竖屏下墙体是长方形，正方形闪白会从两侧露出一大块
     if (ob.flash > 0) {
       ctx.globalAlpha = ob.flash * 6;
       ctx.fillStyle = '#fff';
       ctx.beginPath();
-      ctx.roundRect(-s, -s, s * 2, s * 2, 7);
+      if (isWall) ctx.rect(-hw, -hh, hw * 2, hh * 2);
+      else ctx.roundRect(-hw, -hh, hw * 2, hh * 2, 7);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -7717,6 +8083,29 @@ function netQuick() {
 // ---------- 排位赛匹配 ----------
 // 匹配：size = 目标人数（自由匹配自选，排位赛固定 16）
 let MATCH_SIZE = 16;   // 当前匹配的目标人数
+// 匹配成功后自动开局：凑齐即开，不等房主手动点「开始联机」。
+// 兜底 3 秒：万一有人匹配上就掉线，也不会永远卡在房间里。
+let matchAutoStart = false, matchAutoNeed = 0, matchAutoTimer = null;
+function stopMatchAutoStart() {
+  matchAutoStart = false; matchAutoNeed = 0;
+  if (matchAutoTimer) { clearTimeout(matchAutoTimer); matchAutoTimer = null; }
+}
+function armMatchAutoStart(want) {
+  if (NET.role !== 'host') return;       // 只有房主能开局，guest 由快照驱动
+  matchAutoStart = true; matchAutoNeed = want;
+  clearTimeout(matchAutoTimer);
+  matchAutoTimer = setTimeout(() => fireMatchAutoStart(true), 3000);
+  fireMatchAutoStart(false);              // 可能 peer 早已连好（服务端先广播 joined 再发 matched）
+}
+function fireMatchAutoStart(force) {
+  if (!matchAutoStart) return;
+  if (!force && NET.peers.size + 1 < matchAutoNeed) return;   // 人还没齐，再等等
+  const need = matchAutoNeed;
+  stopMatchAutoStart();
+  if (G.state === 'playing') return;      // 已经开了就别重复
+  setNetStatus('create', `🚀 ${need} 人已就位，自动开始！`, 'ok');
+  startGame();
+}
 // 匹配等待反馈：只显示计数会让人以为「点了没反应」，加上等待秒数和在线人数才知道在动
 //
 // 两个防坑设计：
@@ -7785,6 +8174,7 @@ function netMatch(size) {
   let ws;
   try { ws = new WebSocket(wsURL()); } catch (e) {
     stopMatchWait();
+    stopMatchAutoStart();
     modal.style.display = 'none';
     return;
   }
@@ -7818,8 +8208,9 @@ function netMatch(size) {
         NET.slot = 1;
         showNetView(true);
         document.getElementById('net-room-code').textContent = m.room;
-        setNetStatus('create', (ranked ? '🏆 排位赛' : '🎯 自由') + `匹配成功！等待 ${want} 名玩家就位后开始…`, 'ok');
+        setNetStatus('create', (ranked ? '🏆 排位赛' : '🎯 自由') + `匹配成功！凑齐 ${want} 人自动开始…`, 'ok');
         attachHostHandlers(ws);
+        armMatchAutoStart(want);   // 人齐即开，不用房主手点
       } else {
         NET.role = 'guest';
         NET.slot = m.slot || 2;
@@ -7831,6 +8222,7 @@ function netMatch(size) {
     } else if (m.t === 'error') {
       NET.matchWs = null;
       stopMatchWait();
+      stopMatchAutoStart();
       modal.style.display = 'none';
       try { ws.close(); } catch (err) {}
       alert(m.msg || '匹配失败');
@@ -7838,17 +8230,20 @@ function netMatch(size) {
   };
   ws.onerror = () => {
     stopMatchWait();
+    stopMatchAutoStart();
     if (NET.matchWs === ws) NET.matchWs = null;
     modal.style.display = 'none';
   };
   ws.onclose = () => {
     stopMatchWait();
+    stopMatchAutoStart();
     if (NET.matchWs === ws) NET.matchWs = null;
     if (modal.style.display !== 'none') modal.style.display = 'none';
   };
 }
 document.getElementById('match-cancel-btn').addEventListener('click', () => {
   stopMatchWait();
+  stopMatchAutoStart();
   const ws = NET.matchWs;
   NET.matchWs = null;
   if (ws) { try { ws.send(JSON.stringify({ t: 'match_cancel' })); } catch (e) {} try { ws.close(); } catch (e) {} }
@@ -7865,7 +8260,8 @@ function attachHostHandlers(ws) {
       const slot = m.slot || 2;
       if (m.state === 'connected') {
         NET.peers.set(slot, { input: null, name: m.name || '', skin: m.skin || '' });
-        setNetStatus('create', `✅ ${m.name || ('P' + slot)} 已就位！（当前 ${NET.peers.size + 1}/16 人）`, 'ok');
+        setNetStatus('create', `✅ ${m.name || ('P' + slot)} 已就位！（当前 ${NET.peers.size + 1}/${NET.cap || 16} 人）`, 'ok');
+        fireMatchAutoStart(false);   // 匹配局：人一到齐就自动开
         document.getElementById('net-start-btn').style.display = 'inline-block';
         Sfx.powerup();
         if (G.state === 'playing' && !G.players.some(p => p.id === slot)) {
