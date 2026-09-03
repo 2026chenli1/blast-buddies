@@ -64,6 +64,28 @@ function withMatchLock<T>(fn: () => Promise<T>): Promise<T> {
 const bc = new BroadcastChannel('blast-relay');
 
 // ---------- 战斗通行证 ----------
+
+// ---------- 盲盒 ----------
+const BOX_COST = 6;          // 抽一次消耗 6 B币
+const KILLS_PER_BCOIN = 300; // 累计击杀 300 个敌人得 1 B币
+// 奖池概率（合计 100）：空奖 20 / 技能 60 / 金币 10 / 盲盒专属皮肤 10
+// 注意：BOX_SKIN_IDS 依赖 SHOP_ITEMS，必须放在 SHOP_ITEMS 声明之后（见文件下方）
+const BOX_RATE = { none: 20, skill: 60, coins: 10, skin: 10 };
+
+
+// 全部技能 id → 名称（盲盒「技能」奖从这里面随机给一个玩家还没有的）
+const SKILL_NAMES: Record<string, string> = {
+  skin_default: '战术冲刺', skin_green: '生命绽放', skin_pink: '樱花弹幕', skin_gold: '黄金圣裁',
+  skin_purple: '闪电链', skin_dark: '暗影隐身', skin_fire: '烈焰火墙', skin_ice: '冰霜陷阱',
+  skin_mecha: '能量护盾', skin_rainbow: '彩虹狂暴', skin_void: '虚空坍缩', skin_crimson: '裁决天罚',
+  skin_astral: '星辰崩解', skin_phoenix: '涅槃重生', skin_abyss: '深海漩涡', skin_storm: '天雷审判',
+  skin_necro: '亡者行军', skin_celestial: '圣光裁决', skin_chaos: '混沌崩坏', skin_eternal: '永恒领域',
+  skin_jester: '诡术扑克', skin_ghost: '灵体穿梭', skin_robot: '过载自毁', skin_candy: '糖霜爆破',
+  skin_samurai: '拔刀术', skin_alien: '母舰召唤', skin_mummy: '亡者诅咒', skin_dragon: '龙息吐焰',
+  skin_glitch: '数据错乱',
+};
+const ALL_SKILL_IDS = Object.keys(SKILL_NAMES);
+
 const PASS_KILLS = 300; // 累计击杀 300 个敌人获得战斗通行证（与客户端 index.html 保持一致）
 const PASS_GUNS = new Set(['gun_laser', 'gun_dual', 'gun_plasma']); // 通行证专属武器
 const PASS_SKINS = new Set(['skin_void', 'skin_crimson', 'skin_astral']); // 通行证专属皮肤
@@ -648,7 +670,7 @@ function setupSocket(ws: WebSocket, ip: string) {
 const kv = await Deno.openKv();
 
 // 商城目录：皮肤 + 枪（价格单位：金币；price=0 为初始赠送；lv 为枪械解锁等级）
-const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: number; lv?: number }> = {
+const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: number; lv?: number; pass?: number; box?: number; killReq?: number }> = {
   skin_default: { type: 'skin', name: '蓝色战士', price: 0 },
   skin_green:   { type: 'skin', name: '翠绿战士', price: 200 },
   skin_pink:    { type: 'skin', name: '樱花甜心', price: 200 },
@@ -659,9 +681,27 @@ const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: nu
   skin_ice:     { type: 'skin', name: '寒冰射手', price: 1500 },
   skin_mecha:   { type: 'skin', name: '机甲武装', price: 3000 },
   skin_rainbow: { type: 'skin', name: '彩虹独角兽', price: 5000 },
-  skin_void:    { type: 'skin', name: '虚空行者', price: 6000 },
-  skin_crimson: { type: 'skin', name: '猩红裁决', price: 9000 },
-  skin_astral:  { type: 'skin', name: '星辰主宰', price: 15000 },
+  // 战斗通行证：每款独立击杀门槛 killReq（与客户端 SKIN_DEFS 保持一致）
+  skin_void:     { type: 'skin', name: '虚空行者', price: 6000,   pass: 1, killReq: 1000 },
+  skin_crimson:  { type: 'skin', name: '猩红裁决', price: 9000,   pass: 1, killReq: 3000 },
+  skin_astral:   { type: 'skin', name: '星辰主宰', price: 15000,  pass: 1, killReq: 4000 },
+  skin_phoenix:  { type: 'skin', name: '不死凤凰', price: 22000,  pass: 1, killReq: 8000 },
+  skin_abyss:    { type: 'skin', name: '深渊泰坦', price: 28000,  pass: 1, killReq: 10000 },
+  skin_storm:    { type: 'skin', name: '雷霆之主', price: 36000,  pass: 1, killReq: 15000 },
+  skin_necro:    { type: 'skin', name: '亡灵君主', price: 45000,  pass: 1, killReq: 20000 },
+  skin_celestial:{ type: 'skin', name: '天界圣骑', price: 60000,  pass: 1, killReq: 30000 },
+  skin_chaos:    { type: 'skin', name: '混沌魔神', price: 80000,  pass: 1, killReq: 50000 },
+  skin_eternal:  { type: 'skin', name: '永恒至尊', price: 120000, pass: 1, killReq: 80000 },
+  // 盲盒专属：商城不卖，只能抽（price 0 表示非卖品）
+  skin_jester:   { type: 'skin', name: '诡笑小丑',   price: 0, box: 1 },
+  skin_ghost:    { type: 'skin', name: '幽灵旅者',   price: 0, box: 1 },
+  skin_robot:    { type: 'skin', name: '报废机器人', price: 0, box: 1 },
+  skin_candy:    { type: 'skin', name: '糖果恶魔',   price: 0, box: 1 },
+  skin_samurai:  { type: 'skin', name: '浪人剑客',   price: 0, box: 1 },
+  skin_alien:    { type: 'skin', name: '异星来客',   price: 0, box: 1 },
+  skin_mummy:    { type: 'skin', name: '诅咒木乃伊', price: 0, box: 1 },
+  skin_dragon:   { type: 'skin', name: '幼龙术士',   price: 0, box: 1 },
+  skin_glitch:   { type: 'skin', name: '故障幻影',   price: 0, box: 1 },
   gun_pistol:   { type: 'gun', name: '标准手枪', price: 0,   lv: 1 },
   gun_rapid:    { type: 'gun', name: '冲锋枪',   price: 300, lv: 2 },
   gun_shotgun:  { type: 'gun', name: '散弹枪',   price: 600, lv: 4 },
@@ -671,6 +711,8 @@ const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: nu
   gun_dual:     { type: 'gun', name: '双管机枪', price: 2500, lv: 12 },
   gun_plasma:   { type: 'gun', name: '等离子炮', price: 4000, lv: 15 },
 };
+// 盲盒专属皮肤 id 列表（必须在 SHOP_ITEMS 声明之后才能取到）
+const BOX_SKIN_IDS = Object.keys(SHOP_ITEMS).filter((k) => SHOP_ITEMS[k].box);
 
 // 可升级物品（武器/皮肤技能/手榴弹），每项最高 5 级；升级花费经验（不影响等级/排行）
 const UPGRADE_MAX_LV = 5;
@@ -754,6 +796,8 @@ function pubUser(u: Record<string, any>) {
     gun: u.gun,
     kills: (u.kills as number) || 0,
     pass: u.pass ? 1 : 0,
+    bcoin: (u.bcoin as number) || 0,          // B 币：盲盒抽奖货币
+    skills: (u.skills as string[]) || [],      // 盲盒抽到的额外技能（可装到皮肤上）
     upgrades: u.upgrades || {},
     expSpent: u.expSpent || 0,
     spendableExp: Math.max(0, (u.exp || 0) - (u.expSpent || 0)),
@@ -908,6 +952,10 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
         ownedGuns: ['gun_pistol'],
         skin: 'skin_default',
         gun: 'gun_pistol',
+        kills: 0,
+        bcoin: 0,          // B 币：累计击杀每 300 个得 1 枚，用于抽盲盒
+        bcoinGiven: 0,     // 已发放过的 B 币数（按累计击杀算，防止重复发）
+        skills: [],        // 盲盒抽到的额外技能
         created: Date.now(),
       };
       await kv.set(['user', p], u.value);
@@ -1165,10 +1213,22 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     if ((def.lv || 1) > (u.level as number)) {
       return jsonResp({ ok: false, msg: `需要 Lv.${def.lv} 才能解锁该武器` }, 400);
     }
-    // 通行证专属武器/皮肤：未获得战斗通行证不可购买
-    const needPass = (def.type === 'gun' && PASS_GUNS.has(String(item))) ||
-                     (def.type === 'skin' && PASS_SKINS.has(String(item)));
-    if (needPass && !u.pass) {
+    // 盲盒专属皮肤：商城不卖，只能用 B 币抽
+    if (def.box) {
+      return jsonResp({ ok: false, msg: '这款是盲盒专属，请在盲盒里用 B 币抽取' }, 400);
+    }
+    // 通行证皮肤：每款有独立的累计击杀门槛（原本统一 PASS_KILLS，现在分档）
+    if (def.pass) {
+      const req2 = def.killReq || PASS_KILLS;
+      if ((u.kills as number) < req2) {
+        return jsonResp({
+          ok: false,
+          msg: `需要累计击杀 ${req2} 个敌人才解锁「${def.name}」（当前 ${u.kills || 0}）`,
+        }, 400);
+      }
+    }
+    // 通行证武器仍按「是否已获得战斗通行证」判断
+    if (def.type === 'gun' && PASS_GUNS.has(String(item)) && !u.pass) {
       return jsonResp({ ok: false, msg: `需要战斗通行证（累计击杀 ${PASS_KILLS} 个敌人）才能解锁` }, 400);
     }
     const owned: string[] = def.type === 'skin' ? u.ownedSkins : u.ownedGuns;
@@ -1224,6 +1284,59 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     return jsonResp({ ok: true, user: pubUser(u) });
   }
 
+
+  // POST /api/box/draw —— 抽一次盲盒（消耗 BOX_COST 枚 B 币）
+  // 奖池：空奖 20% / 额外技能 60% / 金币 10% / 盲盒专属皮肤 10%
+  if (path === '/api/box/draw' && req.method === 'POST') {
+    if ((u.bcoin as number || 0) < BOX_COST) {
+      return jsonResp({ ok: false, msg: `B 币不足（需要 ${BOX_COST} 枚，当前 ${u.bcoin || 0}）` }, 400);
+    }
+    u.bcoin = (u.bcoin as number) - BOX_COST;
+    const roll = Math.random() * 100;
+    let prize: any = { type: 'none' };
+    if (roll < BOX_RATE.none) prize = { type: 'none' };
+    else if (roll < BOX_RATE.none + BOX_RATE.skill) prize = { type: 'skill' };
+    else if (roll < BOX_RATE.none + BOX_RATE.skill + BOX_RATE.coins) prize = { type: 'coins' };
+    else prize = { type: 'skin' };
+
+    if (prize.type === 'skill') {
+      // 额外技能：随机给一个还没拥有的技能（可装到任意皮肤上）
+      const ownedSkills: string[] = (u.skills as string[]) || [];
+      const pool = ALL_SKILL_IDS.filter((k) => !ownedSkills.includes(k));
+      if (!pool.length) {
+        // 技能已全收集：折算成金币，不让玩家白抽
+        prize = { type: 'coins', fallback: 'skills_full' };
+      } else {
+        const got = pool[Math.floor(Math.random() * pool.length)];
+        ownedSkills.push(got);
+        u.skills = ownedSkills;
+        prize = { type: 'skill', id: got, name: SKILL_NAMES[got] || got };
+      }
+    }
+    if (prize.type === 'coins') {
+      const amount = 800 + Math.floor(Math.random() * 700); // 800~1500 金币
+      u.coins = (u.coins as number) + amount;
+      prize.amount = amount;
+    }
+    if (prize.type === 'skin') {
+      const owned: string[] = (u.ownedSkins as string[]) || [];
+      const pool = BOX_SKIN_IDS.filter((k) => !owned.includes(k));
+      if (!pool.length) {
+        // 盲盒皮肤已集齐：折算成金币
+        const amount = 3000;
+        u.coins = (u.coins as number) + amount;
+        prize = { type: 'coins', amount, fallback: 'skins_full' };
+      } else {
+        const got = pool[Math.floor(Math.random() * pool.length)];
+        owned.push(got);
+        u.ownedSkins = owned;
+        prize = { type: 'skin', id: got, name: SHOP_ITEMS[got].name };
+      }
+    }
+    await kv.set(['user', u.phone], u);
+    return jsonResp({ ok: true, prize, user: pubUser(u) });
+  }
+
   // POST /api/user/result { score, kills, wave } —— 局后结算金币/经验/击杀（累计击杀达标发战斗通行证）
   if (path === '/api/user/result' && req.method === 'POST') {
     const b = await readBody(req);
@@ -1273,12 +1386,19 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     u.kills = ((u.kills as number) || 0) + k;
     u.level = 1 + Math.floor((u.exp as number) / 180); // 升级放缓：180 经验/级
     let passGained = false;
+    // B 币：累计击杀每满 KILLS_PER_BCOIN 发 1 枚（bcoinGiven 记录已发过多少，避免重复发）
+    const bcoinShould = Math.floor((u.kills as number) / KILLS_PER_BCOIN);
+    const bcoinEarned = Math.max(0, bcoinShould - ((u.bcoinGiven as number) || 0));
+    if (bcoinEarned > 0) {
+      u.bcoinGiven = bcoinShould;
+      u.bcoin = ((u.bcoin as number) || 0) + bcoinEarned;
+    }
     if (!u.pass && (u.kills as number) >= PASS_KILLS) {
       u.pass = 1;
       passGained = true;
     }
     await kv.set(['user', auth.phone], u);
-    return jsonResp({ ok: true, user: pubUser(u), gainedCoins, gainedExp, passGained, ownMap, authorBonus });
+    return jsonResp({ ok: true, user: pubUser(u), gainedCoins, gainedExp, passGained, ownMap, authorBonus, bcoinEarned });
   }
 
   return jsonResp({ ok: false, msg: 'Not Found' }, 404);
