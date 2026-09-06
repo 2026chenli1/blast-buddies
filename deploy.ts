@@ -275,6 +275,11 @@ setInterval(() => {
   broadcastLobbyList();
 }, LOBBY_BROADCAST_MS);
 
+// 匹配队列巡检：等太久且已够 MATCH_MIN 人时提前开局（在线人少也能玩起来）
+setInterval(() => {
+  sweepMatchQueue().catch(() => {});
+}, 1000);
+
 // ---------- 房间管理（KV 持久化注册表 + 内存镜像） ----------
 // Deno Deploy 的 isolate 会被回收/重建：仅靠进程内 rooms Map 时，新 isolate 里
 // 看不到已存在的公开房间、也加不进跨 isolate 的房间（表现为「公开房间列表为空」
@@ -550,39 +555,12 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
         // 只和「想要同样人数」的人凑在一起（排位赛固定 16，自由匹配按各自选择）
         const sameSize = q.filter((x: any) => (x.size || MATCH_PLAYERS) === want);
         if (sameSize.length >= want) {
-          // 凑齐：取前 want 人成团，其余留在队列
-          const batch = sameSize.slice(0, want);
-          const batchIds = new Set(batch.map((b: any) => b.id));
-          const rest = q.filter((x: any) => !batchIds.has(x.id));
-          await saveMatchQueue(rest);
-          const room = await createRoom(batch[0].id, want, 'public', 'tdm');
-          // KV 注册表补上其余 15 人（guest），并广播 joined 让各 isolate 的 rooms 镜像同步、房主收到 peer
-          const reg = await roomReg(room);
-          for (let i = 1; i < batch.length; i++) {
-            if (reg && !reg.guests.some((g: any) => g.id === batch[i].id)) {
-              reg.guests.push({ slot: i + 1, id: batch[i].id, name: batch[i].name, skin: batch[i].skin });
-            }
-            broadcast({
-              type: 'room',
-              action: 'joined',
-              room,
-              host: batch[0].id,
-              guest: batch[i].id,
-              slot: i + 1,
-              name: batch[i].name,
-              skin: batch[i].skin,
-              created: Date.now(),
-              cap: want,
-              mode: 'public',
-            });
-          }
-          if (reg) await setRoomReg(reg);
-          // 通知所有成团玩家（本 isolate 直接发 + 跨 isolate 广播）
-          broadcast({ type: 'match', action: 'found', room, players: batch.map((b: any, i: number) => ({ id: b.id, slot: i + 1 })) });
+          // 凑齐：取前 want 人成团，立刻开局
+          await beginMatch(sameSize.slice(0, want), want);
         } else {
           await saveMatchQueue(q);
           // 计数只报「同样人数」的队列长度，否则自由匹配会看到排位赛的人数
-          broadcast({ type: 'match', action: 'count', n: sameSize.length, size: want });
+          broadcast({ type: 'match', action: 'count', n: sameSize.length, size: want, wait: MATCH_WAIT_SEC });
         }
       });
       break;
@@ -713,6 +691,65 @@ const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: nu
 };
 // 盲盒专属皮肤 id 列表（必须在 SHOP_ITEMS 声明之后才能取到）
 const BOX_SKIN_IDS = Object.keys(SHOP_ITEMS).filter((k) => SHOP_ITEMS[k].box);
+
+// ---------- 匹配：凑齐即开，等太久就「少人开局」 ----------
+// 在线人少时，死等凑齐等于永远开不了局。等满 MATCH_WAIT_SEC 后只要凑够 MATCH_MIN
+// 就直接开局（人数不够目标也不补机器人，按实际人数建房）。
+const MATCH_WAIT_SEC = 15;                       // 最长等待秒数
+const MATCH_MIN = 2;                             // 最少几人就能开局（1 人没对手，继续等）
+async function beginMatch(batch: any[], want: number) {
+  if (!batch.length) return;
+  const batchIds = new Set(batch.map((b: any) => b.id));
+  const q = await getMatchQueue();
+  await saveMatchQueue(q.filter((x: any) => !batchIds.has(x.id)));
+  for (const b of batch) matchLocal.delete(b.id);
+  // 房间容量按实际人数：少人开局时 cap 就是实际人数，避免房间里永远显示「还差 N 人」
+  const cap = batch.length;
+  const room = await createRoom(batch[0].id, cap, 'public', 'tdm');
+  // KV 注册表补上其余玩家（guest），并广播 joined 让各 isolate 的 rooms 镜像同步、房主收到 peer
+  const reg = await roomReg(room);
+  for (let i = 1; i < batch.length; i++) {
+    if (reg && !reg.guests.some((g: any) => g.id === batch[i].id)) {
+      reg.guests.push({ slot: i + 1, id: batch[i].id, name: batch[i].name, skin: batch[i].skin });
+    }
+    broadcast({
+      type: 'room',
+      action: 'joined',
+      room,
+      host: batch[0].id,
+      guest: batch[i].id,
+      slot: i + 1,
+      name: batch[i].name,
+      skin: batch[i].skin,
+      created: Date.now(),
+      cap,
+      mode: 'public',
+    });
+  }
+  if (reg) await setRoomReg(reg);
+  // 通知所有成团玩家（本 isolate 直接发 + 跨 isolate 广播）
+  broadcast({ type: 'match', action: 'found', room, players: batch.map((b: any, i: number) => ({ id: b.id, slot: i + 1 })) });
+}
+// 每秒巡检：把「等太久但已经够 MATCH_MIN 人」的队列提前开局
+async function sweepMatchQueue() {
+  await withMatchLock(async () => {
+    const q = await getMatchQueue();
+    if (!q.length) return;
+    const groups = new Map<number, any[]>();
+    for (const p of q) {
+      const sz = (p.size || MATCH_PLAYERS) as number;
+      if (!groups.has(sz)) groups.set(sz, []);
+      (groups.get(sz) as any[]).push(p);
+    }
+    for (const [sz, list] of groups) {
+      if (list.length < MATCH_MIN) continue;   // 1 人不开局：没对手，继续等真人
+      const oldest = Math.min(...list.map((p: any) => p.ts || Date.now()));
+      if (Date.now() - oldest < MATCH_WAIT_SEC * 1000) continue;
+      // 超时：按实际人数开（最多 sz 人），不用机器人补齐
+      await beginMatch(list.slice(0, sz), sz);
+    }
+  });
+}
 
 // 可升级物品（武器/皮肤技能/手榴弹），每项最高 5 级；升级花费经验（不影响等级/排行）
 const UPGRADE_MAX_LV = 5;
