@@ -8130,6 +8130,7 @@ function fireMatchAutoStart(force) {
 // 2) token 让旧计时器自行退出：clearInterval 只能清掉「最后一次记住的那个」id，
 //    漏掉的会永久堆积。每次停表递增 token，旧回调发现 token 变了就自己 return。
 let matchWaitTimer = null, matchWaitStart = 0, matchWaitToken = 0;
+let MATCH_WAIT_SEC = 15;   // 服务端等满这么久就按当前人数开局（由服务端广播覆盖）
 function stopMatchWait() {
   matchWaitToken++;
   if (matchWaitTimer) { clearInterval(matchWaitTimer); matchWaitTimer = null; }
@@ -8170,7 +8171,8 @@ function netMatch(size) {
   const hintEl = document.getElementById('match-hint');
   const ranked = want >= 16;
   if (titleEl) titleEl.textContent = ranked ? '排位匹配中' : '自由匹配中';
-  if (hintEl) hintEl.textContent = `已匹配玩家 · 凑齐 ${want} 人自动开局`;
+  // 蛋仔式：不等凑齐，等满 MATCH_WAIT 秒就按当前人数开局（最少 2 人）
+  if (hintEl) hintEl.textContent = `已匹配玩家 · 等 ${MATCH_WAIT_SEC} 秒后按当前人数开局（最少 2 人）`;
   countEl.textContent = '0/' + want;
   barEl.style.width = '0%';
   modal.style.display = 'flex';
@@ -8204,6 +8206,17 @@ function netMatch(size) {
       const n = Math.max(0, Math.min(want, m.n | 0));
       countEl.textContent = n + '/' + want;
       barEl.style.width = (n / want * 100) + '%';
+      // 倒计时：服务端等满 MATCH_WAIT_SEC 就会按当前人数开局，把剩余秒数告诉玩家
+      if (m.wait) {
+        MATCH_WAIT_SEC = Math.max(1, m.wait | 0);
+        const left = Math.max(0, MATCH_WAIT_SEC - Math.floor((Date.now() - matchWaitStart) / 1000));
+        const waitEl = document.getElementById('match-wait');
+        if (waitEl) {
+          waitEl.textContent = n < 2
+            ? `已等待 ${Math.floor((Date.now() - matchWaitStart) / 1000)} 秒 · 至少 2 人才开`
+            : `${left} 秒后自动开始（当前 ${n} 人）`;
+        }
+      }
     } else if (m.t === 'matched') {
       // 匹配成功：这条连接已被服务器直接编入房间（host/guest 由 slot 决定）
       NET.matchWs = null;
@@ -8216,16 +8229,19 @@ function netMatch(size) {
       NET.connected = true;
       NET.room = m.room;
       NET.gm = 'tdm';
-      NET.cap = want;
+      // 实际成团人数：在线人少时服务端会「少人开局」，容量必须按真实人数，
+      // 否则房间永远显示「还差 N 人」、自动开局也永远等不到人齐。
+      const real = (m.players && m.players.length) ? m.players.length : want;
+      NET.cap = real;
       NET.mode = 'public';
       if (m.slot === 1) {
         NET.role = 'host';
         NET.slot = 1;
         showNetView(true);
         document.getElementById('net-room-code').textContent = m.room;
-        setNetStatus('create', (ranked ? '🏆 排位赛' : '🎯 自由') + `匹配成功！凑齐 ${want} 人自动开始…`, 'ok');
+        setNetStatus('create', (ranked ? '🏆 排位赛' : '🎯 自由') + `匹配成功！${real} 人开局，准备开始…`, 'ok');
         attachHostHandlers(ws);
-        armMatchAutoStart(want);   // 人齐即开，不用房主手点
+        armMatchAutoStart(real);   // 按实际人数开，不用房主手点
       } else {
         NET.role = 'guest';
         NET.slot = m.slot || 2;
