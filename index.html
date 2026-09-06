@@ -580,7 +580,8 @@
   }
   .home-top > * { pointer-events: auto; }
   .home-top-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .home-top-right { display: flex; align-items: center; gap: 8px; }
+  /* 右栏也要能换行：等级卡+任务+聊天三个挤在窄屏会顶出屏幕（实测 360px 下右边缘溢出 20px） */
+  .home-top-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
   .pill, .coin-pill, .online-pill, .season-pill, .bcoin-pill {
     display: inline-flex; align-items: center; gap: 6px;
@@ -806,7 +807,9 @@
   .btn.home-room:active { transform: translateY(3px); box-shadow: 0 2px 0 #0f766e; }
 
   .home-nav {
-    display: flex; gap: 8px;
+    /* 允许换行：底部图标已经加到 6 个（枪/皮肤/排名/地图/通行证/盲盒），
+       窄屏一行放不下时换行，而不是被裁切或顶出屏幕 */
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
     background: rgba(0,0,0,.25);
     border-radius: 999px;
     padding: 6px 10px 24px; /* 底部留白：容纳圆形按钮下方的文字标签 */
@@ -882,9 +885,10 @@
     #home-view .chat-btn { font-size: 11px; padding: 6px 8px; }
     #home-view .daily-map-card { top: 50%; left: 8px; width: 98px; transform: translateY(-50%) scale(.92); transform-origin: left center; }
     #home-view .home-bottom { bottom: 10px; }
-    #home-view .home-nav { gap: 8px; }
-    #home-view .nav-icon { width: 48px; height: 48px; }
-    #home-view .nav-icon svg { width: 20px; height: 20px; }
+    /* 6 个图标：48px×6+间距 会超出 360px 小屏，缩到 42px 保证一行放得下 */
+    #home-view .home-nav { gap: 6px; padding: 6px 8px 22px; }
+    #home-view .nav-icon { width: 42px; height: 42px; }
+    #home-view .nav-icon svg { width: 19px; height: 19px; }
     #home-view .nav-label { font-size: 10px; }
     #home-view .home-actions { gap: 10px; }
     #home-view .home-actions .btn { font-size: 16px; padding: 12px 26px; }
@@ -893,6 +897,20 @@
     #home-view .home-user-card { max-width: 40vw; font-size: 12px; }
     #home-view .home-top-btns { top: 8px; right: 8px; gap: 4px; }
     #home-view .top-icon-btn { width: 32px; height: 32px; }
+
+    /* ---------- 游戏内 HUD：窄屏要整体缩小 ----------
+       得分 26px 字 + 波数 + 生命 + 两个 52px 技能按钮 + 暂停按钮，
+       在 360px 宽的竖屏上会挤成一团并顶出屏幕（竖屏原本完全没有 HUD 适配）。 */
+    #hud.hud-top { padding: 7px 9px; gap: 6px; flex-wrap: wrap; }
+    #hud .hud-score { font-size: 17px; }
+    #hud .hud-wave { font-size: 12px; }
+    #hud .hud-right-wrap { gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+    #hud .hud-right { font-size: 13px; }
+    #hud .skill-btn { width: 40px; height: 40px; }
+    #hud .skill-btn .skill-icon { font-size: 16px; }
+    #hud #mobile-pause-btn { width: 36px; height: 36px; font-size: 15px; }
+    #hud #admin-warp-btn { width: 36px; height: 36px; font-size: 15px; }
+
     /* 弹窗在竖屏下占满宽度 */
     .modal-box { max-width: 92vw !important; max-height: 88vh; overflow: auto; }
   }
