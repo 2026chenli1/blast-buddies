@@ -4383,6 +4383,44 @@ function createEnemy(type, x, y) {
   };
 }
 
+// 玩家之间的碰撞推挤（联机/本地多人：不能重叠、不能互相穿过）
+// 写成 i<j 的双重循环、每对只处理一次并各退一半，一次性分开到 minD。
+// 如果放在「遍历玩家、各自推开自己」的单循环里，后处理的人用的是已经移动过的
+// 位置，一次推不干净，会残留轻微重叠（要靠多帧才收敛）。
+function separatePlayers() {
+  const ps = G.players;
+  // 迭代几轮：多人挤成一团时，推开 A-B 可能又让 B-C 重叠，只跑一遍会残留重叠
+  // （实测三人堆里仍有一对差 11px）。没有重叠就提前收工，不浪费性能。
+  for (let iter = 0; iter < 4; iter++) {
+    let any = false;
+    for (let i = 0; i < ps.length; i++) {
+      const a = ps[i];
+      if (a.dead) continue;
+      for (let j = i + 1; j < ps.length; j++) {
+        const b = ps[j];
+        if (b.dead) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d2 = dx * dx + dy * dy;
+        const minD = a.r + b.r;
+        if (d2 >= minD * minD) continue;
+        any = true;
+        const d = Math.sqrt(d2);
+        if (d > 0.01) {
+          const push = (minD - d) / d * 0.5;   // 两人各退一半
+          a.x -= dx * push; a.y -= dy * push;
+          b.x += dx * push; b.y += dy * push;
+        } else {
+          // 完全重合（比如同时重生在同一点）：随机错开，否则除零推不开会卡死
+          const ang = rand(0, TAU);
+          a.x -= Math.cos(ang) * 0.6; a.y -= Math.sin(ang) * 0.6;
+          b.x += Math.cos(ang) * 0.6; b.y += Math.sin(ang) * 0.6;
+        }
+      }
+    }
+    if (!any) break;
+  }
+}
+
 function spawnEnemy() {
   const angle = rand(0, TAU);
   const margin = 60;
@@ -4644,6 +4682,8 @@ function updateTraps(dt) {
         damagePlayer(p, tg.dmgPlayer);
       }
     }
+  separatePlayers(); // 玩家之间互相推挤，不能重叠
+
     // 敌人也会被陷阱伤害（走 killEnemy 统一结算：计分、计击杀数、计入挑战任务）
     for (let i = G.enemies.length - 1; i >= 0; i--) {
       const e = G.enemies[i];
@@ -7785,6 +7825,27 @@ function updateLobbyPlayer(dt) {
     me.x += (dx / len) * (speed / W) * spd * dt;
     me.y += (dy / len) * (speed / H) * spd * dt;
     me.anim += dt * 10;
+  }
+  // 与其他大厅玩家互相推挤（主页面里也不能重叠穿过）
+  // 大厅坐标是 0~1 的比例值，得先换算成像素才能比距离；
+  // 而且 x/y 的换算分母不同（W / H），不能直接用比例算欧氏距离。
+  // 别人的位置是服务器同步的，这里只推开自己，不改别人。
+  const LOBBY_R = 26; // 与 drawLobbyPlayer 的绘制半径一致
+  for (const [, p] of Lobby.players) {
+    const dxPx = (me.x - p.x) * W;
+    const dyPx = (me.y - p.y) * H;
+    const dPx = Math.hypot(dxPx, dyPx);
+    const minPx = LOBBY_R * 2;
+    if (dPx < minPx) {
+      if (dPx > 0.01) {
+        const push = (minPx - dPx) / dPx;
+        me.x += (dxPx / W) * push;
+        me.y += (dyPx / H) * push;
+      } else {
+        me.x += rand(-0.01, 0.01);
+        me.y += rand(-0.01, 0.01);
+      }
+    }
   }
   // 边界限制（留一点边距）
   me.x = clamp(me.x, 0.04, 0.96);
