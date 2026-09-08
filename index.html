@@ -876,7 +876,7 @@
   }
 
   /* ---------- 手机竖屏自动适配 ---------- */
-  @media (orientation: portrait) and (pointer: coarse) {
+  @media (orientation: portrait), (max-width: 600px) {
     #home-view .home-top-left .season-pill { display: none; }
     #home-view .level-card { max-width: 44vw; }
     #home-view .level-row { font-size: 10px; }
@@ -3725,6 +3725,12 @@ function updateBoxBcoin() {
   const btn = document.getElementById('box-draw-btn');
   if (btn) btn.disabled = (User.bcoin || 0) < 6;
 }
+function showBoxError(msg) {
+  const ic = document.getElementById('box-result-icon');
+  const tx = document.getElementById('box-result-text');
+  if (ic) ic.textContent = '⚠️';
+  if (tx) tx.innerHTML = '<span style="color:#f87171">' + escapeHtmlSafe(msg) + '</span>';
+}
 function renderBoxResult(prize) {
   const ic = document.getElementById('box-result-icon');
   const tx = document.getElementById('box-result-text');
@@ -3737,8 +3743,8 @@ function renderBoxResult(prize) {
 }
 async function drawBox() {
   if (boxBusy) return;
-  if (!User.logged) { alert('登录后才能抽盲盒'); return; }
-  if ((User.bcoin || 0) < 6) { alert('B 币不足，继续击杀敌人即可获得'); return; }
+  if (!User.logged) { showBoxError('登录后才能抽盲盒'); return; }
+  if ((User.bcoin || 0) < 6) { showBoxError('B 币不足（需要 6 枚，当前 ' + (User.bcoin || 0) + '），继续击杀敌人即可获得'); return; }
   boxBusy = true;
   const btn = document.getElementById('box-draw-btn');
   if (btn) btn.disabled = true;
@@ -3746,7 +3752,7 @@ async function drawBox() {
     // 抽奖会扣 B 币，超时给到 25 秒：手机弱网或 Deno 冷启动都可能超过默认 8 秒，
     // 被打断的话玩家以为抽失败了（其实服务端可能已经扣了币）。
     const r = await api('/api/box/draw', {}, 25000);
-    if (!r.ok) { alert(r.msg || '抽奖失败'); return; }
+    if (!r.ok) { showBoxError(r.msg || '抽奖失败'); return; }
     applyUser(r.user);
     renderBoxResult(r.prize);
     updateBoxBcoin();
@@ -3756,7 +3762,7 @@ async function drawBox() {
     const msg = (e && e.name === 'AbortError')
       ? '请求超时（网络较慢），B 币未被扣除，请重试'
       : ('抽奖失败：' + ((e && e.message) || '未知错误'));
-    alert(msg);
+    showBoxError(msg);
   } finally {
     boxBusy = false;
     updateBoxBcoin();
@@ -7126,7 +7132,7 @@ setMobile(detectMobile());
 document.getElementById('mode-switch-btn').addEventListener('click', () => setMobile(!Mobile.active));
 // 手机竖屏自动适配：旋转到竖屏时自动开启手机版操作
 function autoOrient() {
-  if (detectMobile() && window.matchMedia && matchMedia('(orientation: portrait)').matches && !Mobile.active) {
+  if (detectMobile() && window.matchMedia && matchMedia('(orientation: portrait), (max-width: 600px)').matches && !Mobile.active) {
     setMobile(true);
   }
 }
