@@ -129,7 +129,7 @@ function dispatch(m) {
 
   if (m.type === 'chat') {
     // 聊天广播：broadcast 已在各 isolate 触发本函数，这里发给本进程的所有连接
-    const payload = { t: 'chat', name: m.name, text: m.text, skin: m.skin, ts: m.ts };
+    const payload = { t: 'chat', name: m.name, text: m.text, skin: m.skin, ts: m.ts, cid: m.cid };
     for (const [, cc] of conns) {
       if (cc.ws && cc.ws.readyState === 1) { try { send(cc.ws, payload); } catch (_e) { /* 已断开 */ } }
     }
@@ -555,9 +555,11 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       const name = (lp && lp.name) || String(msg.name || '游客').slice(0, 12);
       const skin = (lp && lp.skin) || '';
       const ts = Date.now();
-      chatLog.push({ name, text, skin, ts });
+      // cid 由发送方生成并原样广播：发送端已本地上屏，收到回环时靠它去重
+      const cid = String(msg.cid || '').slice(0, 24);
+      chatLog.push({ name, text, skin, ts, cid });
       if (chatLog.length > CHAT_MAX) chatLog.shift();
-      broadcast({ type: 'chat', name, text, skin, ts });
+      broadcast({ type: 'chat', name, text, skin, ts, cid });
       break;
     }
     case 'chat_history': {
