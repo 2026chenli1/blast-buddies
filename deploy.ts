@@ -66,6 +66,12 @@ const bc = new BroadcastChannel('blast-relay');
 // ---------- 战斗通行证 ----------
 
 // ---------- 盲盒 ----------
+
+// ---------- 大厅聊天 ----------
+const CHAT_MAX = 60;          // 只保留最近 60 条
+const CHAT_TEXT_MAX = 120;    // 单条最长字数
+const chatLog: any[] = [];    // { name, text, skin, ts }
+
 const BOX_COST = 6;          // 抽一次消耗 6 B币
 const KILLS_PER_BCOIN = 300; // 累计击杀 300 个敌人得 1 B币
 // 奖池概率（合计 100）：空奖 20 / 技能 60 / 金币 10 / 盲盒专属皮肤 10
@@ -117,6 +123,15 @@ function dispatch(m) {
     // 转发给本 isolate 中同房间、非来源的连接
     for (const [id, c] of conns) {
       if (id !== m.from && c.room === m.room) send(c.ws, m.payload);
+    }
+    return;
+  }
+
+  if (m.type === 'chat') {
+    // 聊天广播：broadcast 已在各 isolate 触发本函数，这里发给本进程的所有连接
+    const payload = { t: 'chat', name: m.name, text: m.text, skin: m.skin, ts: m.ts };
+    for (const [, cc] of conns) {
+      if (cc.ws && cc.ws.readyState === 1) { try { send(cc.ws, payload); } catch (_e) { /* 已断开 */ } }
     }
     return;
   }
@@ -453,6 +468,7 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
         players[id] = { x: p.x, y: p.y, angle: p.angle, name: p.name, skin: p.skin };
       }
       send(ws, { t: 'lobby_list', me: connId, d: players });
+      if (chatLog.length) send(ws, { t: 'chat_history', d: chatLog });
       broadcast({ type: 'lobby', action: 'join', id: connId, x: lp?.x, y: lp?.y, angle: lp?.angle, name: lp?.name, skin: lp?.skin, ip: c.ip });
       break;
     }
@@ -530,6 +546,22 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       }
       list.sort((a, b) => (a.room < b.room ? -1 : 1));
       send(ws, { t: 'rooms', d: list });
+      break;
+    }
+    case 'chat': {
+      const lp = lobbyPlayers.get(connId);
+      const text = String(msg.text || '').trim().slice(0, CHAT_TEXT_MAX);
+      if (!text) return;                                   // 空消息不广播
+      const name = (lp && lp.name) || String(msg.name || '游客').slice(0, 12);
+      const skin = (lp && lp.skin) || '';
+      const ts = Date.now();
+      chatLog.push({ name, text, skin, ts });
+      if (chatLog.length > CHAT_MAX) chatLog.shift();
+      broadcast({ type: 'chat', name, text, skin, ts });
+      break;
+    }
+    case 'chat_history': {
+      send(ws, { t: 'chat_history', d: chatLog });
       break;
     }
     case 'match': {
