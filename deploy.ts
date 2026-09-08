@@ -74,9 +74,12 @@ const chatLog: any[] = [];    // { name, text, skin, ts }
 
 const BOX_COST = 6;          // 抽一次消耗 6 B币
 const KILLS_PER_BCOIN = 300; // 累计击杀 300 个敌人得 1 B币
-// 奖池概率（合计 100）：空奖 20 / 技能 60 / 金币 10 / 盲盒专属皮肤 10
-// 注意：BOX_SKIN_IDS 依赖 SHOP_ITEMS，必须放在 SHOP_ITEMS 声明之后（见文件下方）
-const BOX_RATE = { none: 20, skill: 60, coins: 10, skin: 10 };
+// 奖池概率（合计 100）：空奖 8 / 技能 62 / 金币 12 / 盲盒专属皮肤 18
+// 空奖原本 20% 太挫败（抽一次要 6 B 币 = 累计击杀 1800），降到 8%，
+// 让出来的份额主要给盲盒皮肤（玩家最想要的），其次金币。
+// 注意：改这里要同步改客户端盲盒面板里的概率文案（index.html 搜「奖池」）。
+// 另注意：BOX_SKIN_IDS 依赖 SHOP_ITEMS，必须放在 SHOP_ITEMS 声明之后（见文件下方）
+const BOX_RATE = { none: 8, skill: 62, coins: 12, skin: 18 };
 
 
 // 全部技能 id → 名称（盲盒「技能」奖从这里面随机给一个玩家还没有的）
