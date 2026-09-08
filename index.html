@@ -3102,6 +3102,7 @@ document.getElementById('lb-tab-online').addEventListener('click', () => {
 // 走在线大厅那条 ws：Lobby.ws 存在时直接发，否则（未进大厅）提示稍后再试。
 let chatUnread = 0;
 const chatLog = [];   // 本地缓存最近消息，重开面板时不用重新拉
+const chatSeen = new Set(); // 自己发出去的 cid：收到服务端回环时靠它去重，避免重复上屏
 
 function escapeHtmlSafe(str) {
   return String(str).replace(/[&<>"']/g, (c) => (
@@ -3142,7 +3143,11 @@ function pushChat(m) {
 }
 // 服务端推来的聊天消息（大厅 ws 与匹配 ws 都会走各自 onmessage，这里统一暴露）
 function onChatMessage(m) {
-  if (m.t === 'chat') pushChat({ name: m.name || '游客', text: m.text || '', ts: m.ts || Date.now(), mine: false });
+  if (m.t === 'chat') {
+    // 自己刚发出去的那条已经本地上屏了，服务端回环回来要跳过，否则会显示两次
+    if (m.cid && chatSeen.has(m.cid)) return;
+    pushChat({ name: m.name || '游客', text: m.text || '', ts: m.ts || Date.now(), mine: false, cid: m.cid });
+  }
   else if (m.t === 'chat_history' && Array.isArray(m.d)) {
     chatLog.length = 0;
     for (const item of m.d) chatLog.push({ name: item.name, text: item.text, ts: item.ts, mine: false });
@@ -3159,11 +3164,14 @@ function sendChat() {
     alert('当前不在线（大厅未连接），聊天发不出去');
     return;
   }
+  const cid = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   try {
-    ws.send(JSON.stringify({ t: 'chat', text: text.slice(0, 120), name: User.name || '游客' }));
+    ws.send(JSON.stringify({ t: 'chat', text: text.slice(0, 120), name: User.name || '游客', cid }));
     input.value = '';
-    // 本地立即上屏，不等服务端回环（否则弱网下会像没发出去）
-    pushChat({ name: User.name || '游客', text: text.slice(0, 120), ts: Date.now(), mine: true });
+    chatSeen.add(cid);
+    // 本地立即上屏，不等服务端回环（否则弱网下会像没发出去）；
+    // 回环回来时按 cid 跳过，避免同一条消息出现两次。
+    pushChat({ name: User.name || '游客', text: text.slice(0, 120), ts: Date.now(), mine: true, cid });
     renderChat();
   } catch (e) { /* 发送失败就保留输入框内容 */ }
 }
