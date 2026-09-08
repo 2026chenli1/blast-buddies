@@ -566,6 +566,29 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       send(ws, { t: 'chat_history', d: chatLog });
       break;
     }
+    case 'friend_req': {
+      // 转发加好友请求给目标连接（connId 由客户端从大厅列表拿到）
+      const to = String(msg.to || '');
+      const name = String(msg.name || '游客').slice(0, 12);
+      const target = conns.get(to);
+      if (!target || !target.ws || target.ws.readyState !== 1) {
+        send(ws, { t: 'friend_fail', msg: '对方已离开' });
+        return;
+      }
+      send(target.ws, { t: 'friend_req', from: connId, name });
+      break;
+    }
+    case 'friend_accept': {
+      // 同意：通知请求方双方已成好友
+      const to = String(msg.to || '');
+      const name = String(msg.name || '游客').slice(0, 12);
+      const target = conns.get(to);
+      if (target && target.ws && target.ws.readyState === 1) {
+        send(target.ws, { t: 'friend_ok', id: connId, name });
+      }
+      send(ws, { t: 'friend_ok', id: to, name: String(msg.toName || '').slice(0, 12), accepted: true });
+      break;
+    }
     case 'match': {
       // 匹配：加入队列，凑齐目标人数后自动建房开局。
       // size = 想要的房间人数（自由匹配 2~16 自选，排位赛固定 MATCH_PLAYERS）。
@@ -869,6 +892,7 @@ function pubUser(u: Record<string, any>) {
     pass: u.pass ? 1 : 0,
     bcoin: (u.bcoin as number) || 0,          // B 币：盲盒抽奖货币
     skills: (u.skills as string[]) || [],      // 盲盒抽到的额外技能（可装到皮肤上）
+    friends: (u.friends as string[]) || [],     // 好友昵称列表
     upgrades: u.upgrades || {},
     expSpent: u.expSpent || 0,
     spendableExp: Math.max(0, (u.exp || 0) - (u.expSpent || 0)),
@@ -1355,6 +1379,28 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     return jsonResp({ ok: true, user: pubUser(u) });
   }
 
+
+
+  // POST /api/friend/add { name } —— 加好友（双方各自调用一次，互为好友）
+  if (path === '/api/friend/add' && req.method === 'POST') {
+    const { name } = await readBody(req);
+    const friend = String(name || '').trim().slice(0, 12);
+    if (!friend) return jsonResp({ ok: false, msg: '好友昵称为空' }, 400);
+    const friends: string[] = (u.friends as string[]) || [];
+    if (!friends.includes(friend)) friends.push(friend);
+    u.friends = friends;
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u) });
+  }
+  // POST /api/friend/remove { name }
+  if (path === '/api/friend/remove' && req.method === 'POST') {
+    const { name } = await readBody(req);
+    const friend = String(name || '').trim().slice(0, 12);
+    const friends: string[] = ((u.friends as string[]) || []).filter((f) => f !== friend);
+    u.friends = friends;
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u) });
+  }
 
   // POST /api/box/draw —— 抽一次盲盒（消耗 BOX_COST 枚 B 币）
   // 奖池：空奖 20% / 额外技能 60% / 金币 10% / 盲盒专属皮肤 10%
