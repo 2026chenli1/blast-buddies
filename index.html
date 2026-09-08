@@ -915,6 +915,52 @@
     .modal-box { max-width: 92vw !important; max-height: 88vh; overflow: auto; }
   }
 
+
+  /* ---------- 聊天面板 ---------- */
+  .chat-panel {
+    position: fixed; right: 14px; bottom: 96px; z-index: 30;
+    width: 300px; max-height: 46vh;
+    display: flex; flex-direction: column;
+    background: rgba(10, 18, 30, .88);
+    border: 1.5px solid rgba(255,255,255,.14);
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
+    backdrop-filter: blur(6px);
+    overflow: hidden;
+  }
+  .chat-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; font-size: 13px; font-weight: 800; color: #cfe0f0;
+    background: rgba(255,255,255,.06); border-bottom: 1px solid rgba(255,255,255,.1);
+  }
+  .chat-close { background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; line-height: 1; padding: 0 2px; }
+  .chat-close:hover { color: #fff; }
+  .chat-list { flex: 1; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .chat-item { font-size: 12px; line-height: 1.5; word-break: break-word; }
+  .chat-item .chat-name { font-weight: 800; color: #6ecbff; margin-right: 4px; }
+  .chat-item.chat-me .chat-name { color: #ffd166; }
+  .chat-item .chat-text { color: #e2e8f0; }
+  .chat-empty { font-size: 12px; color: #64748b; text-align: center; padding: 12px 0; }
+  .chat-input-row { display: flex; gap: 6px; padding: 8px; border-top: 1px solid rgba(255,255,255,.1); }
+  .chat-input-row input {
+    flex: 1; min-width: 0; padding: 7px 9px; font-size: 13px;
+    border-radius: 8px; border: 1.5px solid rgba(255,255,255,.18);
+    background: rgba(0,0,0,.35); color: #e2e8f0; outline: none;
+  }
+  .chat-input-row input:focus { border-color: rgba(110,203,255,.6); }
+  .chat-input-row button {
+    flex: none; padding: 7px 12px; font-size: 13px; font-weight: 800;
+    border-radius: 8px; border: none; cursor: pointer;
+    background: linear-gradient(180deg, #38bdf8, #0284c7); color: #04263a;
+  }
+  .chat-input-row button:active { transform: scale(.96); }
+  .chat-unread {
+    position: absolute; top: -6px; left: -6px; min-width: 17px; height: 17px;
+    padding: 0 4px; border-radius: 999px; background: #f43f5e; color: #fff;
+    font-size: 11px; font-weight: 800; display: none;
+    align-items: center; justify-content: center;
+  }
+
   /* ---------- 弹窗通用 ---------- */
   .modal-mask {
     position: fixed; inset: 0; z-index: 40;
@@ -1047,6 +1093,19 @@
   <canvas id="game"></canvas>
 </div>
 
+<!-- 聊天面板 -->
+<div class="chat-panel" id="chat-panel" style="display:none;">
+  <div class="chat-head">
+    <span>💬 大厅聊天</span>
+    <button class="chat-close" id="chat-close-btn" aria-label="关闭">×</button>
+  </div>
+  <div class="chat-list" id="chat-list"></div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" maxlength="120" placeholder="说点什么…（Enter 发送）">
+    <button id="chat-send-btn">发送</button>
+  </div>
+</div>
+
 <!-- HUD -->
 <div class="hud-top" id="hud" style="display:none;">
   <div class="hud-score">得分 <span id="score-display">0</span></div>
@@ -1092,7 +1151,7 @@
           <div class="exp-track"><div class="exp-fill" id="hu-exp-fill" style="width:0%"></div></div>
         </div>
         <button class="chat-btn" id="home-task-btn" title="每日任务"><svg viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-3px;margin-right:4px;"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="2"/><path d="M9 15l2 2 4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg>任务</button>
-        <button class="chat-btn" id="home-chat-btn">聊天</button>
+        <button class="chat-btn" id="home-chat-btn" style="position:relative;">聊天<span class="chat-unread" id="chat-unread">0</span></button>
       </div>
     </div>
 
@@ -3039,7 +3098,102 @@ document.getElementById('lb-tab-online').addEventListener('click', () => {
 });
 
 // 顶部聊天 / 每日任务（右上角任务按钮开关挑战面板）
-document.getElementById('home-chat-btn').addEventListener('click', () => { ensureAudio(); alert('聊天功能即将上线'); });
+// ---------- 大厅聊天 ----------
+// 走在线大厅那条 ws：Lobby.ws 存在时直接发，否则（未进大厅）提示稍后再试。
+let chatUnread = 0;
+const chatLog = [];   // 本地缓存最近消息，重开面板时不用重新拉
+
+function escapeHtmlSafe(str) {
+  return String(str).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+function chatTime(ts) {
+  const d = new Date(ts || Date.now());
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function renderChat() {
+  const list = document.getElementById('chat-list');
+  if (!list) return;
+  if (!chatLog.length) {
+    list.innerHTML = '<div class="chat-empty">还没有人说话，来抢沙发 🛋️</div>';
+    return;
+  }
+  list.innerHTML = chatLog.map((m) => {
+    const me = m.mine ? ' chat-me' : '';
+    return `<div class="chat-item${me}"><span class="chat-name">${escapeHtmlSafe(m.name)}</span>`
+      + `<span style="color:#64748b;font-size:11px;">${chatTime(m.ts)}</span><br>`
+      + `<span class="chat-text">${escapeHtmlSafe(m.text)}</span></div>`;
+  }).join('');
+  list.scrollTop = list.scrollHeight;   // 始终看最新
+}
+function pushChat(m) {
+  chatLog.push(m);
+  if (chatLog.length > 60) chatLog.shift();
+  const panel = document.getElementById('chat-panel');
+  const open = panel && panel.style.display !== 'none';
+  if (open) {
+    renderChat();
+  } else {
+    chatUnread++;
+    const badge = document.getElementById('chat-unread');
+    if (badge) { badge.textContent = chatUnread > 99 ? '99+' : chatUnread; badge.style.display = 'flex'; }
+  }
+}
+// 服务端推来的聊天消息（大厅 ws 与匹配 ws 都会走各自 onmessage，这里统一暴露）
+function onChatMessage(m) {
+  if (m.t === 'chat') pushChat({ name: m.name || '游客', text: m.text || '', ts: m.ts || Date.now(), mine: false });
+  else if (m.t === 'chat_history' && Array.isArray(m.d)) {
+    chatLog.length = 0;
+    for (const item of m.d) chatLog.push({ name: item.name, text: item.text, ts: item.ts, mine: false });
+    renderChat();
+  }
+}
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  if (!input) return;
+  const text = (input.value || '').trim();
+  if (!text) return;
+  const ws = Lobby.ws;
+  if (!ws || ws.readyState !== 1) {
+    alert('当前不在线（大厅未连接），聊天发不出去');
+    return;
+  }
+  try {
+    ws.send(JSON.stringify({ t: 'chat', text: text.slice(0, 120), name: User.name || '游客' }));
+    input.value = '';
+    // 本地立即上屏，不等服务端回环（否则弱网下会像没发出去）
+    pushChat({ name: User.name || '游客', text: text.slice(0, 120), ts: Date.now(), mine: true });
+    renderChat();
+  } catch (e) { /* 发送失败就保留输入框内容 */ }
+}
+function openChat() {
+  const panel = document.getElementById('chat-panel');
+  if (!panel) return;
+  panel.style.display = 'flex';
+  chatUnread = 0;
+  const badge = document.getElementById('chat-unread');
+  if (badge) badge.style.display = 'none';
+  renderChat();
+  // 没连上大厅时尝试重连，否则发了也发不出去
+  if (!Lobby.ws) startLobbyWorld();
+  setTimeout(() => { const i = document.getElementById('chat-input'); if (i) i.focus(); }, 50);
+}
+document.getElementById('home-chat-btn').addEventListener('click', () => {
+  ensureAudio();
+  const panel = document.getElementById('chat-panel');
+  if (panel && panel.style.display !== 'none') panel.style.display = 'none';
+  else openChat();
+});
+document.getElementById('chat-close-btn').addEventListener('click', () => {
+  const panel = document.getElementById('chat-panel');
+  if (panel) panel.style.display = 'none';
+});
+document.getElementById('chat-send-btn').addEventListener('click', sendChat);
+document.getElementById('chat-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); sendChat(); }
+  e.stopPropagation();   // 别让 WASD 之类的游戏热键吃掉输入
+});
 document.getElementById('refresh-challenge-btn').addEventListener('click', () => { ensureAudio(); alert('每日挑战已刷新'); renderChallenge(); });
 document.getElementById('home-task-btn').addEventListener('click', () => {
   ensureAudio();
@@ -6911,6 +7065,8 @@ function startLobbyWorld() {
     ws.onmessage = (e) => {
       let m;
       try { m = JSON.parse(e.data); } catch (err) { return; }
+      // 聊天消息（含历史），交给聊天面板处理
+      if (m.t === 'chat' || m.t === 'chat_history') { if (typeof onChatMessage === 'function') onChatMessage(m); return; }
       if (m.t === 'lobby_list') {
         if (m.me) Lobby.wsId = m.me; // 服务器告知我的连接 id，用于过滤自己
         const d = m.d || {};
