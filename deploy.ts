@@ -1450,7 +1450,9 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
         prize = { type: 'skin', id: got, name: SHOP_ITEMS[got].name };
       }
     }
-    await kv.set(['user', u.phone], u);
+    // 注意：必须用 auth.phone。用户对象 u 里并没有 phone 字段（phone 是 KV 的 key，
+    // 不在 value 里），写 u.phone 会得到 undefined，Deno KV 直接抛异常 → 500。
+    await kv.set(['user', auth.phone], u);
     return jsonResp({ ok: true, prize, user: pubUser(u) });
   }
 
