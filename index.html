@@ -1106,6 +1106,30 @@
   </div>
 </div>
 
+<!-- 靠近玩家时出现的「加好友」按钮 -->
+<button id="add-friend-btn" style="display:none;position:fixed;left:50%;top:76px;transform:translateX(-50%);
+  z-index:32;padding:9px 16px;border-radius:999px;border:1.5px solid rgba(74,222,128,.6);
+  background:rgba(6,40,25,.9);color:#86efac;font-size:13px;font-weight:800;cursor:pointer;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);backdrop-filter:blur(4px);">➕ 加 <span id="add-friend-name"></span> 为好友</button>
+
+<!-- 好友请求确认 -->
+<div class="modal-mask" id="friend-req-modal" style="display:none;">
+  <div class="modal-box" style="max-width:320px;">
+    <div class="modal-title">好友请求</div>
+    <div style="text-align:center;padding:10px 0 4px;">
+      <div style="font-size:34px;margin-bottom:8px;">🤝</div>
+      <div style="font-size:14px;color:#e2e8f0;">
+        <b id="friend-req-name" style="color:#86efac;">玩家</b> 想添加你为好友
+      </div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:6px;">同意后双方互为好友</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn btn-secondary btn-small" id="friend-req-no" style="flex:1;">拒绝</button>
+      <button class="btn btn-small" id="friend-req-yes" style="flex:1;background:#22c55e;">同意</button>
+    </div>
+  </div>
+</div>
+
 <!-- HUD -->
 <div class="hud-top" id="hud" style="display:none;">
   <div class="hud-score">得分 <span id="score-display">0</span></div>
@@ -2478,13 +2502,14 @@ function gunDef() { return GUN_DEFS[User.gun] || GUN_DEFS.gun_pistol; }
 // 弱网兜底：fetch 默认没有超时，网络卡住时 await 会无限挂起，
 // 调用方（如成绩上报、排行榜）会一直转圈。统一 8 秒超时后放弃，降级为本地处理。
 const API_TIMEOUT = 8000;
-async function api(path, body) {
+async function api(path, body, ms) {
   const headers = { 'content-type': 'application/json' };
   if (User.token) headers['authorization'] = 'Bearer ' + User.token;
   let ctrl = null, timer = null;
   if (typeof AbortController !== 'undefined') {
     ctrl = new AbortController();
-    timer = setTimeout(() => ctrl.abort(), API_TIMEOUT);
+    // 默认 8 秒；抽奖这类要扣货币的操作传更长的超时，别在弱网/冷启动时被误判成失败
+    timer = setTimeout(() => ctrl.abort(), ms || API_TIMEOUT);
   }
   try {
     const res = await fetch(path, {
@@ -2518,6 +2543,7 @@ function applyUser(u) {
   User.name = u.name || User.name;
   User.bcoin = u.bcoin || 0;      // B 币：盲盒抽奖货币
   User.skills = u.skills || [];  // 盲盒抽到的额外技能
+  User.friends = u.friends || []; // 好友昵称列表
   // 同步左上角 B 币显示（打完一局发 B 币、抽盲盒消耗 B 币都要立刻反映出来）
   const bcEl = document.getElementById('hu-bcoin');
   if (bcEl) bcEl.textContent = (User.bcoin || 0).toLocaleString();
@@ -3717,14 +3743,20 @@ async function drawBox() {
   const btn = document.getElementById('box-draw-btn');
   if (btn) btn.disabled = true;
   try {
-    const r = await api('/api/box/draw', {});
+    // 抽奖会扣 B 币，超时给到 25 秒：手机弱网或 Deno 冷启动都可能超过默认 8 秒，
+    // 被打断的话玩家以为抽失败了（其实服务端可能已经扣了币）。
+    const r = await api('/api/box/draw', {}, 25000);
     if (!r.ok) { alert(r.msg || '抽奖失败'); return; }
     applyUser(r.user);
     renderBoxResult(r.prize);
     updateBoxBcoin();
     renderHomeUser();
   } catch (e) {
-    alert('网络异常，请稍后重试');
+    // 把真实原因说出来，别一律「网络错误」，否则没法定位问题
+    const msg = (e && e.name === 'AbortError')
+      ? '请求超时（网络较慢），B 币未被扣除，请重试'
+      : ('抽奖失败：' + ((e && e.message) || '未知错误'));
+    alert(msg);
   } finally {
     boxBusy = false;
     updateBoxBcoin();
@@ -3745,6 +3777,95 @@ document.getElementById('box-draw-btn').addEventListener('click', () => { ensure
 document.getElementById('box-close-btn').addEventListener('click', () => {
   document.getElementById('box-modal').style.display = 'none';
 });
+
+
+// ---------- 好友：靠近时加好友，对方同意后互为好友 ----------
+const FRIEND_NEAR_PX = 120;   // 多近算「靠近」（像素）
+let pendingFriendReq = null;  // { from, name }
+
+function nearestLobbyPlayer() {
+  const me = Lobby.me;
+  let best = null, bestD = Infinity;
+  for (const [id, p] of Lobby.players) {
+    const dx = (me.x - p.x) * W, dy = (me.y - p.y) * H;
+    const dist = Math.hypot(dx, dy);
+    if (dist < bestD) { bestD = dist; best = { id, p, dist }; }
+  }
+  return best;
+}
+// 每帧更新「加好友」按钮：靠近且还不是好友才显示
+function updateFriendButton() {
+  const btn = document.getElementById('add-friend-btn');
+  if (!btn) return;
+  const inLobby = G.state === 'menu' && document.getElementById('home-view').style.display !== 'none';
+  if (!inLobby || !Lobby.players.size) { btn.style.display = 'none'; return; }
+  const near = nearestLobbyPlayer();
+  const name = near && (near.p.name || '');
+  const already = name && (User.friends || []).includes(name);
+  if (!near || near.dist > FRIEND_NEAR_PX || !name || name === (User.name || '游客') || already) {
+    btn.style.display = 'none';
+    return;
+  }
+  const nm = document.getElementById('add-friend-name');
+  if (nm) nm.textContent = name;
+  btn.style.display = 'block';
+  btn.dataset.target = near.id;
+}
+function sendFriendReq() {
+  const btn = document.getElementById('add-friend-btn');
+  const to = btn && btn.dataset.target;
+  if (!to) return;
+  if (!Lobby.ws || Lobby.ws.readyState !== 1) { alert('当前不在线，无法发送好友请求'); return; }
+  try {
+    Lobby.ws.send(JSON.stringify({ t: 'friend_req', to, name: User.name || '游客' }));
+    addPopup(W / 2, H * 0.4, '好友请求已发送', '#4ade80');
+  } catch (e) { alert('发送失败，请重试'); }
+}
+// 收到对方发来的好友请求
+function onFriendReq(m) {
+  pendingFriendReq = { from: m.from, name: m.name || '玩家' };
+  const nm = document.getElementById('friend-req-name');
+  if (nm) nm.textContent = pendingFriendReq.name;
+  const modal = document.getElementById('friend-req-modal');
+  if (modal) modal.style.display = 'flex';
+  Sfx.powerup();
+}
+async function answerFriendReq(yes) {
+  const req = pendingFriendReq;
+  pendingFriendReq = null;
+  const modal = document.getElementById('friend-req-modal');
+  if (modal) modal.style.display = 'none';
+  if (!req) return;
+  if (!yes) return;
+  // 通知对方
+  if (Lobby.ws && Lobby.ws.readyState === 1) {
+    try {
+      Lobby.ws.send(JSON.stringify({
+        t: 'friend_accept', to: req.from, name: User.name || '游客', toName: req.name,
+      }));
+    } catch (e) { /* 忽略 */ }
+  }
+  // 持久化（要登录才行）
+  if (User.logged) {
+    try {
+      const r = await api('/api/friend/add', { name: req.name });
+      if (r.ok) { applyUser(r.user); addPopup(W / 2, H * 0.4, '已添加好友 ' + req.name, '#4ade80'); }
+    } catch (e) { /* 持久化失败也不影响本局已互为好友 */ }
+  } else {
+    addPopup(W / 2, H * 0.4, '已同意（登录后才会保存）', '#fbbf24');
+  }
+}
+// 对方同意了我的请求
+async function onFriendOk(m) {
+  addPopup(W / 2, H * 0.4, (m.name || '玩家') + ' 已成为你的好友', '#4ade80');
+  if (User.logged && m.name) {
+    try { const r = await api('/api/friend/add', { name: m.name }); if (r.ok) applyUser(r.user); }
+    catch (e) { /* 忽略 */ }
+  }
+}
+document.getElementById('add-friend-btn').addEventListener('click', sendFriendReq);
+document.getElementById('friend-req-yes').addEventListener('click', () => answerFriendReq(true));
+document.getElementById('friend-req-no').addEventListener('click', () => answerFriendReq(false));
 
 // ---------- 局后结算：上报得分，发金币/经验 ----------
 async function reportResult() {
@@ -7040,7 +7161,8 @@ const NET = {
 // 大厅是一个共享世界：所有未进入房间的玩家都在这里，只能移动、看见彼此
 const Lobby = {
   ws: null,
-  me: { x: 0.5, y: 0.55, angle: 0, moving: false, anim: 0 }, // 位置用 0~1 比例
+  // 出生点随机：固定 (0.5,0.55) 会让所有人一进来就叠在同一个点上
+  me: { x: 0.2 + Math.random() * 0.6, y: 0.25 + Math.random() * 0.45, angle: 0, moving: false, anim: 0 }, // 位置用 0~1 比例
   players: new Map(), // id -> { x, y, angle, name, skin, lastSeen }
   lastSend: 0,
   connected: false,
@@ -7075,6 +7197,10 @@ function startLobbyWorld() {
       try { m = JSON.parse(e.data); } catch (err) { return; }
       // 聊天消息（含历史），交给聊天面板处理
       if (m.t === 'chat' || m.t === 'chat_history') { if (typeof onChatMessage === 'function') onChatMessage(m); return; }
+      // 好友：请求 / 对方同意 / 对方已离开
+      if (m.t === 'friend_req') { if (typeof onFriendReq === 'function') onFriendReq(m); return; }
+      if (m.t === 'friend_ok') { if (typeof onFriendOk === 'function') onFriendOk(m); return; }
+      if (m.t === 'friend_fail') { alert(m.msg || '对方已离开'); return; }
       if (m.t === 'lobby_list') {
         if (m.me) Lobby.wsId = m.me; // 服务器告知我的连接 id，用于过滤自己
         const d = m.d || {};
@@ -8101,6 +8227,7 @@ function runFrame(now) {
   // 主界面：在线大厅移动 + 渲染
   if (G.state === 'menu' && document.getElementById('home-view').style.display !== 'none') {
     updateLobbyPlayer(dt);
+    updateFriendButton();
   }
   draw();
 }
