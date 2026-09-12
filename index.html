@@ -8607,7 +8607,7 @@ function netMatch(size) {
       NET.gm = 'tdm';
       // 实际成团人数：在线人少时服务端会「少人开局」，容量必须按真实人数，
       // 否则房间永远显示「还差 N 人」、自动开局也永远等不到人齐。
-      const real = (m.players && m.players.length) ? m.players.length : want;
+      const real = m.n || (m.players && m.players.length) || want;
       NET.cap = real;
       NET.mode = 'public';
       if (m.slot === 1) {
