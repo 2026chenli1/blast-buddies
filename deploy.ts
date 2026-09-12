@@ -180,7 +180,7 @@ function dispatch(m) {
           }
           matchLocal.delete(p.id);
           lobbyPlayers.delete(p.id);
-          send(c.ws, { t: 'matched', room: m.room, slot: p.slot });
+          send(c.ws, { t: 'matched', room: m.room, slot: p.slot, n: (m.players || []).length });
         }
       }
     }
@@ -766,6 +766,10 @@ async function beginMatch(batch: any[], want: number) {
   // 房间容量按实际人数：少人开局时 cap 就是实际人数，避免房间里永远显示「还差 N 人」
   const cap = batch.length;
   const room = await createRoom(batch[0].id, cap, 'public', 'tdm');
+  // 先通知成团玩家（本 isolate 直接发 + 跨 isolate 广播）：客户端收到 matched 才会挂 host/guest 处理器，
+  // 必须在 joined 之前，否则发给房主的 peer 消息会被「匹配弹窗的旧处理器」丢弃，房主 peers 永远为空 →
+  // guest 永远收不到状态快照，卡在「等待房主开始」。
+  broadcast({ type: 'match', action: 'found', room, players: batch.map((b: any, i: number) => ({ id: b.id, slot: i + 1 })) });
   // KV 注册表补上其余玩家（guest），并广播 joined 让各 isolate 的 rooms 镜像同步、房主收到 peer
   const reg = await roomReg(room);
   for (let i = 1; i < batch.length; i++) {
@@ -787,9 +791,8 @@ async function beginMatch(batch: any[], want: number) {
     });
   }
   if (reg) await setRoomReg(reg);
-  // 通知所有成团玩家（本 isolate 直接发 + 跨 isolate 广播）
-  broadcast({ type: 'match', action: 'found', room, players: batch.map((b: any, i: number) => ({ id: b.id, slot: i + 1 })) });
 }
+
 // 每秒巡检：把「等太久但已经够 MATCH_MIN 人」的队列提前开局
 async function sweepMatchQueue() {
   await withMatchLock(async () => {
