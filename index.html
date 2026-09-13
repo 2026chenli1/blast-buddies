@@ -689,6 +689,7 @@
     box-shadow: 0 4px 12px rgba(0,0,0,.18);
   }
   .top-icon-btn:hover { background: rgba(50,40,90,.75); }
+  .top-icon-btn.portrait-only { display: none; } /* 仅竖屏展示任务/聊天入口 */
   .top-icon-btn:active { transform: scale(0.92); }
 
   /* 每日地图卡片（左侧中部，避开手机摇杆区域） */
@@ -871,33 +872,31 @@
   /* ---------- 手机竖屏自动适配 ---------- */
   @media (orientation: portrait), (max-width: 600px) {
     #home-view .home-top-left .season-pill { display: none; }
-    #home-view .level-card { max-width: 44vw; }
-    #home-view .level-row { font-size: 10px; }
-    #home-view .level-row .level-exp { font-size: 9px; }
-    #home-view .coin-pill, #home-view .online-pill, #home-view .bcoin-pill { font-size: 11px; padding: 4px 8px; }
-    #home-view .chat-btn { font-size: 11px; padding: 6px 8px; }
-    #home-view .daily-map-card { top: 50%; left: 8px; width: 98px; transform: translateY(-50%) scale(.92); transform-origin: left center; }
-    #home-view .home-bottom { bottom: 10px; }
-    /* 6 个图标：48px×6+间距 会超出 360px 小屏，缩到 42px 保证一行放得下 */
-    #home-view .home-nav { gap: 6px; padding: 6px 8px 22px; }
-    #home-view .nav-icon { width: 42px; height: 42px; }
-    #home-view .nav-icon svg { width: 19px; height: 19px; }
-    #home-view .nav-label { font-size: 10px; }
+    #home-view .level-card { max-width: 40vw; }
+    #home-view .level-row { font-size: 9px; }
+    #home-view .level-row .level-exp { font-size: 8px; }
+    #home-view .coin-pill, #home-view .online-pill, #home-view .bcoin-pill { font-size: 10px; padding: 3px 6px; gap: 3px; }
+    #home-view .chat-btn { display: none; } /* 竖屏把任务/聊天按钮收到右侧图标列 */
+    #home-view .daily-map-card { top: 50%; left: 8px; width: 92px; transform: translateY(-50%) scale(.88); transform-origin: left center; }
+    #home-view .home-bottom { bottom: 8px; }
+    #home-view .home-nav { gap: 8px; padding: 6px 6px 18px; }
+    #home-view .nav-icon { width: 38px; height: 38px; }
+    #home-view .nav-icon svg { width: 17px; height: 17px; }
+    #home-view .nav-label { font-size: 9px; }
     #home-view .home-actions { gap: 10px; }
-    #home-view .home-actions .btn { font-size: 16px; padding: 12px 26px; }
-    #home-view .challenge-card { top: 64px; right: 8px; width: min(300px, 86vw); max-height: 46vh; overflow: auto; }
-    #home-view .home-user-card { max-width: 40vw; font-size: 12px; }
-    /* 图标按钮移到右下导航上方竖排：top:8 会压住等级卡/任务/聊天，叠一起的元凶 */
-    #home-view .home-top-btns { top: auto; bottom: 96px; right: 6px; gap: 5px; flex-direction: column; }
-    /* 右栏（等级卡+任务+聊天）竖排，不再横向挤爆 360px 小屏 */
+    #home-view .home-actions .btn { font-size: 15px; padding: 10px 22px; }
+    #home-view .challenge-card { top: 62px; right: 8px; width: min(300px, 86vw); max-height: 46vh; overflow: auto; }
+    #home-view .home-user-card { max-width: 38vw; font-size: 11px; }
+    #home-view .home-user-card .home-user-name { font-size: 12px; }
+    #home-view .home-user { top: 100px; left: 8px; }
+    /* 右侧图标列：武器(与底部枪重复，隐藏)、商城、音效、模式，再加任务/聊天 */
+    #home-view .home-top-btns { top: auto; bottom: 92px; right: 8px; gap: 8px; flex-direction: column; }
+    #home-view .home-top-btns #weapon-btn { display: none; }
+    #home-view .home-top-btns .portrait-only { display: flex; }
     #home-view .home-top-right { flex-direction: column; align-items: flex-end; }
-    /* 用户卡下移，避开换行后的金币/在线/B币 pills */
-    #home-view .home-user { top: 108px; left: 8px; }
     #home-view .top-icon-btn { width: 32px; height: 32px; }
 
-    /* ---------- 游戏内 HUD：窄屏要整体缩小 ----------
-       得分 26px 字 + 波数 + 生命 + 两个 52px 技能按钮 + 暂停按钮，
-       在 360px 宽的竖屏上会挤成一团并顶出屏幕（竖屏原本完全没有 HUD 适配）。 */
+    /* ---------- 游戏内 HUD：窄屏要整体缩小 ---------- */
     #hud.hud-top { padding: 7px 9px; gap: 6px; flex-wrap: wrap; }
     #hud .hud-score { font-size: 17px; }
     #hud .hud-wave { font-size: 12px; }
@@ -1233,6 +1232,8 @@
       <button class="top-icon-btn" id="shop-btn" title="商城"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="6" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18" stroke="currentColor" stroke-width="2"/></svg></button>
       <button class="top-icon-btn sound-btn sound-icon" id="sound-menu-btn" title="音效：开"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8a5 5 0 0 1 0 8" stroke="currentColor" stroke-width="2" fill="none"/></svg></button>
       <button class="top-icon-btn" id="mode-switch-btn" title="切换手机版"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="6" y="2" width="12" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 18h4" stroke="currentColor" stroke-width="2"/></svg></button>
+      <button class="top-icon-btn portrait-only" id="task-icon-btn" title="每日任务"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="2"/><path d="M9 15l2 2 4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg></button>
+      <button class="top-icon-btn portrait-only" id="chat-icon-btn" title="聊天" style="position:relative"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M2 6a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H6l-4 4V6z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 10h10M7 14h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="chat-unread" id="chat-unread-portrait" style="display:none">0</span></button>
     </div>
 
     <!-- 控制说明（折叠到底部上方） -->
@@ -3144,7 +3145,10 @@ function pushChat(m) {
   } else {
     chatUnread++;
     const badge = document.getElementById('chat-unread');
-    if (badge) { badge.textContent = chatUnread > 99 ? '99+' : chatUnread; badge.style.display = 'flex'; }
+    const badgeP = document.getElementById('chat-unread-portrait');
+    const text = chatUnread > 99 ? '99+' : chatUnread;
+    if (badge) { badge.textContent = text; badge.style.display = 'flex'; }
+    if (badgeP) { badgeP.textContent = text; badgeP.style.display = 'flex'; }
   }
 }
 // 服务端推来的聊天消息（大厅 ws 与匹配 ws 都会走各自 onmessage，这里统一暴露）
@@ -3188,6 +3192,8 @@ function openChat() {
   chatUnread = 0;
   const badge = document.getElementById('chat-unread');
   if (badge) badge.style.display = 'none';
+  const badgeP = document.getElementById('chat-unread-portrait');
+  if (badgeP) badgeP.style.display = 'none';
   renderChat();
   // 没连上大厅时尝试重连，否则发了也发不出去
   if (!Lobby.ws) startLobbyWorld();
@@ -3211,9 +3217,16 @@ document.getElementById('chat-input').addEventListener('keydown', (e) => {
 // 发送按钮状态：未连接服务器时灰色
 const chatSendBtnEl = document.getElementById('chat-send-btn');
 function updateChatSendBtn() {
-  if (chatSendBtnEl) chatSendBtnEl.disabled = !(Lobby.ws && Lobby.ws.readyState === 1);
+  // Lobby 是 const 且在脚本后段才初始化：这里必须 try 包住，
+  // 否则顶层首次调用抛 TDZ 异常会把整个游戏脚本杀死（摇杆/渲染/循环全部失效）
+  let ok = false;
+  try { ok = !!(Lobby.ws && Lobby.ws.readyState === 1); } catch (e) {}
+  if (chatSendBtnEl) chatSendBtnEl.disabled = !ok;
 }
 setInterval(updateChatSendBtn, 1500);
+// 竖屏图标入口代理到原按钮
+document.getElementById('task-icon-btn')?.addEventListener('click', () => { ensureAudio(); document.getElementById('home-task-btn').click(); });
+document.getElementById('chat-icon-btn')?.addEventListener('click', () => { ensureAudio(); document.getElementById('home-chat-btn').click(); });
 updateChatSendBtn();
 document.getElementById('refresh-challenge-btn').addEventListener('click', () => { ensureAudio(); alert('每日挑战已刷新'); renderChallenge(); });
 document.getElementById('home-task-btn').addEventListener('click', () => {
