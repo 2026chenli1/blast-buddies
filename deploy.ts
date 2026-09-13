@@ -71,6 +71,49 @@ const bc = new BroadcastChannel('blast-relay');
 const CHAT_MAX = 60;          // 只保留最近 60 条
 const CHAT_TEXT_MAX = 120;    // 单条最长字数
 const chatLog: any[] = [];    // { name, text, skin, ts }
+const CHAT_KV_KEY = ['chat'];
+const CHAT_SYNC_MS = 6000;    // 每 6 秒从 KV 拉一次，跨 isolate 兜底
+const chatCids = new Set<string>(); // 去重，避免 KV 同步/BC 广播重复入队
+
+function chatKey(m: any): string { return (m.cid ? 'c:' + m.cid : m.ts + '|' + (m.name || '') + '|' + (m.text || '')); }
+async function mergeChatFromKv(): Promise<any[]> {
+  const merged: any[] = [];
+  try {
+    const r = await kv.get(CHAT_KV_KEY);
+    const arr = Array.isArray(r.value) ? r.value : [];
+    for (const item of arr) {
+      const k = chatKey(item);
+      if (chatCids.has(k)) continue;
+      chatCids.add(k);
+      chatLog.push(item);
+      merged.push(item);
+    }
+    if (chatLog.length > CHAT_MAX) chatLog.splice(0, chatLog.length - CHAT_MAX);
+  } catch (_e) { /* KV 读失败不影响本地广播 */ }
+  return merged;
+}
+async function saveChatToKv(item: any) {
+  try {
+    const r = await kv.get(CHAT_KV_KEY);
+    const arr = Array.isArray(r.value) ? r.value : [];
+    arr.push(item);
+    if (arr.length > CHAT_MAX) arr.shift();
+    await kv.set(CHAT_KV_KEY, arr);
+  } catch (_e) { /* KV 写失败仅丢历史，不影响实时 */ }
+}
+// 定期把 KV 里的聊天拉进本地并广播给本 isolate 客户端，解决跨 isolate/新平台 BC 不可靠问题
+function startChatKvSync() {
+  if ((globalThis as any).__chatKvSyncStarted) return;
+  (globalThis as any).__chatKvSyncStarted = true;
+  setInterval(async () => {
+    if (conns.size === 0) return;
+    const merged = await mergeChatFromKv();
+    if (!merged.length) return;
+    for (const item of merged) {
+      broadcast({ type: 'chat', name: item.name, text: item.text, skin: item.skin, ts: item.ts, cid: item.cid });
+    }
+  }, CHAT_SYNC_MS);
+}
 
 const BOX_COST = 6;          // 抽一次消耗 6 B币
 const KILLS_PER_BCOIN = 300; // 累计击杀 300 个敌人得 1 B币
@@ -133,6 +176,16 @@ function dispatch(m) {
   if (m.type === 'chat') {
     // 聊天广播：broadcast 已在各 isolate 触发本函数，这里发给本进程的所有连接
     const payload = { t: 'chat', name: m.name, text: m.text, skin: m.skin, ts: m.ts, cid: m.cid };
+    // 入本地历史（去重），这样本 isolate 后进来的玩家也能看到跨 isolate 消息
+    const item = { name: m.name, text: m.text, skin: m.skin, ts: m.ts, cid: m.cid };
+    if (item.text) {
+      const k = chatKey(item);
+      if (!chatCids.has(k)) {
+        chatCids.add(k);
+        chatLog.push(item);
+        if (chatLog.length > CHAT_MAX) chatLog.shift();
+      }
+    }
     for (const [, cc] of conns) {
       if (cc.ws && cc.ws.readyState === 1) { try { send(cc.ws, payload); } catch (_e) { /* 已断开 */ } }
     }
@@ -439,6 +492,7 @@ async function leaveRoom(connId: string) {
 
 // ---------- 消息处理 ----------
 async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
+  startChatKvSync();
   let msg;
   try {
     msg = JSON.parse(raw);
@@ -471,6 +525,8 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
         players[id] = { x: p.x, y: p.y, angle: p.angle, name: p.name, skin: p.skin };
       }
       send(ws, { t: 'lobby_list', me: connId, d: players });
+      // 先合并 KV 里的跨 isolate 消息，保证新人看到所有历史
+      await mergeChatFromKv();
       if (chatLog.length) send(ws, { t: 'chat_history', d: chatLog });
       broadcast({ type: 'lobby', action: 'join', id: connId, x: lp?.x, y: lp?.y, angle: lp?.angle, name: lp?.name, skin: lp?.skin, ip: c.ip });
       break;
@@ -560,13 +616,25 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       const ts = Date.now();
       // cid 由发送方生成并原样广播：发送端已本地上屏，收到回环时靠它去重
       const cid = String(msg.cid || '').slice(0, 24);
-      chatLog.push({ name, text, skin, ts, cid });
+      const item = { name, text, skin, ts, cid };
+      chatLog.push(item);
       if (chatLog.length > CHAT_MAX) chatLog.shift();
+      chatCids.add(chatKey(item));
       broadcast({ type: 'chat', name, text, skin, ts, cid });
+      // 同时持久化到 KV：新平台 BroadcastChannel 跨 isolate 不可靠，用 KV 兜底
+      void saveChatToKv(item);
       break;
     }
     case 'chat_history': {
       send(ws, { t: 'chat_history', d: chatLog });
+      break;
+    }
+    case 'chat_sync': {
+      // 客户端按时间戳拉增量；先从 KV 合并，再返回比 after 新的消息
+      const after = Number(msg.after) || 0;
+      await mergeChatFromKv();
+      const newer = chatLog.filter((m: any) => m.ts > after);
+      if (newer.length) send(ws, { t: 'chat_history', d: newer });
       break;
     }
     case 'friend_req': {
