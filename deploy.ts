@@ -72,7 +72,7 @@ const CHAT_MAX = 60;          // 只保留最近 60 条
 const CHAT_TEXT_MAX = 120;    // 单条最长字数
 const chatLog: any[] = [];    // { name, text, skin, ts }
 const CHAT_KV_KEY = ['chat'];
-const CHAT_SYNC_MS = 6000;    // 每 6 秒从 KV 拉一次，跨 isolate 兜底
+const CHAT_SYNC_MS = 15000;   // 每 15 秒从 KV 拉一次，跨 isolate 兜底（降低 KV 读取频率）
 const chatCids = new Set<string>(); // 去重，避免 KV 同步/BC 广播重复入队
 
 function chatKey(m: any): string { return (m.cid ? 'c:' + m.cid : m.ts + '|' + (m.name || '') + '|' + (m.text || '')); }
@@ -525,9 +525,9 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
         players[id] = { x: p.x, y: p.y, angle: p.angle, name: p.name, skin: p.skin };
       }
       send(ws, { t: 'lobby_list', me: connId, d: players });
-      // 先合并 KV 里的跨 isolate 消息，保证新人看到所有历史
-      await mergeChatFromKv();
+      // 先发送当前历史，再在后台合并 KV 里的跨 isolate 消息（避免 KV 慢时阻塞新人）
       if (chatLog.length) send(ws, { t: 'chat_history', d: chatLog });
+      void mergeChatFromKv();
       broadcast({ type: 'lobby', action: 'join', id: connId, x: lp?.x, y: lp?.y, angle: lp?.angle, name: lp?.name, skin: lp?.skin, ip: c.ip });
       break;
     }
