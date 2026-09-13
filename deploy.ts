@@ -192,6 +192,18 @@ function dispatch(m) {
     return;
   }
 
+  if (m.type === 'pm') {
+    // 私信：按昵称路由到本 isolate 中的目标连接（在线即时送达）
+    const payload = { t: 'pm', from: m.from, text: m.text, ts: m.ts, gift: m.gift || null };
+    for (const [id, lp] of lobbyPlayers) {
+      if (lp.name === m.toName) {
+        const c = conns.get(id);
+        if (c && c.ws && c.ws.readyState === 1) send(c.ws, payload);
+      }
+    }
+    return;
+  }
+
   if (m.type === 'lobby') {
     if (m.action === 'pos') {
       // 同步其他 isolate 的大厅玩家位置
@@ -660,6 +672,16 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       send(ws, { t: 'friend_ok', id: to, name: String(msg.toName || '').slice(0, 12), accepted: true });
       break;
     }
+    case 'pm': {
+      // 私信实时转发：按昵称路由（broadcast 会送达所有 isolate，各自匹配本地的目标连接）
+      const from = String(msg.name || '游客').slice(0, 12);
+      const toName = String(msg.toName || '').slice(0, 12);
+      const text = String(msg.text || '').slice(0, CHAT_TEXT_MAX);
+      const gift = msg.gift && typeof msg.gift === 'object' ? msg.gift : null;
+      if (!toName || toName === from) return;
+      broadcast({ type: 'pm', toName, from, text, ts: Date.now(), gift });
+      break;
+    }
     case 'match': {
       // 匹配：加入队列，凑齐目标人数后自动建房开局。
       // size = 想要的房间人数（自由匹配 2~16 自选，排位赛固定 MATCH_PLAYERS）。
@@ -963,6 +985,26 @@ async function nameTaken(name: string, excludeKey: string): Promise<boolean> {
     if (u && u.name === name && String(e.key[1]) !== excludeKey) return true;
   }
   return false;
+}
+
+// 按昵称找用户（全表扫描；用户量级小，可接受）
+async function findUserByName(name: string) {
+  for await (const e of kv.list({ prefix: ['user'] })) {
+    const u = e.value as Record<string, any>;
+    if (u && u.name === name) return { phone: String(e.key[1]), user: u };
+  }
+  return null;
+}
+
+// ---------- 私信收件箱（KV，按昵称存，最多 100 条，拉取即清空） ----------
+async function pmInboxPush(name: string, msg: Record<string, any>) {
+  if (!name) return;
+  const key = ['pm', name];
+  const cur = await kv.get(key);
+  const arr: any[] = (cur.value as any[]) || [];
+  arr.push(msg);
+  if (arr.length > 100) arr.splice(0, arr.length - 100);
+  await kv.set(key, arr);
 }
 
 // 下发给前端的用户数据（不含手机号）；等级由经验实时计算（升级曲线放缓：180 经验/级）
@@ -1489,6 +1531,94 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     u.friends = friends;
     await kv.set(['user', auth.phone], u);
     return jsonResp({ ok: true, user: pubUser(u) });
+  }
+
+  // POST /api/pm/send { toName, text } —— 私信：写入对方收件箱 + 在线时 WS 实时投递
+  if (path === '/api/pm/send' && req.method === 'POST') {
+    const { toName, text } = await readBody(req);
+    const to = String(toName || '').trim().slice(0, 12);
+    const t = String(text || '').trim().slice(0, CHAT_TEXT_MAX);
+    if (!to) return jsonResp({ ok: false, msg: '接收方为空' }, 400);
+    if (!t) return jsonResp({ ok: false, msg: '内容为空' }, 400);
+    if (to === u.name) return jsonResp({ ok: false, msg: '不能给自己发私信' }, 400);
+    const msgItem = { from: u.name, text: t, ts: Date.now() };
+    await pmInboxPush(to, msgItem);
+    // 在线实时投递（broadcast 覆盖所有 isolate）
+    broadcast({ type: 'pm', toName: to, from: u.name, text: t, ts: msgItem.ts, gift: null });
+    return jsonResp({ ok: true });
+  }
+
+  // GET /api/pm/history —— 拉取并清空自己的私信收件箱（离线期间收到的私信）
+  if (path === '/api/pm/history' && req.method === 'GET') {
+    const key = ['pm', u.name];
+    const cur = await kv.get(key);
+    const arr: any[] = (cur.value as any[]) || [];
+    if (arr.length) await kv.set(key, []);
+    return jsonResp({ ok: true, d: arr });
+  }
+
+  // POST /api/gift/send { toName, kind, item } —— 赠送皮肤/枪械/技能（转移后自己失去）
+  if (path === '/api/gift/send' && req.method === 'POST') {
+    const { toName, kind, item } = await readBody(req);
+    const to = String(toName || '').trim().slice(0, 12);
+    const it = String(item || '');
+    const k = String(kind || '');
+    if (!to || !it || !['skin', 'gun', 'skill'].includes(k)) {
+      return jsonResp({ ok: false, msg: '参数错误' }, 400);
+    }
+    if (to === u.name) return jsonResp({ ok: false, msg: '不能送给自己' }, 400);
+    // 只能送给好友（客户端私信列表本来就只有好友，这里再兜底校验）
+    const friends: string[] = (u.friends as string[]) || [];
+    if (!friends.includes(to)) return jsonResp({ ok: false, msg: '只能赠送给好友' }, 400);
+    // 校验持有 & 装备状态
+    if (k === 'skin') {
+      const owned: string[] = (u.ownedSkins as string[]) || [];
+      if (it === 'skin_default') return jsonResp({ ok: false, msg: '初始皮肤不能赠送' }, 400);
+      if (!owned.includes(it)) return jsonResp({ ok: false, msg: '你没有这个皮肤' }, 400);
+      if (u.skin === it) return jsonResp({ ok: false, msg: '装备中的皮肤不能赠送，先换一个' }, 400);
+    } else if (k === 'gun') {
+      const owned: string[] = (u.ownedGuns as string[]) || [];
+      if (it === 'gun_pistol') return jsonResp({ ok: false, msg: '初始手枪不能赠送' }, 400);
+      if (!owned.includes(it)) return jsonResp({ ok: false, msg: '你没有这把枪' }, 400);
+      if (u.gun === it) return jsonResp({ ok: false, msg: '装备中的武器不能赠送，先换一把' }, 400);
+    } else {
+      const skills: string[] = (u.skills as string[]) || [];
+      if (!skills.includes(it)) return jsonResp({ ok: false, msg: '你没有这个技能' }, 400);
+    }
+    const target = await findUserByName(to);
+    if (!target) return jsonResp({ ok: false, msg: '找不到该好友（对方可能已改名）' }, 404);
+    const tu = target.user;
+    // 所有权转移：从我这删，给对方加（对方已有时跳过，但仍扣除我的）
+    let giftName = it;
+    if (k === 'skin') {
+      u.ownedSkins = ((u.ownedSkins as string[]) || []).filter((s) => s !== it);
+      const tOwned: string[] = (tu.ownedSkins as string[]) || [];
+      if (!tOwned.includes(it)) tOwned.push(it);
+      tu.ownedSkins = tOwned;
+      giftName = (SHOP_ITEMS[it] && SHOP_ITEMS[it].name) || it;
+    } else if (k === 'gun') {
+      u.ownedGuns = ((u.ownedGuns as string[]) || []).filter((s) => s !== it);
+      const tOwned: string[] = (tu.ownedGuns as string[]) || [];
+      if (!tOwned.includes(it)) tOwned.push(it);
+      tu.ownedGuns = tOwned;
+      giftName = (SHOP_ITEMS[it] && SHOP_ITEMS[it].name) || it;
+    } else {
+      u.skills = ((u.skills as string[]) || []).filter((s) => s !== it);
+      const tSkills: string[] = (tu.skills as string[]) || [];
+      if (!tSkills.includes(it)) tSkills.push(it);
+      tu.skills = tSkills;
+      giftName = SKILL_NAMES[it] || it;
+    }
+    // 升级记录不跟着转移（升级是个人的），清掉发送方的残留记录
+    const ups: Record<string, number> = u.upgrades || {};
+    if (ups[it]) { delete ups[it]; u.upgrades = ups; }
+    await kv.set(['user', auth.phone], u);
+    await kv.set(['user', target.phone], tu);
+    // 给对方收件箱塞一条礼物消息 + 在线实时通知
+    const giftMsg = { from: u.name, text: '', ts: Date.now(), gift: { kind: k, name: giftName } };
+    await pmInboxPush(to, giftMsg);
+    broadcast({ type: 'pm', toName: to, from: u.name, text: '', ts: giftMsg.ts, gift: giftMsg.gift });
+    return jsonResp({ ok: true, user: pubUser(u), giftName });
   }
 
   // POST /api/box/draw —— 抽一次盲盒（消耗 BOX_COST 枚 B 币）
