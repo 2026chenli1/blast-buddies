@@ -937,6 +937,9 @@
   .chat-item.chat-me .chat-name { color: #ffd166; }
   .chat-item .chat-text { color: #e2e8f0; }
   .chat-empty { font-size: 12px; color: #64748b; text-align: center; padding: 12px 0; }
+  .chat-day { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; }
+  .chat-day::before, .chat-day::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.12); }
+  .chat-day span { font-size: 10px; color: #8b95a7; white-space: nowrap; }
   .chat-input-row { display: flex; gap: 6px; padding: 8px; border-top: 1px solid rgba(255,255,255,.1); }
   .chat-input-row input {
     flex: 1; min-width: 0; padding: 7px 9px; font-size: 13px;
@@ -3253,7 +3256,20 @@ function escapeHtmlSafe(str) {
 }
 function chatTime(ts) {
   const d = new Date(ts || Date.now());
-  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return hm;   // 今天的消息只显示时间
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + hm; // 更早的消息带日期
+}
+function chatDayLabel(ts) {
+  const d = new Date(ts || Date.now());
+  const now = new Date();
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
+  if (days <= 0) return '今天';
+  if (days === 1) return '昨天';
+  const wd = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + wd;
 }
 function renderChat() {
   const list = document.getElementById('chat-list');
@@ -3262,17 +3278,27 @@ function renderChat() {
     list.innerHTML = '<div class="chat-empty">还没有人说话，来抢沙发 🛋️</div>';
     return;
   }
-  list.innerHTML = chatLog.map((m) => {
+  let html = '';
+  for (let i = 0; i < chatLog.length; i++) {
+    const m = chatLog[i];
+    const prev = chatLog[i - 1];
+    // 跨天时插入日期分隔条（保留最近 7 天记录，需要能看出消息是哪天的）
+    if (!prev || new Date(prev.ts).toDateString() !== new Date(m.ts).toDateString()) {
+      html += `<div class="chat-day"><span>${chatDayLabel(m.ts)}</span></div>`;
+    }
     const me = m.mine ? ' chat-me' : '';
-    return `<div class="chat-item${me}"><span class="chat-name">${escapeHtmlSafe(m.name)}</span>`
+    html += `<div class="chat-item${me}"><span class="chat-name">${escapeHtmlSafe(m.name)}</span>`
       + `<span style="color:#64748b;font-size:11px;">${chatTime(m.ts)}</span><br>`
       + `<span class="chat-text">${escapeHtmlSafe(m.text)}</span></div>`;
-  }).join('');
+  }
+  list.innerHTML = html;
   list.scrollTop = list.scrollHeight;   // 始终看最新
 }
 function pushChat(m) {
   chatLog.push(m);
-  if (chatLog.length > 60) chatLog.shift();
+  // 缓存 7 天历史（服务端按 7 天裁剪推送，这里容量对齐，避免本地被提前挤掉）
+  const cutoff = Date.now() - 7 * 86400000;
+  while (chatLog.length > 300 || (chatLog.length && chatLog[0].ts < cutoff)) chatLog.shift();
   const panel = document.getElementById('chat-panel');
   const open = panel && panel.style.display !== 'none';
   if (open) {
