@@ -704,6 +704,21 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       });
       break;
     }
+    case 'sig': {
+      // WebRTC P2P 信令转发（offer/answer/ICE 候选）：只在同房间成员间传递，
+      // 客户端按 payload.to === 自己的 slot 过滤。打通后 host↔guest 直连传输快照/输入，
+      // 绕过海外中转（国内玩家间 RTT 从 ~600ms 降到几十 ms）。WS 本体保留作信令 + 回退通道。
+      if (c && c.room) {
+        void touchRoom(c.room);
+        broadcast({
+          type: 'relay',
+          room: c.room,
+          from: connId,
+          payload: { t: 'sig', from: c.slot || 1, to: msg.to || 0, d: msg.d || null },
+        });
+      }
+      break;
+    }
     case 'input': {
       if (c && c.role === 'guest' && c.room) {
         void touchRoom(c.room);
