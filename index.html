@@ -21,7 +21,7 @@
   canvas {
     display: block;
     background: #0d1b2a;
-    cursor: crosshair;
+    cursor: default;
     touch-action: none;
   }
 
@@ -964,6 +964,50 @@
     background: rgba(8,15,26,.72);
     backdrop-filter: blur(3px);
     padding: 16px;
+    pointer-events: auto;
+  }
+
+
+  /* ---------- 盲盒抽奖动画 ---------- */
+  .box-stage {
+    position: relative;
+    width: 110px; height: 110px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .box-stage .box-svg { display: block; width: 80px; height: 80px; }
+  .box-stage .box-burst {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+  }
+  .box-stage #box-result-icon {
+    position: absolute;
+    width: 100%; height: 100%;
+    display: none; align-items: center; justify-content: center;
+    font-size: 54px;
+  }
+  .box-shake .box-svg { animation: boxShake .9s ease-in-out; }
+  @keyframes boxShake {
+    0%, 100% { transform: rotate(0deg); }
+    10%, 30%, 50%, 70%, 90% { transform: rotate(-9deg); }
+    20%, 40%, 60%, 80% { transform: rotate(9deg); }
+  }
+  .box-shake .box-burst { animation: boxBurst .7s ease-out .55s forwards; }
+  @keyframes boxBurst {
+    0% { opacity: 1; transform: scale(0.15); }
+    50% { opacity: 1; transform: scale(1.25); }
+    100% { opacity: 0; transform: scale(1.6); }
+  }
+  .box-revealed .box-svg { animation: boxOpen .35s ease forwards; }
+  @keyframes boxOpen {
+    0% { transform: translateY(0) rotate(0deg); }
+    100% { transform: translateY(-18px) rotate(-8deg); opacity: 0.35; }
+  }
+  .prize-pop { animation: prizePop .55s cubic-bezier(.175, .885, .32, 1.275) forwards; }
+  @keyframes prizePop {
+    0% { transform: scale(0); opacity: 0; }
+    55% { transform: scale(1.45); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
   }
   .modal-box {
     width: min(92vw, 400px);
@@ -1081,6 +1125,20 @@
     font-size: 11.5px; font-family: inherit; letter-spacing: 1px;
   }
   .lb-tab.active { background: #ffd166; color: #0f172a; font-weight: 800; border-color: #ffd166; }
+  /* ---------- 私信 ---------- */
+  .pm-friend { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+  .pm-friend:hover { border-color: #22d3ee; }
+  .pm-friend-name { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+  .pm-friend-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px; }
+  .pm-msg-list { max-height: 42vh; min-height: 160px; overflow-y: auto; background: rgba(0,0,0,.25); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .pm-bubble { max-width: 80%; padding: 7px 11px; border-radius: 12px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+  .pm-bubble.mine { align-self: flex-end; background: rgba(34,211,238,.16); border: 1px solid rgba(34,211,238,.35); color: #e0f2fe; border-bottom-right-radius: 4px; }
+  .pm-bubble.other { align-self: flex-start; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); color: #e2e8f0; border-bottom-left-radius: 4px; }
+  .pm-bubble .pm-gift-tag { display: block; margin-top: 4px; font-size: 11.5px; color: #f9a8d4; font-weight: 700; }
+  .pm-gift-list { max-height: 44vh; overflow-y: auto; }
+  .pm-gift-item { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 9px 12px; margin-bottom: 8px; }
+  .pm-input { flex: 1; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.16); border-radius: 8px; padding: 8px 10px; color: #e2e8f0; font-size: 13px; font-family: inherit; min-width: 0; }
+  .pm-input:focus { outline: none; border-color: #22d3ee; }
 </style>
 </head>
 <body>
@@ -1123,6 +1181,48 @@
       <button class="btn btn-secondary btn-small" id="friend-req-no" style="flex:1;">拒绝</button>
       <button class="btn btn-small" id="friend-req-yes" style="flex:1;background:#22c55e;">同意</button>
     </div>
+  </div>
+</div>
+
+<!-- 私信：好友列表 -->
+<div class="modal-mask" id="pm-list-modal" style="display:none;">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="modal-title">✉ 私信 · 我的好友</div>
+    <div id="pm-friend-list" style="max-height:52vh;overflow-y:auto;"></div>
+    <button class="btn btn-secondary btn-small" id="pm-list-close" style="width:100%;margin-top:10px;">关闭</button>
+  </div>
+</div>
+
+<!-- 私信：对话界面 -->
+<div class="modal-mask" id="pm-chat-modal" style="display:none;">
+  <div class="modal-box" style="max-width:360px;">
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px;">
+      <button id="pm-chat-back" aria-label="返回" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#cbd5e1;border-radius:8px;width:26px;height:26px;cursor:pointer;font-size:15px;line-height:1;padding:0;">‹</button>
+      <span>与 <span id="pm-chat-name" style="color:#22d3ee;"></span> 私信</span>
+    </div>
+    <div id="pm-msg-list" class="pm-msg-list"></div>
+    <div style="font-size:10.5px;color:#64748b;margin-top:6px;">对方在线时即时送达 · 登录后对方离线也能收到</div>
+    <div style="display:flex;gap:6px;margin-top:6px;">
+      <input type="text" id="pm-input" class="pm-input" maxlength="120" placeholder="说点什么…（Enter 发送）">
+      <button class="btn btn-small" id="pm-send-btn" style="background:#22c55e;">发送</button>
+      <button class="btn btn-small" id="pm-gift-btn" title="赠送物品" style="background:#f472b6;">🎁</button>
+    </div>
+  </div>
+</div>
+
+<!-- 私信：赠送选择器 -->
+<div class="modal-mask" id="pm-gift-modal" style="display:none;">
+  <div class="modal-box" style="max-width:360px;">
+    <div class="modal-title">赠送物品给 <span id="pm-gift-name" style="color:#f472b6;"></span></div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;justify-content:center;">
+      <button class="lb-tab pm-tab active" data-tab="skin">皮肤</button>
+      <button class="lb-tab pm-tab" data-tab="gun">枪械</button>
+      <button class="lb-tab pm-tab" data-tab="map">地图</button>
+      <button class="lb-tab pm-tab" data-tab="skill">技能</button>
+    </div>
+    <div id="pm-gift-list" class="pm-gift-list"></div>
+    <div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:8px;">赠送后你将失去该物品 · 装备中的物品不可赠送</div>
+    <button class="btn btn-secondary btn-small" id="pm-gift-close" style="width:100%;margin-top:10px;">关闭</button>
   </div>
 </div>
 
@@ -1172,6 +1272,7 @@
         </div>
         <button class="chat-btn" id="home-task-btn" title="每日任务"><svg viewBox="0 0 24 24" width="16" height="16" style="vertical-align:-3px;margin-right:4px;"><rect x="3" y="5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="2"/><path d="M9 15l2 2 4-4" stroke="currentColor" stroke-width="2" fill="none"/></svg>任务</button>
         <button class="chat-btn" id="home-chat-btn" style="position:relative;">聊天<span class="chat-unread" id="chat-unread">0</span></button>
+        <button class="chat-btn" id="home-pm-btn" style="position:relative;">私信<span class="chat-unread" id="pm-unread" style="display:none;">0</span></button>
       </div>
     </div>
 
@@ -1345,8 +1446,42 @@
         <div style="font-size:11px;color:#64748b;margin-bottom:12px;line-height:1.8;">
           奖池：技能 62% · 盲盒皮肤 18% · 金币 12% · 空奖 8%<br>累计击杀每 300 个敌人得 1 枚 B 币
         </div>
-        <div id="box-result" style="min-height:130px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.25);border-radius:12px;margin-bottom:12px;">
-          <div style="font-size:54px;" id="box-result-icon">🎁</div>
+        <div id="box-result" style="min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.25);border-radius:12px;margin-bottom:12px;overflow:hidden;">
+          <div class="box-stage" id="box-stage">
+            <svg class="box-svg" id="box-svg" viewBox="0 0 64 64" aria-hidden="true">
+              <defs>
+                <linearGradient id="boxGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#f9a8d4"/>
+                  <stop offset="1" stop-color="#f472b6"/>
+                </linearGradient>
+                <linearGradient id="lidGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#fde047"/>
+                  <stop offset="1" stop-color="#fbbf24"/>
+                </linearGradient>
+              </defs>
+              <rect x="10" y="24" width="44" height="30" rx="4" fill="url(#boxGrad)" stroke="#f472b6" stroke-width="2"/>
+              <path d="M10 34 L54 34" stroke="#f472b6" stroke-width="2"/>
+              <rect x="8" y="18" width="48" height="10" rx="2" fill="url(#lidGrad)" stroke="#f59e0b" stroke-width="2"/>
+              <circle cx="32" cy="28" r="5" fill="#ec4899"/>
+              <path d="M32 28 C32 28 26 20 32 20 C38 20 32 28 32 28 C32 28 38 36 32 36 C26 36 32 28 32 28" fill="#fbbf24" opacity="0.9"/>
+            </svg>
+            <div class="box-burst" id="box-burst" aria-hidden="true">
+              <svg viewBox="0 0 64 64" width="100%" height="100%">
+                <g stroke="#fde047" stroke-width="3" stroke-linecap="round">
+                  <line x1="32" y1="4" x2="32" y2="16"/>
+                  <line x1="32" y1="48" x2="32" y2="60"/>
+                  <line x1="4" y1="32" x2="16" y2="32"/>
+                  <line x1="48" y1="32" x2="60" y2="32"/>
+                  <line x1="12" y1="12" x2="20" y2="20"/>
+                  <line x1="44" y1="44" x2="52" y2="52"/>
+                  <line x1="52" y1="12" x2="44" y2="20"/>
+                  <line x1="20" y1="44" x2="12" y2="52"/>
+                </g>
+                <circle cx="32" cy="32" r="10" fill="none" stroke="#fbbf24" stroke-width="2"/>
+              </svg>
+            </div>
+            <div style="font-size:54px;position:absolute;display:none;" id="box-result-icon">🎁</div>
+          </div>
           <div style="font-size:14px;color:#94a3b8;margin-top:6px;" id="box-result-text">试试手气</div>
         </div>
         <button class="btn" id="box-draw-btn" style="margin-top:0;">🎲 抽一次（6 B币）</button>
@@ -3726,19 +3861,30 @@ function updateBoxBcoin() {
   if (btn) btn.disabled = (User.bcoin || 0) < 6;
 }
 function showBoxError(msg) {
+  const stage = document.getElementById('box-stage');
   const ic = document.getElementById('box-result-icon');
   const tx = document.getElementById('box-result-text');
-  if (ic) ic.textContent = '⚠️';
+  if (stage) stage.classList.remove('box-shake', 'box-revealed');
+  if (ic) { ic.classList.remove('prize-pop'); ic.style.display = 'none'; }
   if (tx) tx.innerHTML = '<span style="color:#f87171">' + escapeHtmlSafe(msg) + '</span>';
 }
 function renderBoxResult(prize) {
+  const stage = document.getElementById('box-stage');
   const ic = document.getElementById('box-result-icon');
   const tx = document.getElementById('box-result-text');
+  const svg = document.getElementById('box-svg');
   if (!ic || !tx) return;
+  if (stage) stage.classList.remove('box-shake');
+  if (svg) svg.style.display = 'block';
+  ic.classList.remove('prize-pop');
+  ic.style.display = 'flex';
+  void ic.offsetWidth; // 触发重排，让 prize-pop 可以重新播放
   if (prize.type === 'skill') { ic.textContent = '⚡'; tx.innerHTML = `获得额外技能 <b style="color:#fbbf24">${escapeHtml(prize.name)}</b>`; }
   else if (prize.type === 'coins') { ic.textContent = '🪙'; tx.innerHTML = `获得 <b style="color:#fbbf24">${prize.amount}</b> 金币${prize.fallback ? '（重复奖励折算）' : ''}`; }
   else if (prize.type === 'skin') { ic.textContent = '🎨'; tx.innerHTML = `获得盲盒专属皮肤 <b style="color:#f472b6">${escapeHtml(prize.name)}</b>`; }
   else { ic.textContent = '😢'; tx.textContent = '空奖，再试一次'; }
+  ic.classList.add('prize-pop');
+  if (stage) stage.classList.add('box-revealed');
   Sfx.powerup();
 }
 async function drawBox() {
@@ -3748,17 +3894,27 @@ async function drawBox() {
   boxBusy = true;
   const btn = document.getElementById('box-draw-btn');
   if (btn) btn.disabled = true;
+
+  const stage = document.getElementById('box-stage');
+  const icon = document.getElementById('box-result-icon');
+  const svg = document.getElementById('box-svg');
+  const text = document.getElementById('box-result-text');
+  if (stage) { stage.classList.remove('box-shake', 'box-revealed'); }
+  if (icon) { icon.classList.remove('prize-pop'); icon.style.display = 'none'; }
+  if (svg) svg.style.display = 'block';
+  if (text) text.textContent = '开启中…';
+  if (stage) { void stage.offsetWidth; stage.classList.add('box-shake'); }
+
+  // 动画至少播 1.1 秒，同时发请求，两者都完成才揭晓
+  const animMin = new Promise(r => setTimeout(r, 1100));
   try {
-    // 抽奖会扣 B 币，超时给到 25 秒：手机弱网或 Deno 冷启动都可能超过默认 8 秒，
-    // 被打断的话玩家以为抽失败了（其实服务端可能已经扣了币）。
-    const r = await api('/api/box/draw', {}, 25000);
+    const r = await Promise.all([api('/api/box/draw', {}, 25000), animMin]).then(v => v[0]);
     if (!r.ok) { showBoxError(r.msg || '抽奖失败'); return; }
     applyUser(r.user);
     renderBoxResult(r.prize);
     updateBoxBcoin();
     renderHomeUser();
   } catch (e) {
-    // 把真实原因说出来，别一律「网络错误」，否则没法定位问题
     const msg = (e && e.name === 'AbortError')
       ? '请求超时（网络较慢），B 币未被扣除，请重试'
       : ('抽奖失败：' + ((e && e.message) || '未知错误'));
@@ -3872,6 +4028,280 @@ async function onFriendOk(m) {
 document.getElementById('add-friend-btn').addEventListener('click', sendFriendReq);
 document.getElementById('friend-req-yes').addEventListener('click', () => answerFriendReq(true));
 document.getElementById('friend-req-no').addEventListener('click', () => answerFriendReq(false));
+
+// ---------- 私信与赠送 ----------
+// 消息存 localStorage bb_pm：{ 好友名: [ {from, text, ts, gift?} ] }，每个好友最多 100 条
+// 实时投递走大厅 WS（在线时），离线消息登录后由 /api/pm/history 拉取
+const PM = { current: null, tab: 'skin' };
+const PM_KIND_NAMES = { skin: '皮肤', gun: '枪械', map: '地图', skill: '技能' };
+let pmUnread = {};   // { 好友名: 未读数 }
+
+function pmLoad() { try { return JSON.parse(localStorage.getItem('bb_pm') || '{}'); } catch (e) { return {}; } }
+function pmSaveStore(d) { try { localStorage.setItem('bb_pm', JSON.stringify(d)); } catch (e) {} }
+function pmMsgs(name) { return pmLoad()[name] || []; }
+
+// 追加一条消息；自动去重（同发送方+同内容+15 秒内视为同一条），返回是否真的新增
+function pmAppend(name, msg) {
+  if (!name) return false;
+  const d = pmLoad();
+  const arr = d[name] || [];
+  const dup = arr.some((m) => m.from === msg.from && (m.text || '') === (msg.text || '')
+    && (m.gift ? m.gift.kind : '') === (msg.gift ? msg.gift.kind : '')
+    && Math.abs((m.ts || 0) - (msg.ts || 0)) < 15000);
+  if (dup) return false;
+  arr.push({ from: msg.from || '', text: msg.text || '', ts: msg.ts || Date.now(), gift: msg.gift || null });
+  if (arr.length > 100) arr.splice(0, arr.length - 100);
+  d[name] = arr;
+  pmSaveStore(d);
+  if (PM.current === name) renderPMChat();
+  else { pmUnread[name] = (pmUnread[name] || 0) + 1; pmUpdateBadge(); }
+  return true;
+}
+
+function pmUpdateBadge() {
+  const total = Object.values(pmUnread).reduce((a, b) => a + b, 0);
+  const b = document.getElementById('pm-unread');
+  if (b) { b.textContent = total > 99 ? '99+' : total; b.style.display = total ? 'inline-block' : 'none'; }
+}
+
+// 好友列表弹窗
+function renderPMFriendList() {
+  const listEl = document.getElementById('pm-friend-list');
+  if (!listEl) return;
+  const friends = (User.friends && User.friends.length) ? User.friends : [];
+  if (!friends.length) {
+    listEl.innerHTML = '<div style="text-align:center;color:#94a3b8;font-size:13px;padding:22px 0;">还没有好友<br><span style="font-size:11px;">在大厅里靠近其他玩家即可加好友</span></div>';
+    return;
+  }
+  listEl.innerHTML = friends.map((f) => {
+    const unread = pmUnread[f] || 0;
+    const msgs = pmMsgs(f);
+    const last = msgs.length ? msgs[msgs.length - 1] : null;
+    const preview = last
+      ? (last.gift ? '🎁 ' + (last.gift.name || '礼物') : (last.text || '').slice(0, 20))
+      : '开始聊天吧';
+    return `<div class="pm-friend" data-name="${escapeHtml(f)}">
+      <div><div class="pm-friend-name">${escapeHtml(f)}${unread ? ` <span class="chat-unread">${unread}</span>` : ''}</div>
+      <div class="pm-friend-sub">${escapeHtml(preview)}</div></div>
+      <div style="color:#22d3ee;font-size:18px;">›</div>
+    </div>`;
+  }).join('');
+  listEl.querySelectorAll('.pm-friend').forEach((el) => {
+    el.addEventListener('click', () => openPMChat(el.dataset.name));
+  });
+}
+async function openPMList() {
+  const modal = document.getElementById('pm-list-modal');
+  if (!modal) return;
+  renderPMFriendList();
+  modal.style.display = 'flex';
+  // 登录了就顺带拉一下离线期间的私信（服务器收件箱）
+  await pmPullHistory();
+  renderPMFriendList();
+}
+
+// 对话弹窗
+function openPMChat(name) {
+  if (!name) return;
+  PM.current = name;
+  pmUnread[name] = 0;
+  pmUpdateBadge();
+  const nm = document.getElementById('pm-chat-name');
+  if (nm) nm.textContent = name;
+  const listModal = document.getElementById('pm-list-modal');
+  if (listModal) listModal.style.display = 'none';
+  const modal = document.getElementById('pm-chat-modal');
+  if (modal) modal.style.display = 'flex';
+  renderPMChat();
+}
+function renderPMChat() {
+  const listEl = document.getElementById('pm-msg-list');
+  if (!listEl || !PM.current) return;
+  const me = User.name || '游客';
+  const msgs = pmMsgs(PM.current);
+  if (!msgs.length) {
+    listEl.innerHTML = `<div style="text-align:center;color:#64748b;font-size:12px;padding:26px 0;">和 ${escapeHtml(PM.current)} 说点什么吧</div>`;
+  } else {
+    listEl.innerHTML = msgs.map((m) => {
+      const mine = m.from === me;
+      const t = new Date(m.ts || Date.now());
+      const hh = String(t.getHours()).padStart(2, '0'), mm = String(t.getMinutes()).padStart(2, '0');
+      const giftTag = m.gift
+        ? `<span class="pm-gift-tag">🎁 赠送了 ${escapeHtml(m.gift.name || '礼物')}（${PM_KIND_NAMES[m.gift.kind] || '物品'}）</span>` : '';
+      const body = m.text ? escapeHtml(m.text) : '';
+      return `<div class="pm-bubble ${mine ? 'mine' : 'other'}">${body}${giftTag}<span style="display:block;font-size:10px;opacity:.55;margin-top:3px;text-align:${mine ? 'right' : 'left'};">${hh}:${mm}</span></div>`;
+    }).join('');
+  }
+  listEl.scrollTop = listEl.scrollHeight;
+}
+async function sendPM() {
+  const input = document.getElementById('pm-input');
+  if (!input || !PM.current) return;
+  const text = (input.value || '').trim().slice(0, 120);
+  if (!text) return;
+  const me = User.name || '游客';
+  pmAppend(PM.current, { from: me, text, ts: Date.now() });
+  input.value = '';
+  // 实时投递（对方在线时立刻收到）
+  if (Lobby.ws && Lobby.ws.readyState === 1) {
+    try { Lobby.ws.send(JSON.stringify({ t: 'pm', toName: PM.current, name: me, text })); } catch (e) { /* 走持久化 */ }
+  }
+  // 持久化（登录后对方离线也能在下次拉取时收到）
+  if (User.logged) {
+    try { await api('/api/pm/send', { toName: PM.current, text }); } catch (e) { /* 已本地保存，不提示 */ }
+  }
+}
+// 收到对方的私信（WS 实时）
+async function onPM(m) {
+  const from = String(m.from || '').slice(0, 12);
+  if (!from || from === (User.name || '游客')) return;
+  const msg = { from, text: String(m.text || '').slice(0, 120), ts: m.ts || Date.now(), gift: m.gift || null };
+  // 收到地图：直接存进我的地图列表
+  if (msg.gift && msg.gift.kind === 'map' && msg.gift.data) pmReceiveMap(msg.gift);
+  // 收到皮肤/枪/技能礼物：服务器已转移所有权，刷新账号数据
+  if (msg.gift && (msg.gift.kind === 'skin' || msg.gift.kind === 'gun' || msg.gift.kind === 'skill') && User.logged) {
+    try { const r = await api('/api/user/me'); if (r.ok && r.user) applyUser(r.user); } catch (e) {}
+  }
+  pmAppend(from, msg);
+  addPopup(W / 2, H * 0.38, from + (msg.gift ? ' 送给你 ' + (msg.gift.name || '礼物') + '！' : ' 发来私信'), '#22d3ee');
+  Sfx.powerup();
+}
+// 收到别人赠送的地图 → 存入 bb_maps（重名自动加后缀）
+function pmReceiveMap(gift) {
+  try {
+    const data = gift.data;
+    if (!data || !Array.isArray(data.cells)) return;
+    const maps = meLoad();
+    let name = String(data.name || '好友地图').slice(0, 20);
+    while (maps.some((mp) => mp.name === name)) name = name.slice(0, 18) + '_礼';
+    maps.push({ name, cols: data.cols || 16, rows: data.rows || 10, cells: data.cells, lives: data.lives || 3 });
+    meSave(maps);
+  } catch (e) {}
+}
+// 拉取服务器收件箱里的离线私信（登录后）
+async function pmPullHistory() {
+  if (!User.logged) return false;
+  try {
+    const r = await api('/api/pm/history');
+    if (r.ok && Array.isArray(r.d)) {
+      let changed = false;
+      for (const msg of r.d) { if (pmAppend(String(msg.from || '').slice(0, 12), msg)) changed = true; }
+      if (changed) { renderPMFriendList(); pmUpdateBadge(); }
+      return changed;
+    }
+  } catch (e) {}
+  return false;
+}
+
+// ---------- 赠送 ----------
+function openGiftPicker() {
+  if (!PM.current) return;
+  const nm = document.getElementById('pm-gift-name');
+  if (nm) nm.textContent = PM.current;
+  const modal = document.getElementById('pm-gift-modal');
+  if (modal) modal.style.display = 'flex';
+  renderGiftList();
+}
+function pmGiftItems() {
+  const items = [];
+  if (PM.tab === 'skin') {
+    for (const id of (User.ownedSkins || [])) {
+      if (id === 'skin_default' || id === User.skin) continue;   // 初始皮肤/装备中不可赠
+      const d = SKIN_DEFS[id];
+      if (d) items.push({ kind: 'skin', id, name: d.name, icon: d.skill.icon, sub: '皮肤' });
+    }
+  } else if (PM.tab === 'gun') {
+    for (const id of (User.ownedGuns || [])) {
+      if (id === 'gun_pistol' || id === User.gun || id === User.gun2) continue;
+      const d = GUN_DEFS[id];
+      if (d) items.push({ kind: 'gun', id, name: d.name, icon: '🔫', sub: '枪械' });
+    }
+  } else if (PM.tab === 'skill') {
+    for (const id of (User.skills || [])) {
+      const d = SKIN_DEFS[id];
+      items.push({ kind: 'skill', id, name: d ? d.skill.name : id, icon: d ? d.skill.icon : '✨', sub: '技能' });
+    }
+  } else {
+    for (const mp of meLoad()) items.push({ kind: 'map', id: mp.name, name: mp.name, icon: '🗺️', sub: `地图 ${mp.cols}×${mp.rows}` });
+  }
+  return items;
+}
+function renderGiftList() {
+  const el = document.getElementById('pm-gift-list');
+  if (!el) return;
+  const items = pmGiftItems();
+  if (!items.length) {
+    const hint = PM.tab === 'skill' ? '还没有盲盒技能' : PM.tab === 'map' ? '还没有创建地图' : '没有可赠送的物品（装备中的不可赠）';
+    el.innerHTML = `<div style="text-align:center;color:#64748b;font-size:12px;padding:20px 0;">${hint}</div>`;
+    return;
+  }
+  el.innerHTML = items.map((it) => `
+    <div class="pm-gift-item">
+      <span style="font-size:13px;color:#e2e8f0;">${it.icon} ${escapeHtml(it.name)} <span style="color:#94a3b8;font-size:11px;">${it.sub}</span></span>
+      <button class="btn btn-small" style="background:#f472b6;" data-kind="${it.kind}" data-id="${escapeHtml(it.id)}" data-name="${escapeHtml(it.name)}">赠送</button>
+    </div>`).join('');
+  el.querySelectorAll('button[data-kind]').forEach((b) => {
+    b.addEventListener('click', () => confirmGift({ kind: b.dataset.kind, id: b.dataset.id, name: b.dataset.name }));
+  });
+}
+async function confirmGift(it) {
+  const to = PM.current;
+  if (!to || !it) return;
+  // 地图：纯本地数据，直接通过 WS 把地图数据发给对方（需要对方在线）
+  if (it.kind === 'map') {
+    const map = meLoad().find((mp) => mp.name === it.id);
+    if (!map) { alert('找不到这张地图'); return; }
+    if (!Lobby.ws || Lobby.ws.readyState !== 1) { alert('对方不在线，地图赠送需要对方在线接收'); return; }
+    if (!confirm(`确定把地图「${it.name}」送给 ${to} 吗？（你的地图不会被删除，对方会得到一份副本）`)) return;
+    try {
+      Lobby.ws.send(JSON.stringify({
+        t: 'pm', toName: to, name: User.name || '游客', text: '',
+        gift: { kind: 'map', name: it.name, data: { name: map.name, cols: map.cols, rows: map.rows, cells: map.cells, lives: map.lives } },
+      }));
+      pmAppend(to, { from: User.name || '游客', text: '', ts: Date.now(), gift: { kind: 'map', name: it.name } });
+      renderGiftList();
+    } catch (e) { alert('发送失败，请重试'); }
+    return;
+  }
+  // 皮肤 / 枪械 / 技能：服务器转移所有权（需登录）
+  if (!User.logged) { alert('登录后才能赠送皮肤/枪械/技能'); return; }
+  if (!confirm(`确定把「${it.name}」送给 ${to} 吗？送出后你将失去它`)) return;
+  try {
+    const r = await api('/api/gift/send', { toName: to, kind: it.kind, item: it.id }, 12000);
+    if (r.ok) {
+      applyUser(r.user);   // 本地库存立刻更新（自己没有了）
+      pmAppend(to, { from: User.name || '游客', text: '', ts: Date.now(), gift: { kind: it.kind, name: r.giftName || it.name } });
+      renderGiftList();
+      addPopup(W / 2, H * 0.4, '已把「' + (r.giftName || it.name) + '」送给 ' + to, '#f9a8d4');
+    } else alert(r.msg || '赠送失败');
+  } catch (e) { alert('赠送失败，请稍后再试'); }
+}
+
+// 私信相关事件绑定
+document.getElementById('home-pm-btn').addEventListener('click', () => { ensureAudio(); openPMList(); });
+document.getElementById('pm-list-close').addEventListener('click', () => {
+  document.getElementById('pm-list-modal').style.display = 'none';
+});
+document.getElementById('pm-chat-back').addEventListener('click', () => {
+  document.getElementById('pm-chat-modal').style.display = 'none';
+  openPMList();
+});
+document.getElementById('pm-send-btn').addEventListener('click', sendPM);
+document.getElementById('pm-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); sendPM(); }
+  e.stopPropagation();   // 别让游戏热键吃掉输入
+});
+document.getElementById('pm-gift-btn').addEventListener('click', openGiftPicker);
+document.getElementById('pm-gift-close').addEventListener('click', () => {
+  document.getElementById('pm-gift-modal').style.display = 'none';
+});
+document.querySelectorAll('.pm-tab').forEach((b) => {
+  b.addEventListener('click', () => {
+    PM.tab = b.dataset.tab || 'skin';
+    document.querySelectorAll('.pm-tab').forEach((x) => x.classList.toggle('active', x === b));
+    renderGiftList();
+  });
+});
 
 // ---------- 局后结算：上报得分，发金币/经验 ----------
 async function reportResult() {
@@ -4662,6 +5092,55 @@ function respawnPlayer(p) {
   updateHUD();
 }
 
+// ---------- 怪物 AI（任务#140）----------
+// 怪物等级：每 10 波提升一档（第 1-10 波 Lv1，第 11-20 波 Lv2，以此类推）
+// 等级影响：血量、攻击力、协作包抄强度（见 enemySteer）
+function enemyTier() { return Math.floor((G.wave - 1) / 10) + 1; }
+
+// 怪物转向 AI：不再直线傻冲——
+//   1) 协作包抄：高等级时各自瞄准玩家周围不同方位的"包抄点"（黄金角分配，天然分散合围）
+//   2) 障碍规避：感知圈内的挡路障碍 → 沿切线绕行（每个怪有自己的绕行方向偏好，不会整群同侧卡死）
+//   3) 近身游走：进入攻击圈后不再直线顶脸，横向绕着玩家摆动走位
+function enemySteer(e, t, dt) {
+  const tier = e.tier || 1;
+  const coord = Math.min(1, (tier - 1) * 0.35);   // 团体协作系数：等级越高越会包抄
+  const dx = t.x - e.x, dy = t.y - e.y;
+  const d = Math.hypot(dx, dy) || 1;
+  let ax = dx / d, ay = dy / d;
+  // 1) 协作包抄：距离还远时瞄准自己的包抄点，靠近后再直接扑向玩家
+  if (coord > 0 && d > 160) {
+    const ga = (e.id * 2.39996) % TAU;            // 黄金角：任意 id 组合都均匀散开
+    const orbit = 40 + (e.id % 7) * 10;
+    const gx = t.x + Math.cos(ga) * orbit * coord - e.x;
+    const gy = t.y + Math.sin(ga) * orbit * coord - e.y;
+    const gd = Math.hypot(gx, gy) || 1;
+    ax = gx / gd; ay = gy / gd;
+  }
+  // 2) 障碍规避
+  for (const ob of G.obstacles) {
+    const ox = ob.x - e.x, oy = ob.y - e.y;
+    const od = Math.hypot(ox, oy) || 1;
+    const sense = e.r + ob.r + 26 + tier * 4;     // 等级越高预判越远
+    if (od >= sense) continue;
+    const nx = ox / od, ny = oy / od;
+    const ahead = nx * ax + ny * ay;              // >0 表示障碍挡在去路上
+    if (ahead < 0.3) continue;
+    const w = (1 - od / sense) * Math.min(1, ahead * 2);
+    const s = e.avoidDir || 1;
+    ax += -ny * s * w * 1.8 + nx * w * 0.4;       // 切向绕行 + 少量径向排斥防蹭墙
+    ay += nx * s * w * 1.8 + ny * w * 0.4;
+  }
+  // 3) 近身游走：贴到攻击距离后横向摆动，绕着玩家转圈而不是直顶
+  if (d < 84 + tier * 6) {
+    const px = -dy / d, py = dx / d;              // 去路方向的垂直方向
+    const osc = Math.sin(G.time * 2.6 + (e.phase || 0));
+    const amt = (0.45 + coord * 0.55) * osc;
+    ax += px * amt; ay += py * amt;
+  }
+  const m = Math.hypot(ax, ay) || 1;
+  return { x: ax / m, y: ay / m };
+}
+
 function createEnemy(type, x, y) {
   const base = {
     grunt:  { r: 17, hp: 1, speed: 1.0,  score: 10,  color: '#f94144', name: '小怪' },
@@ -4669,20 +5148,27 @@ function createEnemy(type, x, y) {
     tank:   { r: 27, hp: 4, speed: 0.5,  score: 40,  color: '#9d4edd', name: '坦克' },
   }[type] || { r: 17, hp: 1, speed: 1.0, score: 10, color: '#f94144', name: '小怪' };
   const speedScale = 1 + (G.wave - 1) * 0.06;
+  // 每 10 波升一档：血量 +50%/档、攻击力约 +1/两档（上限 3）、分数 +40%/档
+  const tier = enemyTier();
+  const hp = Math.round(base.hp * (1 + (tier - 1) * 0.5));
   return {
     id: ++G.bulletSeq,   // 联机快照按 id 匹配，保证客机端对象身份稳定
     type, x, y,
     r: base.r,
-    hp: base.hp,
-    maxHp: base.hp,
-    speed: CFG.enemySpeedBase * base.speed * speedScale + rand(0, CFG.enemySpeedRand),
-    score: base.score,
+    hp,
+    maxHp: hp,
+    speed: CFG.enemySpeedBase * base.speed * speedScale * (1 + (tier - 1) * 0.04) + rand(0, CFG.enemySpeedRand),
+    dmg: Math.min(3, 1 + Math.floor((tier - 1) / 2)),  // 接触伤害随等级提升
+    score: Math.round(base.score * (1 + (tier - 1) * 0.4)),
+    tier,                                            // 怪物等级（绘制徽章用，联机同步）
     color: base.color,
     name: base.name,
     angle: 0,
     anim: rand(0, TAU),
     flash: 0,
     damageCooldown: 0,
+    avoidDir: Math.random() < 0.5 ? -1 : 1,         // 绕障方向偏好（个体差异，防整群同侧卡死）
+    phase: rand(0, TAU),                            // 近身游走的摆动相位（个体差异）
     frozen: 0,       // 冰冻剩余时间（期间无法移动）
     slow: 0,         // 减速剩余时间（移速减半，与冻结区分）
     burn: 0,         // 灼烧剩余时间（持续掉血）
@@ -5378,12 +5864,13 @@ function update(dt) {
     e.slow = Math.max(0, (e.slow || 0) - dt);   // 樱花弹幕的减速
     const t = nearestAlivePlayer(e.x, e.y);
     if (t) {
-      const a = Math.atan2(t.y - e.y, t.x - e.x);
-      e.angle = a;
+      // 怪物 AI：绕障 + 近身游走 + 协作包抄（不再直线傻冲），方向由 enemySteer 计算
+      const dir = enemySteer(e, t, dt);
+      e.angle = Math.atan2(t.y - e.y, t.x - e.x);
       if (e.frozen <= 0) {
         const sp = e.speed * (e.slow > 0 ? 0.5 : 1); // 减速：移速减半（与冻结的完全禁止移动区分）
-        e.x += Math.cos(a) * sp * dt;
-        e.y += Math.sin(a) * sp * dt;
+        e.x += dir.x * sp * dt;
+        e.y += dir.y * sp * dt;
       }
     }
     // 障碍推挤（敌人会被箱子挡住）
@@ -5411,9 +5898,10 @@ function update(dt) {
         // 推开敌人，不让其与玩家重叠
         e.x += (e.x - p.x) * push;
         e.y += (e.y - p.y) * push;
-        // 造成伤害（有冷却）
+        // 造成伤害（有冷却）；攻击力随怪物等级提升（e.dmg，Lv1=1 → Lv5+=3）
         if (p.invuln <= 0 && e.damageCooldown <= 0) {
-          damagePlayer(p, 1);
+          damagePlayer(p, e.dmg || 1);
+          if ((e.dmg || 1) > 1) addPopup(p.x, p.y - p.r - 14, `-${e.dmg}`, '#ff6b6b');
           e.damageCooldown = 0.8;
         }
       }
@@ -5728,7 +6216,12 @@ function startWave() {
   if (G.gm === 'tdm') return;  G.wave++;
   const banner = document.getElementById('wave-banner');
   const isBoss = G.wave % CFG.bossEvery === 0;
-  banner.textContent = isBoss ? `⚠ 第 ${G.wave} 波 · BOSS 来袭 ⚠` : `第 ${G.wave} 波`;
+  // 每 10 波怪物升档：第 11/21/31... 波开头提示"怪物进化"
+  const tierUp = G.wave > 10 && (G.wave - 1) % 10 === 0;
+  banner.textContent = isBoss
+    ? `⚠ 第 ${G.wave} 波 · BOSS 来袭${tierUp ? ' · 怪物进化!' : ''} ⚠`
+    : `第 ${G.wave} 波${tierUp ? ` · 怪物进化 Lv${enemyTier()}!` : ''}`;
+  if (tierUp) Sfx.bossAlarm();
   banner.classList.toggle('boss', isBoss);
   banner.classList.remove('show');
   void banner.offsetWidth;
@@ -6218,7 +6711,12 @@ function drawPlayer(p) {
   ctx.ellipse(0, 4, p.r, p.r * 0.8, 0, 0, TAU);
   ctx.fill();
 
-  drawSkinDeco(ctx, p.r, c, G.time); // 皮肤主题装饰（画在身体下层 → 像从头顶长出来）
+  // 皮肤主题装饰：在身体下层绘制，且固定朝上、不随枪口旋转，
+  // 避免皇冠/犄角等被枪口方向带到身体侧面而"聚在一边"。
+  ctx.save();
+  ctx.rotate(-p.angle);
+  drawSkinDeco(ctx, p.r, c, G.time);
+  ctx.restore();
 
   // 身体
   const grad = ctx.createRadialGradient(-p.r*0.3, -p.r*0.3, p.r*0.2, 0, 0, p.r);
@@ -6451,6 +6949,35 @@ function drawEnemies() {
       ctx.moveTo(e.r*0.35, -e.r*0.45);
       ctx.lineTo(e.r*0.05, -e.r*0.35);
       ctx.stroke();
+    }
+
+    // 怪物等级徽章（Lv2+ 才显示）+ 受损血条（多血量怪）
+    const et = e.tier || 1;
+    if (et > 1 || (e.maxHp > 1 && e.hp < e.maxHp)) {
+      const topY = -e.r - (et > 1 ? 16 : 8);
+      if (et > 1) {
+        const label = 'Lv' + et;
+        ctx.font = '900 10px system-ui,-apple-system,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const tw = ctx.measureText(label).width + 10;
+        ctx.fillStyle = et >= 3 ? '#ff6b6b' : '#ffd166';
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(-tw / 2, -e.r - 20, tw, 13, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillText(label, 0, -e.r - 13.5);
+      }
+      if (e.maxHp > 1 && e.hp < e.maxHp) {
+        const bw = e.r * 1.6, bh = 4;
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        ctx.fillRect(-bw / 2, topY, bw, bh);
+        ctx.fillStyle = e.hp / e.maxHp > 0.4 ? '#7ee787' : '#ff6b6b';
+        ctx.fillRect(-bw / 2, topY, bw * Math.max(0, e.hp / e.maxHp), bh);
+      }
     }
 
     if (e.flash > 0) {
@@ -7227,6 +7754,8 @@ function startLobbyWorld() {
       if (m.t === 'friend_req') { if (typeof onFriendReq === 'function') onFriendReq(m); return; }
       if (m.t === 'friend_ok') { if (typeof onFriendOk === 'function') onFriendOk(m); return; }
       if (m.t === 'friend_fail') { alert(m.msg || '对方已离开'); return; }
+      // 私信 / 礼物（实时）
+      if (m.t === 'pm') { if (typeof onPM === 'function') onPM(m); return; }
       if (m.t === 'lobby_list') {
         if (m.me) Lobby.wsId = m.me; // 服务器告知我的连接 id，用于过滤自己
         const d = m.d || {};
@@ -7757,6 +8286,7 @@ function snapshotState() {
     })),
     enemies: G.enemies.map(e => ({
       id: e.id, t: e.type, x: R(e.x), y: R(e.y), r: R(e.r), hp: e.hp, maxHp: e.maxHp,
+      tier: e.tier || 1, dmg: e.dmg || 1,
       speed: R(e.speed), color: e.color,
       angle: A(e.angle), anim: A(e.anim), flash: A(e.flash), damageCooldown: A(e.damageCooldown),
       frozen: A(e.frozen), burn: A(e.burn), slow: A(e.slow),
@@ -7913,9 +8443,10 @@ function applyNetState(s) {
     for (const se of s.enemies) {
       eSeen.add(se.id);
       let e = eById.get(se.id);
-      if (!e) { e = { id: se.id, type: se.t, score: 10, name: '', x: se.x, y: se.y }; G.enemies.push(e); }
+      if (!e) { e = { id: se.id, type: se.t, tier: se.tier || 1, dmg: se.dmg || 1, score: 10, name: '', x: se.x, y: se.y }; G.enemies.push(e); }
       e._tx = se.x; e._ty = se.y;
       e.type = se.t; e.r = se.r; e.hp = se.hp; e.maxHp = se.maxHp;
+      e.tier = se.tier || 1; e.dmg = se.dmg || 1;   // 怪物等级/攻击力：客机端绘制徽章用
       e.speed = se.speed; e.color = se.color;
       e.angle = se.angle; e.anim = se.anim; e.flash = se.flash; e.damageCooldown = se.damageCooldown;
       e.frozen = se.frozen || 0; e.burn = se.burn || 0; e.slow = se.slow || 0;
@@ -8120,6 +8651,7 @@ function show(el) { el.classList.remove('hidden'); }
 function hide(el) { el.classList.add('hidden'); }
 
 function showMenu() {
+  document.querySelector('canvas').style.cursor = 'default';
   G.state = 'menu';
   G.players = [];
   G.boss = null;
@@ -8188,6 +8720,7 @@ function startGame() {
   G.gm = (G.mode === 'net' && NET.gm) ? NET.gm : 'coop';
   resetDomCache();
   G.state = 'playing';
+  document.querySelector('canvas').style.cursor = 'crosshair';
   G.score = 0;
   G.wave = 0;
   G.time = 0;
@@ -8270,6 +8803,7 @@ function pauseGame() {
   if (G.state !== 'playing') return;
   if (NET.role === 'guest') return; // guest 无权暂停
   G.state = 'paused';
+  document.querySelector('canvas').style.cursor = 'default';
   mouse.down = false;
   show(document.getElementById('pause-overlay'));
 }
@@ -8278,12 +8812,14 @@ function resumeGame() {
   if (G.state !== 'paused') return;
   if (NET.role === 'guest') return; // guest 无权恢复
   G.state = 'playing';
+  document.querySelector('canvas').style.cursor = 'crosshair';
   hide(document.getElementById('pause-overlay'));
 }
 
 function gameOver() {
   if (G.state !== 'playing') return;
   G.state = 'over';
+  document.querySelector('canvas').style.cursor = 'default';
   mouse.down = false;
   Sfx.gameover();
   G.shake = 18;
@@ -9259,9 +9795,17 @@ renderChallenge();
 renderLeaderboard(document.getElementById('lb-list-start'));
 requestAnimationFrame(loop);
 
-// 本地调试句柄（仅 localhost 暴露，线上不挂任何全局）
-if (location.hostname === 'localhost') {
-  window.__bb = { NET, G, startGame, netCreate, netJoin, hasOpenDc, netPingSamples: () => netPingSamples };
+// 本地调试句柄（仅 localhost/127.0.0.1 暴露，线上不挂任何全局）
+if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+  window.__bb = {
+    NET, G, Mobile, setMobile, startGame, startSolo, netCreate, netJoin, hasOpenDc,
+    netPingSamples: () => netPingSamples,
+    // 怪物 AI 调试钩子（任务#140 验证用）
+    createEnemy, enemySteer, enemyTier, update, damagePlayer, startWave, killEnemy,
+    // 私信/赠送调试钩子（任务#139 验证用）
+    User, PM, Lobby, openPMList, openPMChat, renderPMChat, sendPM, onPM,
+    openGiftPicker, renderGiftList, confirmGift, pmAppend, pmLoad, meLoad, meSave, applyUser,
+  };
 }
 
 })();
