@@ -135,10 +135,14 @@
   .overlay > *:first-child { margin-top: auto; }
   .overlay > *:last-child { margin-bottom: auto; }
 
-  /* 大厅覆盖层：铺满无内边距，让 #home-view 自由定位 */
-  #start-overlay { display: block; padding: 0; overflow: hidden; background: transparent; backdrop-filter: none; }
+  /* 大厅覆盖层：铺满无内边距，让 #home-view 自由定位。
+     pointer-events:none 让空白区域触摸穿透到 canvas（大厅摇杆），
+     只有真正的交互控件恢复 auto。 */
+  #start-overlay { display: block; padding: 0; overflow: hidden; background: transparent; backdrop-filter: none; pointer-events: none; }
   #start-overlay > #home-view { margin: 0; position: absolute; inset: 0; }
-  #start-overlay > #net-panel { margin: 0; position: absolute; inset: 0; background: rgba(8,15,26,.75); backdrop-filter: blur(6px); }
+  #start-overlay > #net-panel { margin: 0; position: absolute; inset: 0; background: rgba(8,15,26,.75); backdrop-filter: blur(6px); pointer-events: auto; }
+  #home-view .home-user, #home-view .home-top-btns, #home-view .daily-map-card,
+  #home-view .home-bottom, #home-view .challenge-card { pointer-events: auto; }
 
   .game-title {
     font-size: clamp(36px, 7vw, 72px);
@@ -230,6 +234,15 @@
   }
   .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #d89b00, 0 14px 30px rgba(255,183,3,.45); }
   .btn:active { transform: translateY(3px); box-shadow: 0 3px 0 #d89b00; }
+  /* 按不了的按钮必须一眼看出灰色 */
+  .btn:disabled, button:disabled, .top-icon-btn:disabled, .nav-icon:disabled {
+    opacity: .4;
+    filter: grayscale(.75);
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+    pointer-events: none;
+  }
   .btn-small { font-size: 15px; padding: 9px 22px; }
   .btn-secondary {
     margin-top: 12px;
@@ -560,8 +573,6 @@
   }
   @keyframes bossFillPulse { from { filter: brightness(1); } to { filter: brightness(1.4); } }
 
-  .tip { position: fixed; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 12.5px; color: rgba(255,255,255,.35); z-index: 5; pointer-events: none; }
-  .credit { position: fixed; bottom: 12px; right: 16px; font-size: 11px; color: rgba(255,255,255,.22); z-index: 5; pointer-events: none; }
 
   /* ---------- 主界面（Roblox 风格大厅） ---------- */
   #home-view {
@@ -845,24 +856,6 @@
   .nav-icon:hover { background: rgba(255,255,255,.22); }
   .nav-icon:active { transform: scale(0.9); }
 
-  /* 左下角信息 */
-  .home-footer {
-    position: absolute; bottom: 14px; left: 14px;
-    display: flex; align-items: flex-end; gap: 16px;
-  }
-  .home-logo { display: flex; align-items: center; gap: 10px; }
-  .logo-avatar {
-    width: 40px; height: 40px;
-    background: rgba(255,255,255,.15);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 10px rgba(0,0,0,.15);
-  }
-  .logo-title { font-size: 15px; font-weight: 900; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,.3); }
-  .logo-sub { font-size: 11px; color: rgba(255,255,255,.65); }
-  .home-likes { display: flex; gap: 10px; font-size: 11px; color: rgba(255,255,255,.75); font-weight: 700; }
-  .home-likes span { display: flex; align-items: center; gap: 3px; }
-
   /* 控制说明与排行榜（大厅下方折叠区） */
   #home-view > .controls-grid { display: none !important; }
   #home-view > .lb-wrap {
@@ -893,9 +886,13 @@
     #home-view .home-actions { gap: 10px; }
     #home-view .home-actions .btn { font-size: 16px; padding: 12px 26px; }
     #home-view .challenge-card { top: 64px; right: 8px; width: min(300px, 86vw); max-height: 46vh; overflow: auto; }
-    #home-view .home-footer .home-likes { display: none; }
     #home-view .home-user-card { max-width: 40vw; font-size: 12px; }
-    #home-view .home-top-btns { top: 8px; right: 8px; gap: 4px; }
+    /* 图标按钮移到右下导航上方竖排：top:8 会压住等级卡/任务/聊天，叠一起的元凶 */
+    #home-view .home-top-btns { top: auto; bottom: 96px; right: 6px; gap: 5px; flex-direction: column; }
+    /* 右栏（等级卡+任务+聊天）竖排，不再横向挤爆 360px 小屏 */
+    #home-view .home-top-right { flex-direction: column; align-items: flex-end; }
+    /* 用户卡下移，避开换行后的金币/在线/B币 pills */
+    #home-view .home-user { top: 108px; left: 8px; }
     #home-view .top-icon-btn { width: 32px; height: 32px; }
 
     /* ---------- 游戏内 HUD：窄屏要整体缩小 ----------
@@ -1236,21 +1233,6 @@
       <button class="top-icon-btn" id="shop-btn" title="商城"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="6" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 10h18" stroke="currentColor" stroke-width="2"/></svg></button>
       <button class="top-icon-btn sound-btn sound-icon" id="sound-menu-btn" title="音效：开"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path d="M16 8a5 5 0 0 1 0 8" stroke="currentColor" stroke-width="2" fill="none"/></svg></button>
       <button class="top-icon-btn" id="mode-switch-btn" title="切换手机版"><svg viewBox="0 0 24 24" width="18" height="18"><rect x="6" y="2" width="12" height="20" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 18h4" stroke="currentColor" stroke-width="2"/></svg></button>
-    </div>
-
-    <!-- 左下角信息 -->
-    <div class="home-footer">
-      <div class="home-logo">
-        <div class="logo-avatar"><svg viewBox="0 0 24 24" width="20" height="20"><rect x="5" y="8" width="14" height="11" rx="2" fill="#38bdf8"/><circle cx="12" cy="6" r="4" fill="#fb7185"/><rect x="9" y="12" width="6" height="4" rx="1" fill="#1e293b"/></svg></div>
-        <div>
-          <div class="logo-title">Blast Buddies</div>
-          <div class="logo-sub">制作方：Blasters</div>
-        </div>
-      </div>
-      <div class="home-likes">
-        <span><svg viewBox="0 0 24 24" width="14" height="14"><path d="M7 22H3v-9h4zm11.6-9c.9 0 1.6.7 1.6 1.6v.8c0 .9-.7 1.6-1.6 1.6H15l-1.7 4.2a1 1 0 0 1-1.8.1L10 14.5V6h2l3-4h.5a1.5 1.5 0 0 1 1.5 1.5v3H19c1.1 0 2 .9 2 2v.5c0 .8-.2 1.5-.6 2.1.4-.1.9-.1 1.3-.1z" fill="currentColor"/></svg> 64.0K</span>
-        <span><svg viewBox="0 0 24 24" width="14" height="14"><path d="M17 22h4v-9h-4zm-11.6-9c-.9 0-1.6.7-1.6 1.6v.8c0 .9.7 1.6 1.6 1.6H9l1.7 4.2a1 1 0 0 0 1.8.1L14 14.5V6h-2l-3-4h-.5A1.5 1.5 0 0 0 7 3.5v3H5c-1.1 0-2 .9-2 2v.5c0 .8.2 1.5.6 2.1-.4-.1-.9-.1-1.3-.1z" fill="currentColor"/></svg> 11.7K</span>
-      </div>
     </div>
 
     <!-- 控制说明（折叠到底部上方） -->
@@ -1603,8 +1585,6 @@
   </div>
 </div>
 
-<div class="tip">提示：登录后可保存金币与等级 · 商城购买皮肤和枪械 · 联机模式开房间和好友一起打 BOSS</div>
-<div class="credit">Blast Buddies 同款玩法 · HTML5 Canvas</div>
 
 <script>
 (() => {
@@ -3228,6 +3208,13 @@ document.getElementById('chat-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); sendChat(); }
   e.stopPropagation();   // 别让 WASD 之类的游戏热键吃掉输入
 });
+// 发送按钮状态：未连接服务器时灰色
+const chatSendBtnEl = document.getElementById('chat-send-btn');
+function updateChatSendBtn() {
+  if (chatSendBtnEl) chatSendBtnEl.disabled = !(Lobby.ws && Lobby.ws.readyState === 1);
+}
+setInterval(updateChatSendBtn, 1500);
+updateChatSendBtn();
 document.getElementById('refresh-challenge-btn').addEventListener('click', () => { ensureAudio(); alert('每日挑战已刷新'); renderChallenge(); });
 document.getElementById('home-task-btn').addEventListener('click', () => {
   ensureAudio();
@@ -6023,7 +6010,8 @@ function draw() {
 
 // ---------- 手机版虚拟控件绘制 ----------
 function drawMobileControls() {
-  if (!Mobile.active || G.state !== 'playing') return;
+  const menuLobby = G.state === 'menu' && !!Lobby.ws && document.getElementById('home-view').style.display !== 'none';
+  if (!Mobile.active || (G.state !== 'playing' && !menuLobby)) return;
   ctx.save();
 
   // ===== 摇杆（浮动摇杆：手指按下处出现；无输入时左下角显示提示圈）=====
@@ -6056,6 +6044,8 @@ function drawMobileControls() {
     ctx.globalAlpha = 1;
   }
 
+  // 大厅只画摇杆，不画开火按钮
+  if (G.state !== 'playing') { ctx.restore(); return; }
   // ===== 开火按钮（右下）：左半=逆时针转枪口，右半=顺时针转枪口 =====
   const fb = fireBtnPos();
   const active = Mobile.fire.id !== null;
@@ -7039,6 +7029,9 @@ function touchXY(t) {
 
 canvas.addEventListener('touchstart', (e) => {
   ensureAudio();
+  // 漏网真机兜底：UA/pointer 检测都失手（部分安卓平板/HarmonyOS），
+  // 但真触摸事件 + 小屏出现了 → 直接切手机版
+  if (!Mobile.active && window.innerWidth <= 1024 && navigator.maxTouchPoints > 0) setMobile(true);
   e.preventDefault();
   if (!Mobile.active) {
     // 电脑版触摸：模拟鼠标（单人 / 联机 host 控制 P1，guest 控制自己的角色）
@@ -7049,10 +7042,20 @@ canvas.addEventListener('touchstart', (e) => {
     if (G.state === 'playing') mouse.down = true;
     return;
   }
-  // 手机版
-  if (G.state !== 'playing') return;
+  // 手机版：游戏内 or 在线大厅（大厅只开左半屏摇杆走动）
+  const lobbyTouch = G.state === 'menu' && !!Lobby.ws;
+  if (G.state !== 'playing' && !lobbyTouch) return;
   for (const t of e.changedTouches) {
     const p = touchXY(t);
+    if (G.state !== 'playing') {
+      // 大厅模式：左半屏浮动摇杆，其余触摸不处理（不挡 UI）
+      if (p.x < W * 0.45 && Mobile.joy.id === null) {
+        Mobile.joy.id = t.identifier;
+        Mobile.joy.bx = p.x; Mobile.joy.by = p.y;
+        Mobile.joy.dx = 0; Mobile.joy.dy = 0; Mobile.joy.mag = 0;
+      }
+      continue;
+    }
     const fb = fireBtnPos();
     const inFire = Math.hypot(p.x - fb.x, p.y - fb.y) <= fb.r * 1.18;
     if (inFire && Mobile.fire.id === null) {
@@ -7316,6 +7319,8 @@ function setNetStatus(which, text, cls) {
 
 function updateNetHud() {
   const el = document.getElementById('hud-net');
+  const nsb = document.getElementById('net-start-btn');
+  if (nsb) nsb.disabled = !(NET.role === 'host' && (NET.cap || 0) <= 1 || (NET.peers.size + 1) >= Math.max(1, NET.cap || 1));
   if (!el) return;
   if (NET.connected && G.state !== 'menu') {
     el.style.display = 'block';
