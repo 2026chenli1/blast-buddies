@@ -7268,18 +7268,41 @@ function sendLobbyPos() {
 }
 // 页面加载即进入在线大厅（未登录时先以「游客」身份，登录后由 applyUser 更新昵称）
 startLobbyWorld();
-// ---------- RTT 测量：每 2 秒发 ping，服务器直接回 pong ----------
+// ---------- RTT 测量：每秒发 ping，服务器直接回 pong ----------
 // （不绕经对方浏览器：对方标签页后台节流会把 RTT 拉到几万毫秒）
 let netPingLast = 0;
+let netPingPending = 0;   // 已发出但尚未收到 pong 的 ping 时间戳
+let netPingSamples = [];  // 最近若干次有效 RTT（ms）
+let netPongAt = 0;        // 最后一次收到 pong 的时间
 function netPing() {
   if (!NET.ws || NET.ws.readyState !== 1) return;
   if (NET.role !== 'host' && NET.role !== 'guest') return;
   if (NET.role === 'host' && NET.peers.size === 0) { NET.rtt = 0; return; }
   if (NET.role === 'guest' && G.state !== 'playing') return;
   const now = performance.now();
-  if (now - netPingLast < 2000) return;
+  // 1. 有未完成的 ping 时：如果超过 4s 还没回，认为丢包，允许重发
+  if (netPingPending) {
+    if (now - netPingPending < 1000) return; // 1s 内不重复发，避免拥塞
+    if (now - netPingPending < 4000) return; // 1-4s 之间继续等
+    netPingPending = 0; // 超时重置
+  }
+  if (now - netPingLast < 1000) return;
   netPingLast = now;
+  netPingPending = now;
   netSend({ t: 'ping', d: now });
+}
+function recordRtt(rtt) {
+  const now = performance.now();
+  netPongAt = now;
+  // 忽略极端异常值（后台切回时几万 ms 的 stale pong）
+  if (rtt > 0 && rtt < 3000) {
+    netPingSamples.push({ v: rtt, ts: now });
+  }
+  // 只保留最近 10 秒内的样本，并取中位数显示，比「最新一次」稳定得多
+  netPingSamples = netPingSamples.filter(s => now - s.ts < 10000);
+  if (!netPingSamples.length) { NET.rtt = Math.round(rtt); return; }
+  const sorted = netPingSamples.map(s => s.v).sort((a, b) => a - b);
+  NET.rtt = sorted[Math.floor(sorted.length / 2)];
 }
 
 // ---------- 网络心跳定时器（Web Worker） ----------
@@ -7440,7 +7463,9 @@ function netCreate(max, mode, gm, autoStart) {
       const gi = NET.peers.get(m.slot);
       if (gi) gi.input = m.d || null;
     } else if (m.t === 'pong') {
-      NET.rtt = Math.round(performance.now() - m.d);
+      const rtt = performance.now() - m.d;
+      netPingPending = 0;
+      recordRtt(rtt);
       updateNetHud();
     } else if (m.t === 'error') {
       clearTimeout(NET.createTimer);
@@ -7494,7 +7519,9 @@ function netJoin(room) {
       applyNetState(m.d);
     } else if (m.t === 'pong') {
       // 服务器直接回的 pong：guest 自己测 RTT（不依赖房主浏览器）
-      NET.rtt = Math.round(performance.now() - m.d);
+      const rtt = performance.now() - m.d;
+      netPingPending = 0;
+      recordRtt(rtt);
       updateNetHud();
     } else if (m.t === 'peer') {
       // 房主断开
@@ -8719,7 +8746,9 @@ function attachHostHandlers(ws) {
       const gi = NET.peers.get(m.slot);
       if (gi) gi.input = m.d || null;
     } else if (m.t === 'pong') {
-      NET.rtt = Math.round(performance.now() - m.d);
+      const rtt = performance.now() - m.d;
+      netPingPending = 0;
+      recordRtt(rtt);
       updateNetHud();
     } else if (m.t === 'error') {
       setNetStatus('create', m.msg, 'err');
@@ -8743,7 +8772,9 @@ function attachGuestHandlers(ws) {
     if (m.t === 'state') {
       applyNetState(m.d);
     } else if (m.t === 'pong') {
-      NET.rtt = Math.round(performance.now() - m.d);
+      const rtt = performance.now() - m.d;
+      netPingPending = 0;
+      recordRtt(rtt);
       updateNetHud();
     } else if (m.t === 'peer') {
       netClose();
