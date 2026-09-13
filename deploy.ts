@@ -68,7 +68,8 @@ const bc = new BroadcastChannel('blast-relay');
 // ---------- 盲盒 ----------
 
 // ---------- 大厅聊天 ----------
-const CHAT_MAX = 60;          // 只保留最近 60 条
+const CHAT_MAX = 300;         // 条数硬上限（防 KV 无限膨胀），正常情况下 7 天时间窗先到
+const CHAT_TTL_MS = 7 * 86400000; // 聊天记录保留 7 天
 const CHAT_TEXT_MAX = 120;    // 单条最长字数
 const chatLog: any[] = [];    // { name, text, skin, ts }
 const CHAT_KV_KEY = ['chat'];
@@ -76,6 +77,11 @@ const CHAT_SYNC_MS = 15000;   // 每 15 秒从 KV 拉一次，跨 isolate 兜底
 const chatCids = new Set<string>(); // 去重，避免 KV 同步/BC 广播重复入队
 
 function chatKey(m: any): string { return (m.cid ? 'c:' + m.cid : m.ts + '|' + (m.name || '') + '|' + (m.text || '')); }
+// 裁剪：超过 7 天或超过条数上限的旧消息出队（chatLog 按时间有序，从队头删）
+function pruneChat() {
+  const cutoff = Date.now() - CHAT_TTL_MS;
+  while (chatLog.length && (chatLog[0].ts < cutoff || chatLog.length > CHAT_MAX)) chatLog.shift();
+}
 async function mergeChatFromKv(): Promise<any[]> {
   const merged: any[] = [];
   try {
@@ -88,7 +94,7 @@ async function mergeChatFromKv(): Promise<any[]> {
       chatLog.push(item);
       merged.push(item);
     }
-    if (chatLog.length > CHAT_MAX) chatLog.splice(0, chatLog.length - CHAT_MAX);
+    pruneChat();
   } catch (_e) { /* KV 读失败不影响本地广播 */ }
   return merged;
 }
@@ -97,7 +103,9 @@ async function saveChatToKv(item: any) {
     const r = await kv.get(CHAT_KV_KEY);
     const arr = Array.isArray(r.value) ? r.value : [];
     arr.push(item);
-    if (arr.length > CHAT_MAX) arr.shift();
+    // KV 里也按 7 天 + 条数上限裁剪，与新连接推送的历史保持一致
+    const cutoff = Date.now() - CHAT_TTL_MS;
+    while (arr.length && (arr[0].ts < cutoff || arr.length > CHAT_MAX)) arr.shift();
     await kv.set(CHAT_KV_KEY, arr);
   } catch (_e) { /* KV 写失败仅丢历史，不影响实时 */ }
 }
@@ -537,7 +545,8 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
         players[id] = { x: p.x, y: p.y, angle: p.angle, name: p.name, skin: p.skin };
       }
       send(ws, { t: 'lobby_list', me: connId, d: players });
-      // 先发送当前历史，再在后台合并 KV 里的跨 isolate 消息（避免 KV 慢时阻塞新人）
+      // 先发送当前历史（7 天内），再在后台合并 KV 里的跨 isolate 消息（避免 KV 慢时阻塞新人）
+      pruneChat();
       if (chatLog.length) send(ws, { t: 'chat_history', d: chatLog });
       void mergeChatFromKv();
       broadcast({ type: 'lobby', action: 'join', id: connId, x: lp?.x, y: lp?.y, angle: lp?.angle, name: lp?.name, skin: lp?.skin, ip: c.ip });
@@ -630,7 +639,7 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       const cid = String(msg.cid || '').slice(0, 24);
       const item = { name, text, skin, ts, cid };
       chatLog.push(item);
-      if (chatLog.length > CHAT_MAX) chatLog.shift();
+      pruneChat();
       chatCids.add(chatKey(item));
       broadcast({ type: 'chat', name, text, skin, ts, cid });
       // 同时持久化到 KV：新平台 BroadcastChannel 跨 isolate 不可靠，用 KV 兜底
@@ -638,6 +647,7 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       break;
     }
     case 'chat_history': {
+      pruneChat();
       send(ws, { t: 'chat_history', d: chatLog });
       break;
     }
