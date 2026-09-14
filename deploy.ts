@@ -775,6 +775,21 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       }
       break;
     }
+    case 'vote': {
+      // 房间准备阶段的投票（游戏模式 / 装备）：广播给房间内所有人（含房主），
+      // 每个客户端按 slot 本地汇总，房主开局时取票数最多的选项。
+      // 服务器只做转发，不存票数状态——和 input/state 一样保持纯中转，重启也不丢状态。
+      if (c && c.room) {
+        void touchRoom(c.room);
+        broadcast({
+          type: 'relay',
+          room: c.room,
+          from: connId,
+          payload: { t: 'vote', kind: String(msg.kind || 'gm'), choice: String(msg.choice || ''), slot: c.slot },
+        });
+      }
+      break;
+    }
     case 'ping': {
       // 服务器直接回 pong 给发送者：测的是 客户端↔服务器 的真实网络 RTT。
       // 旧方案绕经对方浏览器（ping→guest→pong→host），对方标签页一旦被
