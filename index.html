@@ -312,6 +312,27 @@
   .room-mode-opt input { accent-color: #ffd166; }
   .room-setup-btns { display: flex; justify-content: center; gap: 12px; margin-top: 18px; }
 
+  /* ---------- 房间准备：模式投票 ---------- */
+  .vote-opt {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 10px; padding: 9px 12px; cursor: pointer;
+    font-size: 13px; color: #cfe0f0; text-align: left; width: 100%;
+  }
+  .vote-opt:hover { border-color: rgba(255,209,102,.45); }
+  .vote-opt.mine { border-color: #ffd166; background: rgba(255,209,102,.12); color: #ffd166; }
+  .vote-opt.leading { box-shadow: inset 0 0 0 1px rgba(74,222,128,.5); }
+  .vote-opt-name { flex: 1; font-weight: 700; }
+  .vote-opt-desc { font-size: 11px; color: #8da3b8; font-weight: 400; display: block; margin-top: 2px; }
+  .vote-count {
+    min-width: 26px; height: 22px; padding: 0 7px; border-radius: 999px;
+    background: rgba(255,255,255,.1); color: #cfe0f0;
+    font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  }
+  .vote-opt.mine .vote-count { background: rgba(255,209,102,.25); color: #ffd166; }
+  .vote-voters { font-size: 11px; color: #7d93a8; margin-top: 4px; }
+
   /* ---------- 房间大厅列表 ---------- */
   .net-lobby-title { font-size: 13px; color: #7d93a8; margin: 12px 0 6px; text-align: left; font-weight: 700; }
   #net-room-list { max-height: 180px; overflow-y: auto; }
@@ -1395,6 +1416,16 @@
         <button class="btn btn-small" id="net-join-btn">加入房间</button>
       </div>
     </div>
+
+    <!-- 房间准备阶段：全员投票选模式（房主点开始时按票数决定），每人可先配好自己的装备 -->
+    <div id="net-vote-box" style="display:none;">
+      <div class="net-lobby-title">🗳️ 模式投票 · 开局按票数决定</div>
+      <div id="net-vote-opts" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div class="vote-voters" id="net-vote-hint">点击选项投票，可随时改票；平票时以房主的选择为准</div>
+      <div style="margin-top:10px;">
+        <button class="btn btn-small btn-secondary" id="net-loadout-btn" style="margin-top:0;">🎒 装备选择</button>
+      </div>
+    </div>
   </div>
 
   <!-- 模式选择弹窗 -->
@@ -1406,6 +1437,31 @@
       <button class="mode-big-btn" id="pick-quick">⚡ 快速游戏<small>加入随机比赛 · 所有房间都是公开的</small></button>
       <button class="mode-big-btn" id="pick-ranked">🏆 排位赛<small>16 名玩家陆续匹配 · 凑齐即开局</small></button>
       <button class="btn btn-secondary btn-small" id="mode-modal-close" style="margin-top:0;">取消</button>
+    </div>
+  </div>
+
+  <!-- 单人游戏设置：开局模式 + 场地障碍（团队死斗需多人对抗，单人下不提供） -->
+  <div class="modal-mask" id="solo-setup-modal" style="display:none;">
+    <div class="modal-box" style="max-width:420px;">
+      <div class="modal-title">单人游戏设置</div>
+      <div class="room-setup-row" style="align-items:flex-start;">
+        <span class="room-setup-label">游戏模式</span>
+        <div class="room-mode-opts">
+          <label class="room-mode-opt"><input type="radio" name="solo-gm" value="coop" checked><span>协作 · 对抗无尽敌人波次</span></label>
+          <label class="room-mode-opt"><input type="radio" name="solo-gm" value="stronghold"><span>据点 · 占领中心区域，据守得分</span></label>
+        </div>
+      </div>
+      <div class="room-setup-row" style="align-items:flex-start;">
+        <span class="room-setup-label">场地</span>
+        <div class="room-mode-opts">
+          <label class="room-mode-opt"><input type="radio" name="solo-ob" value="none" checked><span>空场 · 专心打怪，不生成砖块</span></label>
+          <label class="room-mode-opt"><input type="radio" name="solo-ob" value="normal"><span>有障碍 · 砖块可破坏，能躲能挡</span></label>
+        </div>
+      </div>
+      <div class="room-setup-btns">
+        <button class="btn btn-small btn-secondary" id="solo-setup-cancel">取消</button>
+        <button class="btn btn-small" id="solo-setup-ok">开始游戏</button>
+      </div>
     </div>
   </div>
 
@@ -7752,6 +7808,7 @@ const NET = {
   dcs: new Map(),  // host：slot -> RTCDataChannel（P2P 打通后快照/输入走直连）
   gpc: null,       // guest：与房主的 RTCPeerConnection
   gdc: null,       // guest：与房主的 RTCDataChannel
+  votes: new Map(),// 房间准备阶段：slot -> { gm }（模式投票，本地汇总）
 };
 
 // ---------- 在线大厅（首页） ----------
@@ -8076,6 +8133,8 @@ function netClose() {
   NET.pcs.forEach((pc) => { try { pc.close(); } catch (e) {} }); NET.pcs.clear(); NET.dcs.clear();
   guestTeardown();
   NET.autoStart = false;
+  NET.votes.clear();      // 离开房间：清掉上一局的投票
+  renderVoteBox();
   updateNetHud();
 }
 
@@ -8113,6 +8172,68 @@ function updateNetHud() {
 }
 
 // ---------- host：创建房间（max：人数上限 0=不限；mode：public/private） ----------
+// ======================= 房间准备：模式投票 =======================
+// 服务器只转发（case 'vote'），票数由各客户端按 slot 本地汇总；
+// 房主开局时取票数最多的模式。平票以房主（slot 1）的选择为准。
+const VOTE_GM_OPTS = [
+  { id: 'coop', name: '协作', desc: '共同对抗无尽敌人波次' },
+  { id: 'stronghold', name: '据点', desc: '占领中心区域，据守得分' },
+  { id: 'tdm', name: '团队死斗', desc: '红蓝对抗，击杀计分' },
+];
+function voteMySlot() { return NET.role === 'host' ? 1 : (NET.slot || 2); }
+function voteTally() {
+  const t = {};
+  for (const v of NET.votes.values()) { if (v.gm) t[v.gm] = (t[v.gm] || 0) + 1; }
+  return t;
+}
+function voteWinner() {
+  const t = voteTally();
+  let best = null, bestN = 0;
+  for (const k in t) if (t[k] > bestN) { bestN = t[k]; best = k; }
+  if (!best) return null;
+  const tied = Object.keys(t).filter(k => t[k] === bestN);
+  if (tied.length > 1) {   // 平票：房主说了算
+    const hv = NET.votes.get(1);
+    if (hv && hv.gm && tied.indexOf(hv.gm) >= 0) return hv.gm;
+  }
+  return best;
+}
+function netSendVote(choice) {
+  const s = voteMySlot();
+  NET.votes.set(s, Object.assign({}, NET.votes.get(s), { gm: choice }));
+  renderVoteBox();
+  try { netSend({ t: 'vote', kind: 'gm', choice }); } catch (e) { /* 未连接就只本地记录 */ }
+}
+function renderVoteBox() {
+  const box = document.getElementById('net-vote-box');
+  if (!box) return;
+  const inRoom = !!NET.connected && !!NET.room && G.state === 'menu';
+  box.style.display = inRoom ? 'block' : 'none';
+  if (!inRoom) return;
+  const t = voteTally(), lead = voteWinner(), mine = (NET.votes.get(voteMySlot()) || {}).gm;
+  document.getElementById('net-vote-opts').innerHTML = VOTE_GM_OPTS.map(o => {
+    const n = t[o.id] || 0;
+    const cls = ['vote-opt'];
+    if (mine === o.id) cls.push('mine');
+    if (lead === o.id && n > 0) cls.push('leading');
+    return `<button type="button" class="${cls.join(' ')}" data-vote="${o.id}">`
+      + `<span class="vote-opt-name">${o.name}<span class="vote-opt-desc">${o.desc}</span></span>`
+      + `<span class="vote-count">${n}</span></button>`;
+  }).join('');
+  for (const b of document.querySelectorAll('[data-vote]')) {
+    b.addEventListener('click', () => netSendVote(b.dataset.vote));
+  }
+  const hint = document.getElementById('net-vote-hint');
+  if (hint) {
+    const total = NET.votes.size;
+    const leadName = (VOTE_GM_OPTS.find(o => o.id === lead) || {}).name || '';
+    hint.textContent = total
+      ? `${total} 人已投票${leadName ? ' · 当前领先：' + leadName : ''}`
+      : '点击选项投票，可随时改票；平票时以房主的选择为准';
+  }
+}
+function voteReset() { NET.votes.clear(); renderVoteBox(); }
+
 function netCreate(max, mode, gm, autoStart) {
   if (NET.ws) return;
   NET.autoStart = !!autoStart; // 建房后直接开局（游玩自定义地图 / 快速游戏兜底建房）
@@ -8155,6 +8276,11 @@ function netCreate(max, mode, gm, autoStart) {
         NET.autoStart = false;
         setNetStatus('create', `🚀 已开局！房间号 ${m.room} · 公开房间，其他玩家点「快速游戏」即可随机加入`, 'ok');
         startGame();
+      } else {
+        // 准备阶段：房主默认投自己建房时选的模式，其他人加入后各自投票
+        voteReset();
+        NET.votes.set(1, { gm: NET.gm });
+        renderVoteBox();
       }
     } else if (m.t === 'peer') {
       const slot = m.slot || 2;
@@ -8206,6 +8332,12 @@ function netCreate(max, mode, gm, autoStart) {
     } else if (m.t === 'sig') {
       // WebRTC 信令：只处理发给自己 slot 的（offer/answer/ICE）
       if (m.to === NET.slot) handleSig(m);
+    } else if (m.t === 'vote') {
+      // 房间准备阶段的模式投票（服务器广播房间内所有人的票）
+      if (m.slot && m.kind === 'gm' && m.choice) {
+        NET.votes.set(m.slot, Object.assign({}, NET.votes.get(m.slot), { gm: m.choice }));
+        renderVoteBox();
+      }
     } else if (m.t === 'error') {
       clearTimeout(NET.createTimer);
       setNetStatus('create', m.msg, 'err');
@@ -8254,6 +8386,16 @@ function netJoin(room) {
       const gmLabel = { coop: '协作', stronghold: '据点', tdm: '团队死斗' }[NET.gm] || '协作';
       setNetStatus('join', `✅ 已加入房间 ${m.room}（${gmLabel}），你是 P${NET.slot}。比赛已开始的话将直接进入战场…`, 'ok');
       updateNetHud();
+      // 准备阶段：默认投房主设定的模式，之后可随时改票
+      voteReset();
+      NET.votes.set(NET.slot, { gm: NET.gm });
+      renderVoteBox();
+    } else if (m.t === 'vote') {
+      // 房间准备阶段的模式投票（服务器广播房间内所有人的票）
+      if (m.slot && m.kind === 'gm' && m.choice) {
+        NET.votes.set(m.slot, Object.assign({}, NET.votes.get(m.slot), { gm: m.choice }));
+        renderVoteBox();
+      }
     } else if (m.t === 'state') {
       // P2P 已直连时忽略 WS 快照（数据走数据通道，避免重复应用）
       if (!guestDcOpen()) applyNetState(m.d);
@@ -8769,11 +8911,12 @@ function showMenu() {
 function startGame() {
   ensureAudio();
   // 联机：仅房主可以开始游戏（guest 由快照驱动）
-  if (G.mode === 'net' && NET.role !== 'host') return;
-  // 游戏模式：联机用 NET.gm，单人默认 coop
-  G.gm = (G.mode === 'net' && NET.gm) ? NET.gm : 'coop';
+  if (NET.connected && NET.role === 'guest') return;
+  // 联机房主一律用 NET.gm（开局前已按房间投票结果设定），单人保留开局前选的模式
+  G.gm = (NET.connected && NET.role === 'host' && NET.gm) ? NET.gm : (G.gm || 'coop');
   resetDomCache();
   G.state = 'playing';
+  renderVoteBox();          // 开局后收起投票面板（返回菜单/建房时会自动再显示）
   document.querySelector('canvas').style.cursor = 'crosshair';
   G.score = 0;
   G.wave = 0;
@@ -9188,20 +9331,35 @@ document.getElementById('home-start-btn').addEventListener('click', () => {
 document.getElementById('mode-modal-close').addEventListener('click', () => {
   modeModal.style.display = 'none';
 });
-// 单人游戏：不依赖服务器、不进房间，点击即玩；无障碍 = 不生成可破坏障碍（空场）
-function startSolo() {
+// 单人游戏：不依赖服务器、不进房间，点击即玩；可自选模式与场地（无障碍 = 不生成可破坏障碍）
+function startSolo(gm, noObstacles) {
   closeLobby();
   closeLobbyWorld();
   modeModal.style.display = 'none';
-  G.customMap = null;     // 用标准随机地图，不沿用上次选的自定义图
-  G.noObstacles = true;   // 无障碍：场地全空，专心打怪
+  const soloModal = document.getElementById('solo-setup-modal');
+  if (soloModal) soloModal.style.display = 'none';
+  G.customMap = null;              // 用标准随机地图，不沿用上次选的自定义图
+  G.noObstacles = !!noObstacles;   // 无障碍：场地全空，专心打怪
   G.mode = 'single';
+  G.gm = gm || 'coop';             // 单人模式也生效（startGame 会保留非联机时的 G.gm）
   homeView.style.display = 'none';
   startGame();
 }
 document.getElementById('pick-solo').addEventListener('click', () => {
   ensureAudio();
-  startSolo();
+  const m = document.getElementById('solo-setup-modal');
+  if (m) { m.style.display = 'flex'; return; }   // 先选模式与场地，再开局
+  startSolo('coop', true);
+});
+document.getElementById('solo-setup-cancel').addEventListener('click', () => {
+  const m = document.getElementById('solo-setup-modal');
+  if (m) m.style.display = 'none';
+});
+document.getElementById('solo-setup-ok').addEventListener('click', () => {
+  ensureAudio();
+  const gmEl = document.querySelector('input[name="solo-gm"]:checked');
+  const obEl = document.querySelector('input[name="solo-ob"]:checked');
+  startSolo(gmEl ? gmEl.value : 'coop', !(obEl && obEl.value === 'normal'));
 });
 // 快速游戏：拉取公开房间列表 → 随机加入一个；没有房间则自动创建公开房间
 document.getElementById('pick-quick').addEventListener('click', () => {
@@ -9761,8 +9919,18 @@ document.getElementById('loadout-start-btn').addEventListener('click', () => {
   User.activeSlot = 1;
   User.grenadeCd = 0;
   try { localStorage.setItem('bb_gun2', User.gun2); localStorage.setItem('bb_grenade', User.grenade); } catch (e) {}
+  // 联机：房主开局时按房间投票结果决定模式（平票以房主为准；没人投就沿用建房设定）
+  if (NET.role === 'host' && NET.connected) {
+    const w = voteWinner();
+    if (w) NET.gm = w;
+  }
   loadoutModal.style.display = 'none';
   startGame();
+});
+// 准备阶段的装备入口：先配好自己的装备，再等房主开始
+document.getElementById('net-loadout-btn').addEventListener('click', () => {
+  ensureAudio();
+  showLoadout();
 });
 
 // ======================= 游戏内 1/2/3/4 切换 =======================
