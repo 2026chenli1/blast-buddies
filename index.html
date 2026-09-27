@@ -1422,8 +1422,10 @@
       <div class="net-lobby-title">🗳️ 模式投票 · 开局按票数决定</div>
       <div id="net-vote-opts" style="display:flex;flex-direction:column;gap:8px;"></div>
       <div class="vote-voters" id="net-vote-hint">点击选项投票，可随时改票；平票时以房主的选择为准</div>
-      <div style="margin-top:10px;">
+      <div style="margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
         <button class="btn btn-small btn-secondary" id="net-loadout-btn" style="margin-top:0;">🎒 装备选择</button>
+        <button class="btn btn-small" id="match-start-now" style="margin-top:0; display:none;">立即开始</button>
+        <span id="match-autostart" style="display:none; align-items:center; gap:5px; font-size:13px; font-weight:800; color:#fbbf24;">⏱ <span id="match-autostart-sec">8</span> 秒后自动开始</span>
       </div>
     </div>
   </div>
@@ -1690,7 +1692,10 @@
         </div>
       </div>
       <div class="loadout-hint">游戏中按 <b>1</b>/<b>2</b> 切换武器，按 <b>3</b> 扔手榴弹，按 <b>4</b> 或 <b>Q</b> 释放技能</div>
-      <button class="btn btn-small" id="loadout-start-btn">开始游戏</button>
+      <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+        <button class="btn btn-small" id="loadout-start-btn">开始游戏</button>
+        <button class="btn btn-small btn-secondary" id="loadout-cancel">返回</button>
+      </div>
     </div>
   </div>
 
@@ -8134,6 +8139,7 @@ function netClose() {
   guestTeardown();
   NET.autoStart = false;
   NET.votes.clear();      // 离开房间：清掉上一局的投票
+  stopMatchAutoStart();   // 离开房间：停掉匹配自动开局倒计时，免得在菜单里突然开一局
   renderVoteBox();
   updateNetHud();
 }
@@ -8916,6 +8922,7 @@ function startGame() {
   G.gm = (NET.connected && NET.role === 'host' && NET.gm) ? NET.gm : (G.gm || 'coop');
   resetDomCache();
   G.state = 'playing';
+  stopMatchAutoStart();     // 已经开了：停掉匹配自动开局倒计时
   renderVoteBox();          // 开局后收起投票面板（返回菜单/建房时会自动再显示）
   document.querySelector('canvas').style.cursor = 'crosshair';
   G.score = 0;
@@ -9444,27 +9451,68 @@ function netQuick() {
 // 匹配：size = 目标人数（自由匹配自选，排位赛固定 16）
 let MATCH_SIZE = 16;   // 当前匹配的目标人数
 // 匹配成功后自动开局：凑齐即开，不等房主手动点「开始联机」。
-// 兜底 3 秒：万一有人匹配上就掉线，也不会永远卡在房间里。
+// 但留 MATCH_AUTOSTART_SEC 秒缓冲给玩家投票选模式 / 配装备，倒计时走完自动开。
+// 两个防呆：
+//  1) 打开装备弹窗时暂停倒计时——别在玩家换枪换到一半时把他拽进游戏
+//  2) 一个对手都没连上时不急着开（否则房间里只有自己），先给 GRACE 秒宽限
 let matchAutoStart = false, matchAutoNeed = 0, matchAutoTimer = null;
+const MATCH_AUTOSTART_SEC = 12;   // 匹配成功 → 自动开局的缓冲秒数（够投一票 + 换把枪）
+const MATCH_AUTOSTART_GRACE = 8;  // 无人连上时最多再等这么久
+let matchAutoSec = 0, matchAutoGrace = 0, matchAutoTick = null, matchAutoHost = false;
 function stopMatchAutoStart() {
-  matchAutoStart = false; matchAutoNeed = 0;
+  matchAutoStart = false; matchAutoNeed = 0; matchAutoSec = 0; matchAutoGrace = 0;
   if (matchAutoTimer) { clearTimeout(matchAutoTimer); matchAutoTimer = null; }
+  if (matchAutoTick) { clearInterval(matchAutoTick); matchAutoTick = null; }
+  const box = document.getElementById('match-autostart');
+  if (box) box.style.display = 'none';
+  const now = document.getElementById('match-start-now');
+  if (now) now.style.display = 'none';
 }
-function armMatchAutoStart(want) {
-  if (NET.role !== 'host') return;       // 只有房主能开局，guest 由快照驱动
-  matchAutoStart = true; matchAutoNeed = want;
-  clearTimeout(matchAutoTimer);
-  matchAutoTimer = setTimeout(() => fireMatchAutoStart(true), 3000);
-  fireMatchAutoStart(false);              // 可能 peer 早已连好（服务端先广播 joined 再发 matched）
+function renderMatchAutoStart(text) {
+  const box = document.getElementById('match-autostart');
+  if (!box) return;
+  box.style.display = 'inline-flex';
+  const secEl = document.getElementById('match-autostart-sec');
+  if (secEl) secEl.textContent = text;
 }
-function fireMatchAutoStart(force) {
+function fireMatchAutoStart() {
   if (!matchAutoStart) return;
-  if (!force && NET.peers.size + 1 < matchAutoNeed) return;   // 人还没齐，再等等
+  if (G.state === 'playing') { stopMatchAutoStart(); return; }
   const need = matchAutoNeed;
   stopMatchAutoStart();
-  if (G.state === 'playing') return;      // 已经开了就别重复
+  // 开局前定模式：按房间投票结果（平票以房主为准），和手动开局走同一条规则
+  if (NET.role === 'host' && NET.connected) { const w = voteWinner(); if (w) NET.gm = w; }
   setNetStatus('create', `🚀 ${need} 人已就位，自动开始！`, 'ok');
   startGame();
+}
+function armMatchAutoStart(want) {
+  matchAutoStart = true; matchAutoNeed = want;
+  matchAutoSec = MATCH_AUTOSTART_SEC; matchAutoGrace = 0;
+  matchAutoHost = NET.role === 'host';   // 只有房主真开局，guest 只跟着显示倒计时
+  if (matchAutoTick) clearInterval(matchAutoTick);
+  const nowBtn = document.getElementById('match-start-now');
+  if (nowBtn) nowBtn.style.display = matchAutoHost ? 'inline-block' : 'none';
+  renderMatchAutoStart(String(matchAutoSec));
+  matchAutoTick = setInterval(() => {
+    if (!matchAutoStart) { clearInterval(matchAutoTick); matchAutoTick = null; return; }
+    if (G.state === 'playing') { stopMatchAutoStart(); return; }
+    // 装备弹窗开着就暂停倒计时，关掉后继续走
+    const lm = document.getElementById('loadout-modal');
+    if (lm && getComputedStyle(lm).display !== 'none') { renderMatchAutoStart('暂停'); return; }
+    if (matchAutoSec > 0) { matchAutoSec--; renderMatchAutoStart(String(matchAutoSec)); return; }
+    if (matchAutoHost && want >= 2 && NET.peers.size < 1 && matchAutoGrace < MATCH_AUTOSTART_GRACE) {
+      matchAutoGrace++;
+      renderMatchAutoStart('等对手 ' + (MATCH_AUTOSTART_GRACE - matchAutoGrace));
+      return;
+    }
+    if (matchAutoHost) fireMatchAutoStart();
+    else renderMatchAutoStart('即将开始');
+  }, 1000);
+  // 兜底：标签页被后台节流时 interval 会停摆，用 timeout 兜住（不会永远卡在房间）
+  clearTimeout(matchAutoTimer);
+  matchAutoTimer = setTimeout(() => {
+    if (matchAutoHost && matchAutoStart && G.state !== 'playing') fireMatchAutoStart();
+  }, (MATCH_AUTOSTART_SEC + MATCH_AUTOSTART_GRACE + 2) * 1000);
 }
 // 匹配等待反馈：只显示计数会让人以为「点了没反应」，加上等待秒数和在线人数才知道在动
 //
@@ -9476,17 +9524,26 @@ function fireMatchAutoStart(force) {
 //    漏掉的会永久堆积。每次停表递增 token，旧回调发现 token 变了就自己 return。
 let matchWaitTimer = null, matchWaitStart = 0, matchWaitToken = 0;
 let MATCH_WAIT_SEC = 15;   // 服务端等满这么久就按当前人数开局（由服务端广播覆盖）
+let MATCH_LAST_N = 0;      // 最近一次队列人数：决定等待文案是「至少 2 人」还是倒计时
 function stopMatchWait() {
   matchWaitToken++;
   if (matchWaitTimer) { clearInterval(matchWaitTimer); matchWaitTimer = null; }
   matchWaitStart = 0;
+  MATCH_LAST_N = 0;
 }
-function updateMatchWait() {
+// 等待文案：定时器和服务端广播共用同一个渲染逻辑。
+// 之前两处各写各的——服务端 match_status 刚显示「N 秒后自动开始」，下一秒就被
+// 定时器的「已等待 N 秒」覆盖掉，倒计时等于从来没有出现过。
+function renderMatchWait() {
   const el = document.getElementById('match-wait');
   if (!el) return;
-  const sec = matchWaitStart ? Math.floor((Date.now() - matchWaitStart) / 1000) : 0;
-  el.textContent = `已等待 ${sec} 秒`;
+  const waited = matchWaitStart ? Math.floor((Date.now() - matchWaitStart) / 1000) : 0;
+  const left = Math.max(0, MATCH_WAIT_SEC - waited);
+  el.textContent = MATCH_LAST_N < 2
+    ? `已等待 ${waited} 秒 · 至少 2 人才开`
+    : `${left} 秒后自动开始（当前 ${MATCH_LAST_N} 人）`;
 }
+function updateMatchWait() { renderMatchWait(); }
 // 在线人数：帮助判断还要等多久；不足目标人数时给出明确提示
 async function refreshMatchOnline(need) {
   const el = document.getElementById('match-online');
@@ -9551,17 +9608,11 @@ function netMatch(size) {
       const n = Math.max(0, Math.min(want, m.n | 0));
       countEl.textContent = n + '/' + want;
       barEl.style.width = (n / want * 100) + '%';
-      // 倒计时：服务端等满 MATCH_WAIT_SEC 就会按当前人数开局，把剩余秒数告诉玩家
-      if (m.wait) {
-        MATCH_WAIT_SEC = Math.max(1, m.wait | 0);
-        const left = Math.max(0, MATCH_WAIT_SEC - Math.floor((Date.now() - matchWaitStart) / 1000));
-        const waitEl = document.getElementById('match-wait');
-        if (waitEl) {
-          waitEl.textContent = n < 2
-            ? `已等待 ${Math.floor((Date.now() - matchWaitStart) / 1000)} 秒 · 至少 2 人才开`
-            : `${left} 秒后自动开始（当前 ${n} 人）`;
-        }
-      }
+      // 倒计时：服务端等满 MATCH_WAIT_SEC 就会按当前人数开局，把剩余秒数告诉玩家。
+      // 服务端没带 wait（旧版/跨 isolate 转发丢字段）时用本地默认值兜底，不能整段跳过。
+      MATCH_WAIT_SEC = Math.max(1, (m.wait | 0) || MATCH_WAIT_SEC);
+      MATCH_LAST_N = n;
+      renderMatchWait();
     } else if (m.t === 'matched') {
       // 匹配成功：这条连接已被服务器直接编入房间（host/guest 由 slot 决定）
       NET.matchWs = null;
@@ -9586,13 +9637,16 @@ function netMatch(size) {
         document.getElementById('net-room-code').textContent = m.room;
         setNetStatus('create', (ranked ? '🏆 排位赛' : '🎯 自由') + `匹配成功！${real} 人开局，准备开始…`, 'ok');
         attachHostHandlers(ws);
+        voteReset(); netSendVote(NET.gm || 'tdm');   // 房主默认票（同时广播给全房间）
         armMatchAutoStart(real);   // 按实际人数开，不用房主手点
       } else {
         NET.role = 'guest';
         NET.slot = m.slot || 2;
         showNetView(false);
-        setNetStatus('join', (ranked ? '🏆' : '🎯') + ` 已加入房间 ${m.room}，你是 P${NET.slot}，等待房主开始…`, 'ok');
+        setNetStatus('join', (ranked ? '🏆' : '🎯') + ` 已加入房间 ${m.room}，你是 P${NET.slot}，即将自动开始…`, 'ok');
         attachGuestHandlers(ws);
+        voteReset(); netSendVote(NET.gm || 'tdm');
+        armMatchAutoStart(real);   // guest 只显示倒计时，实际由房主开局
       }
       updateNetHud();
     } else if (m.t === 'error') {
@@ -9639,7 +9693,9 @@ function attachHostHandlers(ws) {
         lastSentObv = -1; // 新 guest 加入：下一帧快照强制携带 obstacles（否则新客机看不到墙）
         hostSetupPeer(slot); // 主动向该 guest 发起 WebRTC P2P 直连
         setNetStatus('create', `✅ ${m.name || ('P' + slot)} 已就位！（当前 ${NET.peers.size + 1}/${NET.cap || 16} 人）`, 'ok');
-        fireMatchAutoStart(false);   // 匹配局：人一到齐就自动开
+        // 匹配局不再「人一到齐立刻开」：统一等 armMatchAutoStart 的缓冲倒计时走完，
+        // 这段时间留给模式投票和换装备（想提前开就点「立即开始」）。
+        // 这里如果直接 fireMatchAutoStart，玩家连投票面板都没看清就被拽进游戏。
         document.getElementById('net-start-btn').style.display = 'inline-block';
         Sfx.powerup();
         if (G.state === 'playing' && !G.players.some(p => p.id === slot)) {
@@ -9680,6 +9736,12 @@ function attachHostHandlers(ws) {
     } else if (m.t === 'sig') {
       // WebRTC 信令：只处理发给自己 slot 的（offer/answer/ICE）
       if (m.to === NET.slot) handleSig(m);
+    } else if (m.t === 'vote') {
+      // 准备阶段的模式投票（匹配进房的房主同样要收到客机改票，否则按票开局只会看到房主自己那一票）
+      if (m.slot && m.kind === 'gm' && m.choice) {
+        NET.votes.set(m.slot, Object.assign({}, NET.votes.get(m.slot), { gm: m.choice }));
+        renderVoteBox();
+      }
     } else if (m.t === 'error') {
       setNetStatus('create', m.msg, 'err');
     }
@@ -9710,6 +9772,12 @@ function attachGuestHandlers(ws) {
     } else if (m.t === 'sig') {
       // WebRTC 信令：只处理发给自己 slot 的（offer/answer/ICE）
       if (m.to === NET.slot) handleSig(m);
+    } else if (m.t === 'vote') {
+      // 准备阶段的模式投票：宾客也要看到房主/其他人的票，否则自己那一票永远是「领先」
+      if (m.slot && m.kind === 'gm' && m.choice) {
+        NET.votes.set(m.slot, Object.assign({}, NET.votes.get(m.slot), { gm: m.choice }));
+        renderVoteBox();
+      }
     } else if (m.t === 'peer') {
       netClose();
       setNetStatus('join', '房主已断开连接', 'err');
@@ -9912,25 +9980,45 @@ function showLoadout() {
     : '无技能';
   loadoutModal.style.display = 'flex';
 }
-document.getElementById('loadout-start-btn').addEventListener('click', () => {
+// 保存装备弹窗里的选择（开局和「返回」都走这里）
+function applyLoadout() {
   User.gun = document.getElementById('loadout-primary').value;
   User.gun2 = document.getElementById('loadout-secondary').value;
   User.grenade = document.getElementById('loadout-grenade').value;
   User.activeSlot = 1;
   User.grenadeCd = 0;
   try { localStorage.setItem('bb_gun2', User.gun2); localStorage.setItem('bb_grenade', User.grenade); } catch (e) {}
+}
+document.getElementById('loadout-start-btn').addEventListener('click', () => {
+  applyLoadout();
   // 联机：房主开局时按房间投票结果决定模式（平票以房主为准；没人投就沿用建房设定）
   if (NET.role === 'host' && NET.connected) {
     const w = voteWinner();
     if (w) NET.gm = w;
   }
   loadoutModal.style.display = 'none';
+  // guest 不能开局（由房主快照驱动）：这里只保存装备并关闭，否则点下去毫无反应、困在弹窗里
+  if (NET.connected && NET.role === 'guest') return;
   startGame();
+});
+// 「返回」：只保存装备不开局（准备阶段看了装备还想继续投票时要用）
+document.getElementById('loadout-cancel').addEventListener('click', () => {
+  applyLoadout();
+  loadoutModal.style.display = 'none';
 });
 // 准备阶段的装备入口：先配好自己的装备，再等房主开始
 document.getElementById('net-loadout-btn').addEventListener('click', () => {
   ensureAudio();
   showLoadout();
+});
+// 匹配成功后的「立即开始」：跳过倒计时直接开，模式仍按当前投票结果
+const matchStartNowBtn = document.getElementById('match-start-now');
+if (matchStartNowBtn) matchStartNowBtn.addEventListener('click', () => {
+  ensureAudio();
+  if (NET.role !== 'host' || !NET.connected) return;
+  stopMatchAutoStart();
+  const w = voteWinner(); if (w) NET.gm = w;
+  startGame();
 });
 
 // ======================= 游戏内 1/2/3/4 切换 =======================
