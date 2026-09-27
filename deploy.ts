@@ -239,7 +239,11 @@ function dispatch(m) {
     if (m.action === 'count') {
       for (const id of matchLocal) {
         const c = conns.get(id);
-        if (c && !c.room && c.ws && c.ws.readyState === 1) send(c.ws, { t: 'match_status', n: m.n });
+        // size / wait 必须透传：客户端按 size 过滤（自由匹配别被排位赛计数干扰），
+        // 并按 wait 显示「N 秒后自动开始」。早期版本这里只发 n，倒计时永远不显示。
+        if (c && !c.room && c.ws && c.ws.readyState === 1) {
+          send(c.ws, { t: 'match_status', n: m.n, size: m.size, wait: m.wait });
+        }
       }
     } else if (m.action === 'found') {
       for (const p of m.players || []) {
@@ -250,10 +254,13 @@ function dispatch(m) {
             c.room = m.room;
             c.role = p.slot === 1 ? 'host' : 'guest';
             c.slot = p.slot;
+            if (p.slot === 1) c.hostSince = Date.now();
           }
           matchLocal.delete(p.id);
           lobbyPlayers.delete(p.id);
           send(c.ws, { t: 'matched', room: m.room, slot: p.slot, n: (m.players || []).length });
+          // 标记已送达：KV 兜底巡检就不会再补发一次（客户端重复收到 matched 会重复挂处理器）
+          foundDone.add(m.room + ':' + p.id);
         }
       }
     }
@@ -366,9 +373,12 @@ setInterval(() => {
   broadcastLobbyList();
 }, LOBBY_BROADCAST_MS);
 
-// 匹配队列巡检：等太久且已够 MATCH_MIN 人时提前开局（在线人少也能玩起来）
+// 每秒巡检：匹配队列 + 跨 isolate 兜底投递（成团通知 / WebRTC 信令 / 房主成员公告）
 setInterval(() => {
   sweepMatchQueue().catch(() => {});
+  drainMatchFound().catch(() => {});
+  drainSig().catch(() => {});
+  sweepRoomPeers().catch(() => {});
 }, 1000);
 
 // ---------- 房间管理（KV 持久化注册表 + 内存镜像） ----------
@@ -421,6 +431,7 @@ async function createRoom(connId: string, cap: number, mode: string, gm: string)
     c.room = room;
     c.role = 'host';
     c.slot = 1;
+    c.hostSince = Date.now();   // 用于「成员公告兜底巡检」的时间窗
   }
   broadcast({ type: 'room', action: 'created', room, host: connId, created: now, cap, mode, gm: gm || 'coop' });
   return room;
@@ -748,6 +759,8 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
           from: connId,
           payload: { t: 'sig', from: c.slot || 1, to: msg.to || 0, d: msg.d || null },
         });
+        // 跨 isolate 兜底：信令丢了 WebRTC 就打不通，只能一直走服务器中转（跨 isolate 同样不通）
+        await pushSig(c.room, c.slot || 1, msg.to || 0, msg.d || null);
       }
       break;
     }
@@ -820,6 +833,7 @@ function setupSocket(ws: WebSocket, ip: string) {
     void leaveRoom(connId);
     lobbyPlayers.delete(connId);
     conns.delete(connId);
+    peerAnnounced.delete(connId);
     broadcast({ type: 'lobby', action: 'leave', id: connId });
     // 匹配中断开：从排位队列移除
     if (matchLocal.has(connId)) {
@@ -899,7 +913,10 @@ async function beginMatch(batch: any[], want: number) {
   // 先通知成团玩家（本 isolate 直接发 + 跨 isolate 广播）：客户端收到 matched 才会挂 host/guest 处理器，
   // 必须在 joined 之前，否则发给房主的 peer 消息会被「匹配弹窗的旧处理器」丢弃，房主 peers 永远为空 →
   // guest 永远收不到状态快照，卡在「等待房主开始」。
-  broadcast({ type: 'match', action: 'found', room, players: batch.map((b: any, i: number) => ({ id: b.id, slot: i + 1 })) });
+  const players = batch.map((b: any, i: number) => ({ id: b.id, slot: i + 1 }));
+  broadcast({ type: 'match', action: 'found', room, players });
+  // 跨 isolate 兜底：BroadcastChannel 不投递到别的 isolate 时，靠 KV 队列补发 matched
+  await pushMatchFound(room, players);
   // KV 注册表补上其余玩家（guest），并广播 joined 让各 isolate 的 rooms 镜像同步、房主收到 peer
   const reg = await roomReg(room);
   for (let i = 1; i < batch.length; i++) {
@@ -921,6 +938,16 @@ async function beginMatch(batch: any[], want: number) {
     });
   }
   if (reg) await setRoomReg(reg);
+  // 成团后队列里剩下的人要看到新计数，否则数字一直停在旧值，玩家以为没人来
+  const rest = q.filter((x: any) => !batchIds.has(x.id));
+  const bySize = new Map<number, number>();
+  for (const p of rest) {
+    const s = (p.size || MATCH_PLAYERS) as number;
+    bySize.set(s, (bySize.get(s) || 0) + 1);
+  }
+  for (const [s, n] of bySize) {
+    broadcast({ type: 'match', action: 'count', n, size: s, wait: MATCH_WAIT_SEC });
+  }
 }
 
 // 每秒巡检：把「等太久但已经够 MATCH_MIN 人」的队列提前开局
@@ -942,6 +969,126 @@ async function sweepMatchQueue() {
       await beginMatch(list.slice(0, sz), sz);
     }
   });
+}
+
+// ---------- 跨 isolate 消息兜底 ----------
+// 实测：新平台 BroadcastChannel 跨 isolate 不可靠（两个连接互相收不到即时广播，只能靠 KV 同步
+// 15 秒后补到）。匹配成团通知、WebRTC 信令、房主的 guest 公告都是「错过一次就永远卡住」的
+// 一次性事件 —— 漏掉就表现为「匹配不上」「匹配成功但进不去」「等待房主开始」。
+// 所以这些事件除了 broadcast，还要写进 KV 队列，各 isolate 每秒巡检拉取并投递给本地连接。
+const KV_MATCH_FOUND = ['matchfound'];
+const KV_SIG_Q = ['sigq'];
+const RELAY_TTL_MS = 60000;      // 兜底事件最长保留时间（超时丢弃，防止 KV 无限膨胀）
+
+async function pushMatchFound(room: string, players: any[]) {
+  try {
+    const r = await kv.get(KV_MATCH_FOUND);
+    const arr = Array.isArray(r.value) ? r.value : [];
+    arr.push({ room, players, ts: Date.now() });
+    await kv.set(KV_MATCH_FOUND, arr.filter((x: any) => Date.now() - (x.ts || 0) < RELAY_TTL_MS));
+  } catch (_) {}
+}
+
+// 已补发过的成团通知（room:connId）——避免每秒重复给同一连接发 matched
+const foundDone = new Set<string>();
+
+async function drainMatchFound() {
+  await withMatchLock(async () => {
+    let arr: any[] = [];
+    try {
+      const r = await kv.get(KV_MATCH_FOUND);
+      arr = Array.isArray(r.value) ? r.value : [];
+    } catch (_) { return; }
+    if (!arr.length) return;
+    const now = Date.now();
+    const keep: any[] = [];
+    for (const ev of arr) {
+      if (now - (ev.ts || 0) > RELAY_TTL_MS) continue;      // 过期：丢弃
+      const ps: any[] = ev.players || [];
+      for (const p of ps) {
+        const key = ev.room + ':' + p.id;
+        if (foundDone.has(key)) continue;
+        const c = conns.get(p.id);
+        if (!c) continue;                                    // 不在本 isolate，留给它的 isolate
+        if (c.room && c.room !== ev.room) { foundDone.add(key); continue; }
+        if (!c.room) {
+          c.room = ev.room;
+          c.role = p.slot === 1 ? 'host' : 'guest';
+          c.slot = p.slot;
+          if (p.slot === 1) c.hostSince = Date.now();
+        }
+        matchLocal.delete(p.id);
+        lobbyPlayers.delete(p.id);
+        send(c.ws, { t: 'matched', room: ev.room, slot: p.slot, n: ps.length });
+        foundDone.add(key);
+      }
+      // 全部玩家都送达后才能从队列移除；有人掉线就等 TTL 自然过期
+      if (!ps.every((p: any) => foundDone.has(ev.room + ':' + p.id))) keep.push(ev);
+    }
+    if (keep.length !== arr.length) {
+      try { await kv.set(KV_MATCH_FOUND, keep); } catch (_) {}
+    }
+  });
+}
+
+async function pushSig(room: string, from: number, to: number, d: any) {
+  try {
+    const r = await kv.get(KV_SIG_Q);
+    const arr = Array.isArray(r.value) ? r.value : [];
+    arr.push({ room, from, to, d, ts: Date.now() });
+    await kv.set(KV_SIG_Q, arr.filter((x: any) => Date.now() - (x.ts || 0) < RELAY_TTL_MS).slice(-300));
+  } catch (_) {}
+}
+
+// 信令兜底投递：WebRTC 打不通就永远回退不到 P2P，游戏数据全靠服务器中转（跨 isolate 又不通），
+// 所以信令必须送达目标 slot 所在 isolate。
+async function drainSig() {
+  await withMatchLock(async () => {
+    let arr: any[] = [];
+    try {
+      const r = await kv.get(KV_SIG_Q);
+      arr = Array.isArray(r.value) ? r.value : [];
+    } catch (_) { return; }
+    if (!arr.length) return;
+    const now = Date.now();
+    const keep: any[] = [];
+    for (const ev of arr) {
+      if (now - (ev.ts || 0) > RELAY_TTL_MS) continue;
+      let hit = false;
+      for (const [, c] of conns) {
+        if (c.room !== ev.room) continue;
+        if ((c.slot || 0) !== ev.to) continue;
+        send(c.ws, { t: 'sig', from: ev.from, to: ev.to, d: ev.d });
+        hit = true;
+      }
+      if (!hit) keep.push(ev);     // 目标还没进房间（或不在本 isolate）：留着下轮再试
+    }
+    if (keep.length !== arr.length) {
+      try { await kv.set(KV_SIG_Q, keep); } catch (_) {}
+    }
+  });
+}
+
+// 房主的 guest 公告兜底：跨 isolate 时 joined 广播到不了房主，房主 peers 永远为空 →
+// 不会发起 WebRTC、guest 也收不到快照（卡在「等待房主开始」）。按 KV 注册表补发 peer。
+const peerAnnounced = new Map<string, Set<string>>();
+let peerSweepTick = 0;
+async function sweepRoomPeers() {
+  if (++peerSweepTick % 2) return;    // 每 2 秒一次，省 KV 读
+  for (const [id, c] of conns) {
+    if (c.role !== 'host' || !c.room) continue;
+    // 开局 40 秒后成员已稳定，不再查（省 KV 读，也避免房间列表房主一直轮询）
+    if (c.hostSince && Date.now() - c.hostSince > 40000) continue;
+    let sent = peerAnnounced.get(id);
+    if (!sent) { sent = new Set(); peerAnnounced.set(id, sent); }
+    let reg: any = null;
+    try { reg = await roomReg(c.room); } catch (_) { continue; }
+    for (const g of (reg && reg.guests) || []) {
+      if (sent.has(g.id)) continue;
+      sent.add(g.id);
+      send(c.ws, { t: 'peer', state: 'connected', slot: g.slot, name: g.name || '', skin: g.skin || '' });
+    }
+  }
 }
 
 // 可升级物品（武器/皮肤技能/手榴弹），每项最高 5 级；升级花费经验（不影响等级/排行）
