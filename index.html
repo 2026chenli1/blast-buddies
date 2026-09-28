@@ -131,6 +131,9 @@
     padding: 20px 12px;
   }
   .overlay.hidden { opacity: 0; pointer-events: none; }
+  /* 防御：父层只是 opacity:0（视觉隐藏），子面板若自带 pointer-events:auto 仍会吞掉
+     触摸/点击。隐藏时一律禁用，避免任何开局路径漏掉收起面板导致摇杆/鼠标失灵。 */
+  .overlay.hidden #net-panel, .overlay.hidden #home-view { pointer-events: none; }
   /* flex 居中 + 可滚动：内容矮时自动垂直居中，内容超高时顶部对齐可滑动（标题不会被裁掉） */
   .overlay > *:first-child { margin-top: auto; }
   .overlay > *:last-child { margin-bottom: auto; }
@@ -445,6 +448,15 @@
   }
   .lb-row:nth-child(odd) { background: rgba(255,255,255,.03); }
   .lb-row.lb-highlight { background: rgba(255,183,3,.22); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,183,3,.5); }
+  /* 前三名：奖牌行高亮 + 专属皮肤奖励标签 */
+  .lb-row.lb-top1 { background: linear-gradient(90deg, rgba(255,209,102,.20), rgba(255,209,102,.04)); box-shadow: inset 0 0 0 1px rgba(255,209,102,.45); }
+  .lb-row.lb-top2 { background: linear-gradient(90deg, rgba(226,232,240,.16), rgba(226,232,240,.03)); box-shadow: inset 0 0 0 1px rgba(226,232,240,.35); }
+  .lb-row.lb-top3 { background: linear-gradient(90deg, rgba(194,112,63,.16), rgba(194,112,63,.03)); box-shadow: inset 0 0 0 1px rgba(194,112,63,.35); }
+  .lb-reward {
+    display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 800; color: #4a3b00; background: #ffd166; white-space: nowrap;
+  }
+  .lb-tip { color: #9fb3c8; font-size: 11.5px; padding: 4px 8px 6px; line-height: 1.5; }
   .lb-rank { font-weight: 900; color: #ffd166; }
   .lb-name { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .lb-wave { color: #9fb3c8; font-size: 12px; }
@@ -710,6 +722,13 @@
     box-shadow: 0 4px 12px rgba(0,0,0,.18);
   }
   .top-icon-btn:hover { background: rgba(50,40,90,.75); }
+  /* 商城按钮：今天还有可买的特惠时右上角亮红点 */
+  .top-icon-btn.has-daily { position: relative; }
+  .top-icon-btn.has-daily::after {
+    content: ''; position: absolute; top: -1px; right: -1px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #ff6b6b; box-shadow: 0 0 0 2px rgba(11,22,38,.85);
+  }
   .top-icon-btn.portrait-only { display: none; } /* 仅竖屏展示任务/聊天入口 */
   .top-icon-btn:active { transform: scale(0.92); }
 
@@ -1082,6 +1101,18 @@
     font-size: 13px; color: #cfe0f0;
   }
   .shop-item.equipped { border-color: #ffd166; box-shadow: inset 0 0 0 1px rgba(255,209,102,.4); }
+  /* 每日商店：折扣角标 + 说明条（沿用商城卡片的圆角 1px 边框风格） */
+  .daily-item { position: relative; }
+  .daily-off {
+    position: absolute; top: 6px; left: 6px; z-index: 2;
+    padding: 2px 7px; border-radius: 999px;
+    background: #ff6b6b; color: #fff; font-size: 11px; font-weight: 900;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3);
+  }
+  .daily-tip {
+    grid-column: 1 / -1; color: #9fb3c8; font-size: 12px;
+    padding: 2px 4px 6px; line-height: 1.5;
+  }
   .shop-item-name { font-weight: 800; color: #eef4ff; font-size: 13.5px; }
   .shop-item-desc { font-size: 11px; color: #9fb3c8; line-height: 1.5; text-align: center; min-height: 32px; }
   .shop-item-skill {
@@ -1745,6 +1776,7 @@
       <div class="shop-tabs">
         <button class="mode-btn active" id="shop-tab-skin">皮肤</button>
         <button class="mode-btn" id="shop-tab-gun">枪械</button>
+        <button class="mode-btn" id="shop-tab-daily">每日特惠</button>
         <button class="mode-btn" id="shop-tab-upg">升级</button>
       </div>
       <div class="shop-grid" id="shop-list"></div>
@@ -1851,6 +1883,11 @@ const SKIN_DEFS = {
   skin_celestial:{ name: '天界圣骑', price: 60000, desc: '★通行证 圣光庇佑，邪祟退散', body1: '#fef9c3', body2: '#a16207', gun1: '#854d0e', gun2: '#713f12', glow: '#fef08a', visorCol: '#fde047', pass: 1, killReq: 30000, deco: 'halo', texture: 'shine', eye: 'visor', trail: 'holy', skill: { icon: '🗡️', name: '圣光裁决', cd: 22, desc: '展开圣光领域 8 秒：领域内队友无敌，敌人持续受到 2 点/秒伤害', power: 55 } },
   skin_chaos:   { name: '混沌魔神', price: 80000, desc: '★通行证 无序即真理，混乱即力量', body1: '#f0abfc', body2: '#581c87', gun1: '#3b0764', gun2: '#0f172a', glow: '#d946ef', pass: 1, killReq: 50000, deco: 'chaos', texture: 'chaos', eye: 'chaos', trail: 'chaos', skill: { icon: '🌀', name: '混沌崩坏', cd: 30, desc: '扭曲空间 6 秒：敌人随机传送且互相伤害，期间自身射速翻倍', power: 60 } },
   skin_eternal: { name: '永恒至尊', price: 120000, desc: '★通行证 超越时空，永恒不灭', body1: '#ffffff', body2: '#1e1b4b', gun1: '#312e81', gun2: '#0f172a', glow: '#fde047', visorCol: '#ffffff', pass: 1, killReq: 80000, deco: 'eternal', texture: 'astral', eye: 'star', trail: 'eternal', skill: { icon: '♾️', name: '永恒领域', cd: 35, desc: '展开永恒领域 10 秒：全场敌人被冻结，自身无敌且射速 3 倍，每击杀延长 1 秒', power: 66 } },
+  // ↓ 排行榜专属：商城不卖、盲盒抽不到，只有线上排行榜前三名能拿到。
+  //   每天结算一次，掉出前三会被收回（rank 字段 = 对应名次，1 冠军 / 2 亚军 / 3 季军）
+  skin_champion:{ name: '至尊冠军', price: 0, rank: 1, desc: '★排行 第 1 名专属 · 每日结算发放', body1: '#ffe9a8', body2: '#f59e0b', gun1: '#b45309', gun2: '#92400e', glow: '#ffd166', deco: 'crown',    texture: 'shine',   eye: 'star',   trail: 'holy',    skill: { icon: '♛', name: '王者号令', cd: 26, desc: '号令全场 6 秒：射速翻倍、移速 +30%，期间所有敌人减速 50%', power: 48 } },
+  skin_runnerup:{ name: '星辰亚军', price: 0, rank: 2, desc: '★排行 第 2 名专属 · 每日结算发放', body1: '#e2e8f0', body2: '#94a3b8', gun1: '#64748b', gun2: '#475569', glow: '#e2e8f0', visorCol: '#cbd5e1', deco: 'halo', texture: 'metal', eye: 'visor', trail: 'frost', skill: { icon: '❈', name: '银月裁决', cd: 24, desc: '银月横扫全场：所有敌人受到 6 点伤害并被击退，BOSS 额外受 8 点', power: 40 } },
+  skin_third:   { name: '荣耀季军', price: 0, rank: 3, desc: '★排行 第 3 名专属 · 每日结算发放', body1: '#fcd9b6', body2: '#c2703f', gun1: '#8a4b25', gun2: '#5c3218', glow: '#fbbf24', deco: 'headband', texture: 'stripe', eye: 'normal', trail: 'ember', skill: { icon: '❉', name: '荣耀冲锋', cd: 20, desc: '向准星方向荣耀冲锋：沿途敌人受到 8 点伤害，终点造成范围冲击', power: 36 } },
   // ↓ 盲盒专属：商城不卖，只能用 B 币在盲盒里抽到
   skin_jester:  { name: '诡笑小丑', price: 0, box: 1, desc: '🎁盲盒 猜猜盒子里是什么', body1: '#fca5a5', body2: '#be123c', gun1: '#4c0519', gun2: '#0f172a', glow: '#fda4af', deco: 'jester', texture: 'harlequin', eye: 'jester', trail: 'confetti', skill: { icon: '🃏', name: '诡术扑克', cd: 16, desc: '掷出 5 张扑克随机造成 1~6 点伤害；抽到王牌则全场敌人受到 8 点伤害', power: 10 } },
   skin_ghost:   { name: '幽灵旅者', price: 0, box: 1, desc: '🎁盲盒 飘忽不定，来去无踪', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#cbd5e1', deco: 'ghost', texture: 'ghost', eye: 'hollow', trail: 'smoke', skill: { icon: '👻', name: '灵体穿梭', cd: 14, desc: '进入灵体状态 5 秒：可穿过墙壁与障碍，期间移速 +50%', power: 11 } },
@@ -1871,6 +1908,12 @@ function passKillsOk(skinId, kills) {
 }
 // 盲盒专属皮肤：商城不卖，只能抽
 const BOX_SKINS = Object.keys(SKIN_DEFS).filter((k) => SKIN_DEFS[k].box);
+// 排行榜专属皮肤：名次(1/2/3) → 皮肤 id（与服务端 RANK_SKINS 保持一致）
+const RANK_SKINS = { 1: 'skin_champion', 2: 'skin_runnerup', 3: 'skin_third' };
+const RANK_SKIN_IDS = [1, 2, 3].map((n) => RANK_SKINS[n]);
+const RANK_TITLES = { 1: '冠军', 2: '亚军', 3: '季军' };
+// 商城里这三款不卖：只有每天排行榜结算时由服务端发放
+function isRankSkin(id) { return RANK_SKIN_IDS.includes(id); }
 
 // 移动特效（紫电幻影及以后的皮肤才有）：移动时脚下/身后持续冒出主题粒子
 const TRAIL_DEFS = {
@@ -2737,8 +2780,14 @@ function applyUser(u) {
   User.ownedGuns = u.ownedGuns || ['gun_pistol'];
   User.kills = u.kills || 0;
   User.pass = u.pass ? 1 : 0;
-  User.skin = SKIN_DEFS[u.skin] ? u.skin : 'skin_default';
-  User.gun = GUN_DEFS[u.gun] ? u.gun : 'gun_pistol';
+  // 排行榜奖励皮肤掉出前三会被服务端收回：背包里已经没有却还穿着 → 退回初始装备
+  let nextSkin = SKIN_DEFS[u.skin] ? u.skin : 'skin_default';
+  let nextGun = GUN_DEFS[u.gun] ? u.gun : 'gun_pistol';
+  if (!User.ownedSkins.includes(nextSkin)) nextSkin = 'skin_default';
+  if (!User.ownedGuns.includes(nextGun)) nextGun = 'gun_pistol';
+  User.skin = nextSkin;
+  User.gun = nextGun;
+  loadDailyShop();   // 登录后拉一次今日特惠（给商城按钮点亮小红点）
   try { localStorage.setItem('bb_name', User.name); } catch (e) {}
   renderHomeUser();
   // 登录拿到昵称后，用最新作者重新拉今日地图（优先展示别人的地图）
@@ -3047,7 +3096,9 @@ function renderShop() {
   document.getElementById('shop-tab-skin').classList.toggle('active', shopTab === 'skin');
   document.getElementById('shop-tab-gun').classList.toggle('active', shopTab === 'gun');
   document.getElementById('shop-tab-upg').classList.toggle('active', shopTab === 'upg');
+  document.getElementById('shop-tab-daily').classList.toggle('active', shopTab === 'daily');
   if (shopTab === 'upg') { renderUpgradeTab(); return; }
+  if (shopTab === 'daily') { renderDailyTab(); return; }
   listEl.classList.remove('upg-list');
   listEl.classList.add('shop-grid');
   const defs = shopTab === 'skin' ? SKIN_DEFS : GUN_DEFS;
@@ -3060,18 +3111,21 @@ function renderShop() {
     const isEq = equipped === id;
     const needPass = d.pass && !isOwned && !User.pass;   // 通行证专属：未获得通行证不可购买
     const lvLock = !isOwned && d.lv && d.lv > User.level;
+    // 排行榜专属皮肤：非卖品，只有每天结算进前三才拿得到（拥有了就能正常装备）
+    const rankNo = d.rank || 0;
     let btn;
     if (isEq) btn = `<button class="shop-buy equipped" disabled>装备中</button>`;
     else if (isOwned) btn = `<button class="shop-buy own" data-eq="${id}">装备</button>`;
+    else if (rankNo) btn = `<button class="shop-buy locked" disabled>🏆 排行榜第 ${rankNo} 名</button>`;
     else if (needPass) btn = `<button class="shop-buy locked" disabled>🎖 通行证解锁</button>`;
     else if (lvLock) btn = `<button class="shop-buy locked" disabled>🔒 Lv.${d.lv} 解锁</button>`;
     else btn = `<button class="shop-buy" data-buy="${id}">💰 ${d.price}</button>`;
     const skillLine = (shopTab === 'skin' && d.skill)
       ? `<div class="shop-item-skill">${d.skill.icon} 技能 · ${d.skill.name} <span class="skill-cd">冷却 ${d.skill.cd}s</span><br><span class="shop-item-skill-desc">${d.skill.desc}</span></div>`
       : '';
-    h += `<div class="shop-item ${isEq ? 'equipped' : ''} ${(lvLock || needPass) ? 'locked' : ''}">
+    h += `<div class="shop-item ${isEq ? 'equipped' : ''} ${(lvLock || needPass || (rankNo && !isOwned)) ? 'locked' : ''}">
       <canvas data-prev="${id}" width="88" height="88"></canvas>
-      <div class="shop-item-name">${d.name}${d.pass ? ' <span style="color:#fbbf24;font-size:10px;">★通行证</span>' : ''}</div>
+      <div class="shop-item-name">${d.name}${d.pass ? ' <span style="color:#fbbf24;font-size:10px;">★通行证</span>' : ''}${rankNo ? ` <span style="color:#ffd166;font-size:10px;">🏆第${rankNo}名</span>` : ''}</div>
       <div class="shop-item-desc">${d.desc || ''}</div>
       ${skillLine}
       ${btn}
@@ -3184,6 +3238,7 @@ function openShop() {
   document.getElementById('shop-modal').style.display = 'flex';
   document.getElementById('shop-msg').textContent = '';
   renderShop();
+  if (shopTab === 'daily') loadDailyShop();   // 停在「每日特惠」时打开就刷新一次
 }
 document.getElementById('shop-btn').addEventListener('click', openShop);
 document.getElementById('shop-close').addEventListener('click', () => {
@@ -3192,6 +3247,98 @@ document.getElementById('shop-close').addEventListener('click', () => {
 document.getElementById('shop-tab-skin').addEventListener('click', () => { shopTab = 'skin'; renderShop(); });
 document.getElementById('shop-tab-gun').addEventListener('click', () => { shopTab = 'gun'; renderShop(); });
 document.getElementById('shop-tab-upg').addEventListener('click', () => { shopTab = 'upg'; renderShop(); });
+document.getElementById('shop-tab-daily').addEventListener('click', () => { shopTab = 'daily'; renderShop(); loadDailyShop(); });
+
+// ======================= 每日商店（每天刷新一批折扣商品） =======================
+// 商品与折扣由服务端按日期生成（同一天所有人看到的都一样，跨天自动换新）；
+// 这里只负责拉取 + 渲染 + 购买。每人每款每日限购一次。
+let dailyShop = null;   // { date, items, bought, refreshIn }
+function dailyCountdownText(sec) {
+  if (!sec && sec !== 0) return '';
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return `${h} 小时 ${m} 分 ${s} 秒后刷新`;
+}
+// 商城按钮上的小红点：今天还有没买/没拥有的特惠时才亮
+function dailyHasDeal() {
+  if (!dailyShop || !Array.isArray(dailyShop.items)) return false;
+  return dailyShop.items.some((g) => {
+    const owned = (g.type === 'skin' ? User.ownedSkins : User.ownedGuns).includes(g.id);
+    return !owned && !(dailyShop.bought || []).includes(g.id);
+  });
+}
+function updateDailyDot() {
+  const btn = document.getElementById('shop-btn');
+  if (btn) btn.classList.toggle('has-daily', !!dailyHasDeal());
+}
+async function loadDailyShop() {
+  const listEl = document.getElementById('shop-list');
+  // 登录后才拉；未登录时只在正停在「每日特惠」页时给提示（别覆盖其它 tab 的列表）
+  const onTab = shopTab === 'daily' && listEl;
+  if (!User.logged) {
+    if (onTab) { listEl.className = 'shop-msg'; listEl.innerHTML = '<div class="lb-empty">登录后查看今日特惠</div>'; }
+    return;
+  }
+  if (onTab) { listEl.className = 'shop-msg'; listEl.innerHTML = '<div class="lb-empty">正在获取今日特惠…</div>'; }
+  try {
+    const r = await api('/api/shop/daily');
+    if (!r.ok || !Array.isArray(r.items)) throw new Error('bad');
+    dailyShop = r;
+    if (onTab) renderDailyTab();
+    updateDailyDot();
+  } catch (e) {
+    if (onTab) listEl.innerHTML = '<div class="lb-empty">今日特惠加载失败，请稍后重试</div>';
+  }
+}
+function renderDailyTab() {
+  const listEl = document.getElementById('shop-list');
+  if (!listEl) return;
+  listEl.classList.remove('upg-list');
+  listEl.classList.add('shop-grid');
+  if (!dailyShop) { loadDailyShop(); return; }
+  const bought = dailyShop.bought || [];
+  let h = `<div class="daily-tip">今日特惠 · 每款每日限购一次 · ${escapeHtml(dailyCountdownText(dailyShop.refreshIn))}</div>`;
+  for (const g of dailyShop.items) {
+    const defs = g.type === 'skin' ? SKIN_DEFS : GUN_DEFS;
+    const d = defs[g.id];
+    if (!d) continue;
+    const owned = (g.type === 'skin' ? User.ownedSkins : User.ownedGuns).includes(g.id);
+    const isBought = bought.includes(g.id);
+    const lvLock = d.lv && d.lv > User.level;
+    let btn;
+    if (owned) btn = `<button class="shop-buy own" data-eq="${g.id}">装备</button>`;
+    else if (isBought) btn = `<button class="shop-buy locked" disabled>今日已购</button>`;
+    else if (lvLock) btn = `<button class="shop-buy locked" disabled>🔒 Lv.${d.lv} 解锁</button>`;
+    else btn = `<button class="shop-buy" data-dbuy="${g.id}">💰 ${g.price}</button>`;
+    const skillLine = (g.type === 'skin' && d.skill)
+      ? `<div class="shop-item-skill">${d.skill.icon} 技能 · ${d.skill.name} <span class="skill-cd">冷却 ${d.skill.cd}s</span><br><span class="shop-item-skill-desc">${d.skill.desc}</span></div>`
+      : `<div class="shop-item-desc">特惠价仅为原价的 ${g.off}%</div>`;
+    h += `<div class="shop-item daily-item">
+      <span class="daily-off">${g.off / 10} 折</span>
+      <canvas data-prev="${g.id}" width="88" height="88"></canvas>
+      <div class="shop-item-name">${d.name}<span style="color:#9fb3c8;font-size:11px;"> · ${g.type === 'skin' ? '皮肤' : '枪械'}</span></div>
+      <div class="shop-item-desc"><s style="color:#7d93a8;">💰 ${g.orig}</s> <b style="color:#ffd166;">💰 ${g.price}</b></div>
+      ${skillLine}
+      ${btn}
+    </div>`;
+  }
+  listEl.innerHTML = h;
+  for (const cv of listEl.querySelectorAll('canvas[data-prev]')) {
+    drawMiniPlayer(cv, (SKIN_DEFS[cv.dataset.prev] || GUN_DEFS[cv.dataset.prev]), !SKIN_DEFS[cv.dataset.prev]);
+  }
+  for (const b of listEl.querySelectorAll('[data-dbuy]')) b.addEventListener('click', () => dailyBuy(b.dataset.dbuy));
+  for (const b of listEl.querySelectorAll('[data-eq]')) b.addEventListener('click', () => shopEquip(b.dataset.eq));
+}
+async function dailyBuy(id) {
+  if (!User.logged) { openLogin(); shopMsg('登录后即可购买'); return; }
+  const g = dailyShop && dailyShop.items.find((x) => x.id === id);
+  if (!g) return;
+  if ((User.coins || 0) < g.price) { shopMsg('金币不足'); return; }
+  try {
+    const r = await api('/api/shop/buy', { item: id });
+    if (r.ok) { applyUser(r.user); dailyShop.bought = (dailyShop.bought || []).concat([id]); renderDailyTab(); updateDailyDot(); Sfx.powerup(); shopMsg(`已购入 ${g.name}（特惠 💰${g.price}）`); }
+    else shopMsg(r.msg || '购买失败');
+  } catch (e) { shopMsg('网络错误'); }
+}
 
 // ======================= 武器选择（等级解锁） =======================
 function gunStatLine(d, id) {
@@ -3273,13 +3420,18 @@ async function loadOnlineRank() {
     if (!r.ok || !Array.isArray(r.list)) throw new Error('bad');
     if (!r.list.length) { el.innerHTML = '<div class="lb-empty">暂无线上玩家，快来抢占第一！</div>'; return; }
     const meName = User.logged ? User.name : (localStorage.getItem('bb_name') || '');
-    let h = '';
+    let h = `<div class="lb-tip">每日结算：前三名可获得专属皮肤（🥇冠军 / 🥈亚军 / 🥉季军），掉出前三将被收回</div>`;
     r.list.slice(0, 20).forEach((u, i) => {
       const lv = u.level ?? (1 + Math.floor((u.exp || 0) / 180));
       const isMe = meName && u.name === meName;
-      h += `<div class="lb-row ${isMe ? 'lb-highlight' : ''}">
-        <span class="lb-rank">${i + 1}</span>
-        <span class="lb-name">${escapeHtml(u.name || '玩家')}</span>
+      const rank = i + 1;
+      const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+      const reward = rank <= 3
+        ? `<span class="lb-reward" title="${RANK_TITLES[rank]}专属皮肤：${SKIN_DEFS[RANK_SKINS[rank]].name}">🏆 ${RANK_TITLES[rank]}皮肤</span>`
+        : '';
+      h += `<div class="lb-row ${isMe ? 'lb-highlight' : ''} ${rank <= 3 ? 'lb-top' + rank : ''}">
+        <span class="lb-rank">${medal || rank}</span>
+        <span class="lb-name">${escapeHtml(u.name || '玩家')}${reward}</span>
         <span class="lb-wave">Lv.${lv}</span>
         <span class="lb-mode">💰${u.coins || 0}</span>
         <span class="lb-score">${u.exp || 0} 经验</span>
@@ -5124,6 +5276,47 @@ function useSkill(p) {
       G.effects.push({ type: 'nova', x: p.x, y: p.y, r: 0, maxR: Math.max(W, H), life: 0.7, maxLife: 0.7, color: '#fbbf24' });
       G.shake = Math.max(G.shake, 12);
       addPopup(p.x, p.y - p.r - 42, '时间凝滞！', '#fbbf24');
+      fx('#fbbf24');
+      break;
+    }
+    // ===== 排行榜专属皮肤：每日结算发放给线上前三名 =====
+    case 'skin_champion': { // 王者号令：6 秒射速翻倍 + 移速 +30%，全场敌人减速 50%
+      p.rainbow = 6;
+      for (const e of G.enemies) e.slow = Math.max(e.slow || 0, 6);
+      if (G.boss && G.boss.hp > 0) G.boss.slow = Math.max(G.boss.slow || 0, 6);
+      G.effects.push({ type: 'nova', x: p.x, y: p.y, r: 0, maxR: Math.max(W, H) * 0.8, life: 0.6, maxLife: 0.6, color: '#ffd166' });
+      addPopup(p.x, p.y - p.r - 42, '王者号令！', '#ffd166');
+      fx('#ffd166');
+      break;
+    }
+    case 'skin_runnerup': { // 银月裁决：全场敌人 6 伤 + 击退，BOSS 额外 8 伤
+      for (let i = G.enemies.length - 1; i >= 0; i--) {
+        const e = G.enemies[i];
+        const a = Math.atan2(e.y - p.y, e.x - p.x);
+        e.x += Math.cos(a) * 90; e.y += Math.sin(a) * 90;
+        e.x = clamp(e.x, e.r, W - e.r); e.y = clamp(e.y, e.r, H - e.r);
+        damageEnemyBySkill(e, 6, '#e2e8f0');
+      }
+      if (G.boss && G.boss.hp > 0) {
+        G.boss.hp -= 8; G.boss.flash = 0.2; updateBossBar();
+        addPopup(G.boss.x, G.boss.y - G.boss.r - 20, '-8', '#e2e8f0');
+      }
+      G.effects.push({ type: 'nova', x: p.x, y: p.y, r: 0, maxR: Math.max(W, H) * 0.7, life: 0.5, maxLife: 0.5, color: '#e2e8f0' });
+      G.shake = Math.max(G.shake, 10);
+      fx('#e2e8f0');
+      break;
+    }
+    case 'skin_third': { // 荣耀冲锋：向准星方向高速突进，沿途 8 伤，终点范围冲击
+      const a = p.angle;
+      p.dashVx = Math.cos(a) * CFG.playerSpeed * 5.6;
+      p.dashVy = Math.sin(a) * CFG.playerSpeed * 5.6;
+      p.dashT = 0.26;
+      p.invuln = Math.max(p.invuln, 0.26);
+      p.dashSlam = 8; // 落点冲击：沿途 + 终点伤害
+      for (let i = G.enemies.length - 1; i >= 0; i--) {
+        const e = G.enemies[i];
+        if (dist2(e.x, e.y, p.x, p.y) < 150 * 150) damageEnemyBySkill(e, 8, '#fbbf24');
+      }
       fx('#fbbf24');
       break;
     }
@@ -8763,6 +8956,13 @@ function applyNetState(s) {
       hide(document.getElementById('start-overlay'));
       hide(document.getElementById('over-overlay'));
       hide(document.getElementById('pause-overlay'));
+      // guest 不跑 startGame()，得自己收起这两块，否则开局后仍盖在画布上：
+      // net-panel 铺满全屏吞触摸（摇杆失效），投票面板挡住半屏
+      document.getElementById('net-panel').style.display = 'none';
+      renderVoteBox();
+      if (document.activeElement && document.activeElement !== document.body) {
+        try { document.activeElement.blur(); } catch (e) {}
+      }
       hideBossBar();
       document.getElementById('hud').style.display = 'flex';
       const awBtn2 = document.getElementById('admin-warp-btn');
@@ -8984,6 +9184,14 @@ function startGame() {
   hide(document.getElementById('start-overlay'));
   hide(document.getElementById('over-overlay'));
   hide(document.getElementById('pause-overlay'));
+  // 联机面板必须显式收起：它铺满全屏（inset:0）且自带 pointer-events:auto，
+  // 父层 start-overlay 只是 opacity:0（不吃事件的只是父层），面板仍在吞触摸/点击，
+  // 表现为「开局后手机摇杆推不动、电脑点了没反应」。
+  document.getElementById('net-panel').style.display = 'none';
+  // 焦点若还留在聊天/房间号输入框里，keydown 会被 stopPropagation 吃掉 → WASD 失灵
+  if (document.activeElement && document.activeElement !== document.body) {
+    try { document.activeElement.blur(); } catch (e) {}
+  }
   hideBossBar();
   document.getElementById('hud').style.display = 'flex';
   const awBtn = document.getElementById('admin-warp-btn');
@@ -10125,6 +10333,8 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
     openGiftPicker, renderGiftList, confirmGift, pmAppend, pmLoad, meLoad, meSave, applyUser,
     // 联机性能调试钩子
     snapshotState, applyNetState, netBroadcast, sendState,
+    // 每日商店 / 排行榜调试钩子（新功能验证用）
+    api, loadOnlineRank, loadDailyShop, renderShop, dailyShop: () => dailyShop,
   };
 }
 
