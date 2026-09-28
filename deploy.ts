@@ -852,7 +852,7 @@ function setupSocket(ws: WebSocket, ip: string) {
 const kv = await Deno.openKv();
 
 // 商城目录：皮肤 + 枪（价格单位：金币；price=0 为初始赠送；lv 为枪械解锁等级）
-const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: number; lv?: number; pass?: number; box?: number; killReq?: number }> = {
+const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: number; lv?: number; pass?: number; box?: number; killReq?: number; rank?: number }> = {
   skin_default: { type: 'skin', name: '蓝色战士', price: 0 },
   skin_green:   { type: 'skin', name: '翠绿战士', price: 200 },
   skin_pink:    { type: 'skin', name: '樱花甜心', price: 200 },
@@ -874,6 +874,10 @@ const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: nu
   skin_celestial:{ type: 'skin', name: '天界圣骑', price: 60000,  pass: 1, killReq: 30000 },
   skin_chaos:    { type: 'skin', name: '混沌魔神', price: 80000,  pass: 1, killReq: 50000 },
   skin_eternal:  { type: 'skin', name: '永恒至尊', price: 120000, pass: 1, killReq: 80000 },
+  // 排行榜专属：商城不卖、盲盒抽不到，只能靠「每日结算进前三」拿到（rank = 对应名次）
+  skin_champion: { type: 'skin', name: '至尊冠军', price: 0, rank: 1 },
+  skin_runnerup: { type: 'skin', name: '星辰亚军', price: 0, rank: 2 },
+  skin_third:    { type: 'skin', name: '荣耀季军', price: 0, rank: 3 },
   // 盲盒专属：商城不卖，只能抽（price 0 表示非卖品）
   skin_jester:   { type: 'skin', name: '诡笑小丑',   price: 0, box: 1 },
   skin_ghost:    { type: 'skin', name: '幽灵旅者',   price: 0, box: 1 },
@@ -895,6 +899,69 @@ const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: nu
 };
 // 盲盒专属皮肤 id 列表（必须在 SHOP_ITEMS 声明之后才能取到）
 const BOX_SKIN_IDS = Object.keys(SHOP_ITEMS).filter((k) => SHOP_ITEMS[k].box);
+// 排行榜专属皮肤：名次 → 皮肤 id（与客户端 RANK_SKINS 保持一致）
+const RANK_SKINS: Record<number, string> = { 1: 'skin_champion', 2: 'skin_runnerup', 3: 'skin_third' };
+const RANK_SKIN_IDS = Object.values(RANK_SKINS);
+
+// ---------- 排行榜前三奖励：每日结算 ----------
+// 每天结算一次（按 UTC+8 日期）：给线上排行榜前三名发放专属皮肤，
+// 掉出前三的会收回皮肤（所以这是"保持排名才一直拥有"的限时奖励）。
+// 幂等：同一天重复调用只会命中缓存的结算记录，不会反复写库。
+let rankSettleRunning: Promise<void> | null = null;
+function todayStr() {
+  // 统一用东八区日期，和玩家体感的"今天"一致
+  return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+async function settleRankRewards() {
+  const run = async () => {
+    const today = todayStr();
+    const rec = await kv.get(['rank_reward']);
+    const state = (rec.value as { date?: string; top?: string[] } | null) || {};
+    if (state.date === today) return;                 // 今天已结算
+    // 1) 收回上一批不再应得的奖励皮肤
+    const prevTop: string[] = state.top || [];
+    for (let i = 0; i < prevTop.length; i++) {
+      const phone = prevTop[i];
+      if (!phone) continue;
+      const e = await kv.get(['user', phone]);
+      const u = e.value as Record<string, any> | null;
+      if (!u) continue;
+      const skinId = RANK_SKINS[i + 1];
+      let owned: string[] = (u.ownedSkins as string[]) || [];
+      if (owned.includes(skinId)) owned = owned.filter((s) => s !== skinId);
+      // 正在穿的被收回 → 退回初始皮肤，避免穿着不存在于背包的皮肤
+      if (u.skin === skinId) u.skin = 'skin_default';
+      u.ownedSkins = owned;
+      u.rankTitle = 0;
+      await kv.set(['user', phone], u);
+    }
+    // 2) 计算今日前三并发放（管理员不参与排行）
+    const list: { phone: string; u: Record<string, any> }[] = [];
+    for await (const e of kv.list({ prefix: ['user'] })) {
+      const u = e.value as Record<string, any>;
+      if (!u) continue;
+      if (u.role === 'admin' || String(e.key[1]) === '__admin__') continue;
+      list.push({ phone: String(e.key[1]), u });
+    }
+    list.sort((a, b) => (b.u.exp || 0) - (a.u.exp || 0) || (b.u.coins || 0) - (a.u.coins || 0));
+    const top = list.slice(0, 3);
+    const topPhones: string[] = [];
+    for (let i = 0; i < top.length; i++) {
+      const { phone, u } = top[i];
+      const skinId = RANK_SKINS[i + 1];
+      const owned: string[] = (u.ownedSkins as string[]) || [];
+      if (!owned.includes(skinId)) owned.push(skinId);
+      u.ownedSkins = owned;
+      u.rankTitle = i + 1;
+      await kv.set(['user', phone], u);
+      topPhones.push(phone);
+    }
+    await kv.set(['rank_reward'], { date: today, top: topPhones, ts: Date.now() });
+  };
+  // 同一 isolate 内合并并发调用，避免重复结算
+  rankSettleRunning = (rankSettleRunning || Promise.resolve()).then(run, run);
+  await rankSettleRunning;
+}
 
 // ---------- 匹配：凑齐即开，等太久就「少人开局」 ----------
 // 在线人少时，死等凑齐等于永远开不了局。等满 MATCH_WAIT_SEC 后只要凑够 MATCH_MIN
@@ -1419,6 +1486,8 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
 
   // GET /api/rank —— 线上排行（公开，按经验值降序，Top 50；管理员不出现在榜单）
   if (path === '/api/rank' && req.method === 'GET') {
+    // 顺带做一次每日结算：前三名发放/收回专属皮肤（每天只跑一次）
+    try { await settleRankRewards(); } catch (e) { console.error('[rank settle]', e); }
     const list = [];
     for await (const e of kv.list({ prefix: ['user'] })) {
       const u = e.value as Record<string, any>;
@@ -1586,7 +1655,10 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
 
   // GET /api/user/me
   if (path === '/api/user/me' && req.method === 'GET') {
-    return jsonResp({ ok: true, user: pubUser(u) });
+    // 登录后也触发一次结算：进了前三就能立刻拿到皮肤，不用等打开排行榜
+    try { await settleRankRewards(); } catch (e) { console.error('[rank settle]', e); }
+    const fresh = await kv.get(['user', auth.phone]);
+    return jsonResp({ ok: true, user: pubUser((fresh.value as Record<string, any>) || u) });
   }
 
   // POST /api/user/name { name } —— 修改用户名（全局唯一，重名拒绝）
@@ -1615,6 +1687,10 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     if (def.box) {
       return jsonResp({ ok: false, msg: '这款是盲盒专属，请在盲盒里用 B 币抽取' }, 400);
     }
+    // 排行榜专属皮肤：非卖品，只能靠每天结算进前三拿到
+    if (def.rank) {
+      return jsonResp({ ok: false, msg: `这款是排行榜第 ${def.rank} 名专属，冲进前三即可获得` }, 400);
+    }
     // 通行证皮肤：每款有独立的累计击杀门槛（原本统一 PASS_KILLS，现在分档）
     if (def.pass) {
       const req2 = def.killReq || PASS_KILLS;
@@ -1636,6 +1712,72 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     owned.push(item as string);
     await kv.set(['user', auth.phone], u);
     return jsonResp({ ok: true, user: pubUser(u) });
+  }
+
+  // ---------- 每日商店：每天刷新一批折扣商品，每人每款每日限购一次 ----------
+  // 商品按「日期 + 商品 id」确定性生成：同一天所有人看到的是同一批，跨天自动换新，
+  // 不需要额外的定时任务或后台写入（Deno Deploy 上最省事也最可靠）。
+  function dailyShop(date: string) {
+    const pool = Object.keys(SHOP_ITEMS).filter((k) => {
+      const d = SHOP_ITEMS[k];
+      return d.price > 0 && !d.box && !d.pass && !d.rank;   // 非卖品（盲盒/通行证/排行奖励）不进每日商店
+    });
+    const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
+    // 确定性洗牌：按 hash(date + id) 排序。皮肤、枪械各取 2 件，
+    // 免得某天刷出来的全是皮肤（纯按全池排序时实测会出现 4 连皮肤）。
+    const byType = (t: 'skin' | 'gun', n: number) =>
+      pool.filter((id) => SHOP_ITEMS[id].type === t)
+        .map((id) => ({ id, h: hash(date + '#' + id) }))
+        .sort((a, b) => a.h - b.h)
+        .slice(0, n);
+    const scored = [...byType('skin', 2), ...byType('gun', 2)];
+    const picked = scored.map(({ id, h }) => {
+      const d = SHOP_ITEMS[id];
+      const offs = [50, 60, 70, 80];                       // 5~8 折
+      const off = offs[h % offs.length];
+      return {
+        id, type: d.type, name: d.name,
+        price: Math.max(1, Math.round(d.price * off / 100)),
+        orig: d.price, off, lv: d.lv || 1,
+      };
+    });
+    return picked;
+  }
+  // GET /api/shop/daily —— 今日商品 + 我已买过哪些 + 距下次刷新秒数
+  if (path === '/api/shop/daily' && req.method === 'GET') {
+    const date = todayStr();
+    const ds = (u.dailyShop as { date?: string; bought?: string[] } | null) || {};
+    const bought = ds.date === date ? (ds.bought || []) : [];
+    // 距东八区次日 0 点的秒数
+    const now = Date.now();
+    const next = new Date(date + 'T00:00:00+08:00').getTime() + 86400000;
+    return jsonResp({
+      ok: true, date, items: dailyShop(date), bought,
+      refreshIn: Math.max(0, Math.round((next - now) / 1000)),
+    });
+  }
+  // POST /api/shop/buy { item } —— 以每日折扣价购买（每款每日限购 1 次）
+  if (path === '/api/shop/buy' && req.method === 'POST') {
+    const { item } = await readBody(req);
+    const id = String(item || '');
+    const date = todayStr();
+    const goods = dailyShop(date).find((g) => g.id === id);
+    if (!goods) return jsonResp({ ok: false, msg: '这件商品今天不在特惠列表里' }, 400);
+    const ds = (u.dailyShop as { date?: string; bought?: string[] } | null) || {};
+    const bought: string[] = ds.date === date ? (ds.bought || []) : [];
+    if (bought.includes(id)) return jsonResp({ ok: false, msg: '今天已经买过这件了，明天再来看看' }, 400);
+    const def = SHOP_ITEMS[id];
+    if ((def.lv || 1) > (u.level as number)) {
+      return jsonResp({ ok: false, msg: `需要 Lv.${def.lv} 才能解锁该武器` }, 400);
+    }
+    const owned: string[] = def.type === 'skin' ? u.ownedSkins : u.ownedGuns;
+    if (owned.includes(id)) return jsonResp({ ok: false, msg: '已拥有该物品' }, 400);
+    if ((u.coins as number) < goods.price) return jsonResp({ ok: false, msg: '金币不足' }, 400);
+    u.coins = (u.coins as number) - goods.price;
+    owned.push(id);
+    u.dailyShop = { date, bought: bought.concat([id]) };
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u), price: goods.price });
   }
 
   // POST /api/user/equip { item } —— 装备
