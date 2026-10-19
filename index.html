@@ -1075,6 +1075,12 @@
   .login-hint { font-size: 12.5px; color: #9fb3c8; line-height: 1.7; text-align: center; }
   .login-hint b { color: #ffd166; font-size: 16px; letter-spacing: 2px; }
   .login-hint.err { color: #ff6b6b; }
+  /* 账号弹窗 */
+  .acct-row { display: flex; align-items: center; gap: 8px; justify-content: center; margin-bottom: 6px; }
+  .acct-label { font-size: 12.5px; color: #9fb3c8; }
+  .acct-id { font-size: 20px; font-weight: 700; letter-spacing: 3px; color: #ffd166; }
+  .acct-sep { height: 1px; background: rgba(148,163,184,.22); margin: 10px 0 8px; }
+  .acct-sec { font-size: 12.5px; color: #7dd3fc; text-align: center; margin-bottom: 6px; }
   .qr-login-btn { width: 100%; border: 1px dashed rgba(255,183,3,.5) !important; color: #ffb703 !important; background: rgba(255,183,3,.06) !important; }
   .mode-big-btn {
     width: 100%; font-size: 17px; font-weight: 800;
@@ -1755,6 +1761,32 @@
         </div>
       </div>
       <button class="btn btn-secondary btn-small" id="login-cancel" style="margin-top:0;">取消</button>
+    </div>
+  </div>
+
+  <!-- 账号弹窗：账号 ID / 设置密码 / 切换账号 -->
+  <div class="modal-mask" id="account-modal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-title">账号</div>
+      <div class="acct-row">
+        <span class="acct-label">账号</span>
+        <span class="acct-id" id="acct-id">—</span>
+        <button class="btn btn-small btn-secondary" id="acct-copy-btn">复制</button>
+      </div>
+      <div class="login-hint" id="acct-tip">在这台设备设置密码后，别的设备点「切换账号」输入账号 + 密码即可切过来，原设备不会被登出。</div>
+      <div class="acct-sep"></div>
+      <div class="acct-sec">设置密码</div>
+      <input class="modal-input" id="acct-pwd-input" maxlength="20" type="password" placeholder="密码 6-20 位">
+      <button class="btn btn-small" id="acct-pwd-btn">设置密码</button>
+      <div class="acct-sep"></div>
+      <div class="acct-sec">切换账号</div>
+      <input class="modal-input" id="switch-acct-input" maxlength="11" placeholder="输入要切换的账号（6 位）">
+      <input class="modal-input" id="switch-pwd-input" maxlength="20" type="password" placeholder="输入该账号的密码">
+      <button class="btn btn-small" id="switch-confirm-btn">切换过去</button>
+      <div class="login-hint" id="acct-msg"></div>
+      <button class="btn btn-secondary btn-small" id="acct-other-login" style="margin-top:0;">手机号 / 扫码登录其它账号</button>
+      <button class="btn btn-secondary btn-small" id="acct-logout" style="margin-top:0;">退出登录（本机）</button>
+      <button class="btn btn-secondary btn-small" id="acct-close" style="margin-top:0;">关闭</button>
     </div>
   </div>
 
@@ -2689,6 +2721,8 @@ const User = {
   grenade: 'grenade_frag',  // 手榴弹
   activeSlot: 1,            // 当前激活槽位 1=主武器 2=副武器
   grenadeCd: 0,             // 手榴弹冷却
+  account: null,            // 跨设备登录用的账号名（设备账号=6 位 ID / 手机号账号=手机号）
+  hasPwd: false,            // 是否已设置密码（设过才能在别的设备切换过来）
 };
 
 function userLevel(exp) { return 1 + Math.floor(exp / 180); } // 升级放缓：180 经验/级（与服务器一致）
@@ -2787,6 +2821,9 @@ function applyUser(u) {
   if (!User.ownedGuns.includes(nextGun)) nextGun = 'gun_pistol';
   User.skin = nextSkin;
   User.gun = nextGun;
+  // 账号名（跨设备切换用）/ 是否已设密码：只在服务端明确下发时覆盖，避免旧接口把值清掉
+  if (u.account !== undefined) User.account = u.account || null;
+  if (u.hasPwd !== undefined) User.hasPwd = !!u.hasPwd;
   loadDailyShop();   // 登录后拉一次今日特惠（给商城按钮点亮小红点）
   try { localStorage.setItem('bb_name', User.name); } catch (e) {}
   renderHomeUser();
@@ -2818,6 +2855,8 @@ function resetUser() {
   User.ownedGuns = ['gun_pistol'];
   User.skin = 'skin_default';
   User.gun = 'gun_pistol';
+  User.account = null;
+  User.hasPwd = false;
   try { localStorage.removeItem('bb_token'); } catch (e) {}
   renderHomeUser();
 }
@@ -3026,14 +3065,83 @@ document.getElementById('qr-login-btn').addEventListener('click', openQrView);
 document.getElementById('qr-refresh-btn').addEventListener('click', () => { loadQrLib().then(() => newQr()); });
 document.getElementById('qr-back-btn').addEventListener('click', backToPhoneView);
 
-// ---------- 切换账号 / 注销账号 ----------
+// ---------- 账号弹窗：账号 ID / 设置密码 / 切换账号 ----------
+// 进入游戏即自动建号并登录，所以这里不再走「退出 → 重新登录」，
+// 切换账号 = 直接换 token（服务端不注销任何旧会话，别的设备上的账号不会被踢下线）。
+function acctMsg(text, err) {
+  const el = document.getElementById('acct-msg');
+  el.textContent = text;
+  el.classList.toggle('err', !!err);
+}
+function openAccount() {
+  document.getElementById('acct-id').textContent = User.account || '—';
+  document.getElementById('acct-pwd-btn').textContent = User.hasPwd ? '修改密码' : '设置密码';
+  document.getElementById('acct-pwd-input').value = '';
+  document.getElementById('switch-acct-input').value = '';
+  document.getElementById('switch-pwd-input').value = '';
+  acctMsg('');
+  document.getElementById('account-modal').style.display = 'flex';
+}
+function closeAccount() { document.getElementById('account-modal').style.display = 'none'; }
+document.getElementById('acct-close').addEventListener('click', closeAccount);
+document.getElementById('acct-copy-btn').addEventListener('click', async () => {
+  const id = User.account || '';
+  if (!id) return;
+  try {
+    await navigator.clipboard.writeText(id);
+    acctMsg('账号已复制：' + id);
+  } catch (e) {
+    // 无剪贴板权限（http / 旧浏览器）时退回选中提示
+    acctMsg('账号：' + id + '（请手动记下）');
+  }
+});
+document.getElementById('acct-pwd-btn').addEventListener('click', async () => {
+  const pwd = document.getElementById('acct-pwd-input').value;
+  if (pwd.length < 6 || pwd.length > 20) { acctMsg('密码需 6-20 位', true); return; }
+  acctMsg('提交中…');
+  try {
+    const r = await api('/api/user/password', { pwd });
+    if (!r.ok) { acctMsg(r.msg || '设置失败，请重试', true); return; }
+    applyUser(r.user);
+    document.getElementById('acct-pwd-btn').textContent = '修改密码';
+    acctMsg('密码已设置。别的设备用账号 ' + (User.account || '') + ' + 这个密码即可切换过来');
+    Sfx.powerup();
+  } catch (e) { acctMsg('网络错误，请重试', true); }
+});
+document.getElementById('switch-confirm-btn').addEventListener('click', async () => {
+  const account = document.getElementById('switch-acct-input').value.trim();
+  const pwd = document.getElementById('switch-pwd-input').value;
+  if (!account) { acctMsg('请输入要切换的账号', true); return; }
+  if (!pwd) { acctMsg('请输入密码', true); return; }
+  acctMsg('切换中…');
+  try {
+    const r = await api('/api/auth/login-pwd', { account, pwd });
+    if (!r.ok) { acctMsg(r.msg || '切换失败', true); return; }
+    // 只换本机会话：已经在其它设备登录着的这个账号不会被登出
+    User.token = r.token;
+    try { localStorage.setItem('bb_token', r.token); } catch (e) {}
+    applyUser(r.user);
+    acctMsg('');
+    closeAccount();
+    renderShop(); renderWeaponSelect();
+    Sfx.powerup();
+  } catch (e) { acctMsg('网络错误，请重试', true); }
+});
+document.getElementById('acct-other-login').addEventListener('click', () => {
+  closeAccount();
+  openLogin();
+});
+document.getElementById('acct-logout').addEventListener('click', async () => {
+  if (!confirm('退出本机登录？\n账号进度已保存在服务器，用账号 + 密码还能切回来。')) return;
+  try { await api('/api/auth/logout', {}); } catch (e) {}
+  closeAccount();
+  resetUser();
+  ensureAccount();   // 立刻补一个新设备账号，保证进度继续保存
+});
 document.getElementById('switch-account-btn').addEventListener('click', async (ev) => {
   ev.stopPropagation(); // 不触发卡片改名
-  if (!User.logged) return;
-  if (!confirm('退出当前账号？\n进度已保存在服务器，下次用同一手机号登录即可找回。')) return;
-  try { await api('/api/auth/logout', {}); } catch (e) {}
-  resetUser();
-  openLogin();
+  if (!User.logged) { openLogin(); return; }
+  openAccount();
 });
 document.getElementById('delete-account-btn').addEventListener('click', async (ev) => {
   ev.stopPropagation(); // 不触发卡片改名
@@ -4572,20 +4680,39 @@ async function reportResult() {
   } catch (e) {}
 }
 
-// ---------- 自动登录（同设备 token 直接拉用户数据） ----------
-(async () => {
+// ---------- 自动登录：有 token 直接拉取；没 token（首次进入）自动建号并登录 ----------
+// 进游戏就有账号、进度自动保存到服务器；之后可在「账号」里设密码，
+// 别的设备点「切换账号」输入账号 + 密码即可切过来。已登录的玩家不会重新建号/重新登录。
+async function ensureAccount() {
   let tok = null;
   try { tok = localStorage.getItem('bb_token'); } catch (e) {}
   if (tok) {
     User.token = tok;
     try {
       const r = await api('/api/user/me');
-      if (r.ok) applyUser(r.user);
-      else { User.token = null; try { localStorage.removeItem('bb_token'); } catch (e) {} }
-    } catch (e) {}
+      if (r.ok) { applyUser(r.user); renderHomeUser(); return true; }
+      // token 失效（服务端清库 / 换环境）：清掉后重新建号，不让玩家卡在未登录态
+      User.token = null;
+      try { localStorage.removeItem('bb_token'); } catch (e) {}
+    } catch (e) {
+      renderHomeUser();
+      return false;   // 网络错误：保留本地 token，下次进来再试，不误建新号
+    }
   }
+  try {
+    const r = await api('/api/auth/guest', {});
+    if (r && r.ok && r.token) {
+      User.token = r.token;
+      try { localStorage.setItem('bb_token', r.token); } catch (e) {}
+      applyUser(r.user);
+      renderHomeUser();
+      return true;
+    }
+  } catch (e) {}
   renderHomeUser();
-})();
+  return false;
+}
+ensureAccount();
 
 // ---------- 主界面人物预览（旋转展示当前皮肤+枪） ----------
 const pcv = document.getElementById('preview-canvas');
@@ -4926,6 +5053,7 @@ const G = {
   players: [],
   bullets: [],
   enemyBullets: [],
+  ghostBullets: [],   // 客机端开火本地预测的"影子子弹"：纯视觉，房主真子弹到达后被顶替
   enemies: [],
   particles: [],
   popups: [],
@@ -6017,6 +6145,7 @@ function update(dt) {
       Sfx.shoot();
       addParticles(p.x + Math.cos(baseAngle) * (p.r + 10), p.y + Math.sin(baseAngle) * (p.r + 10), p.colors.glow, 2, 120, 3, 0.15);
     }
+
   }
 
   G.spreadBoost = Math.max(0, G.spreadBoost - dt);
@@ -7487,6 +7616,19 @@ function drawBullets() {
     ctx.arc(b.x, b.y, b.r, 0, TAU);
     ctx.fill();
   }
+  // 客机端开火本地预测的影子子弹：半透明，等房主真子弹到达后顶替（消除"按下去慢半拍"）
+  if (G.ghostBullets && G.ghostBullets.length) {
+    for (const gb of G.ghostBullets) {
+      ctx.globalAlpha = 0.5 * Math.min(1, gb.life / 0.1);
+      const R = gb.r * 3;
+      ctx.drawImage(glowSprite(gb.color), gb.x - R, gb.y - R, R * 2, R * 2);
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(gb.x, gb.y, gb.r, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
 }
 
 function drawEnemyBullets() {
@@ -8678,7 +8820,8 @@ function snapshotState() {
       angle: A(e.angle), anim: A(e.anim), flash: A(e.flash), damageCooldown: A(e.damageCooldown),
       frozen: A(e.frozen), burn: A(e.burn), slow: A(e.slow),
     })),
-    bullets: G.bullets.map(b => ({ id: b.id, x: R(b.x), y: R(b.y), vx: R(b.vx), vy: R(b.vy), r: b.r, life: A(b.life), damage: b.damage, color: b.color })),
+    // o = 子弹归属玩家 id：客机端据此判断"房主已经生成了我的这一发"，好把本地预测的影子子弹顶掉
+    bullets: G.bullets.map(b => ({ id: b.id, o: b.ownerId, x: R(b.x), y: R(b.y), vx: R(b.vx), vy: R(b.vy), r: b.r, life: A(b.life), damage: b.damage, color: b.color })),
     ebullets: G.enemyBullets.map(b => ({ id: b.id, x: R(b.x), y: R(b.y), vx: R(b.vx), vy: R(b.vy), r: b.r, life: A(b.life), color: b.color })),
     vortexes: G.vortexes.map(v => ({ id: v.id, x: R(v.x), y: R(v.y), r: R(v.r), life: A(v.life), spin: A(v.spin) })),
     zones: G.zones.map(z => ({ id: z.id, t: z.type, x: R(z.x), y: R(z.y), r: R(z.r), life: A(z.life), spin: A(z.spin), armed: z.armed ? 1 : 0 })),
@@ -8714,13 +8857,16 @@ function netBroadcast() {
     sendState();
     return;
   }
-  // 动态广播频率：场上对象越多（弹幕密集），单帧快照越大，自动降低频率
+  // 动态广播频率：只按**每帧都要传的动态对象**计数。
+  // 障碍物（300 块砖）走 v4 增量同步、只在版本变化时携带，不占每帧带宽，绝不能再算进来——
+  // 算进来会让 objCount 恒 >250，快照被压到 14Hz，客机端子弹按 640px/s 每帧瞬移 45px（表现为"射击一跳一跳"）。
   const objCount = G.enemies.length + G.bullets.length + G.enemyBullets.length
-                 + G.obstacles.length + G.powerups.length;
-  let interval = 33;                   // 空闲 ~30Hz
+                 + G.vortexes.length + G.zones.length + G.powerups.length;
+  let interval = 28;                   // 空闲 ~36Hz（子弹密集时也能保持顺滑）
+  if (objCount > 40) interval = 33;    // ~30Hz
   if (objCount > 80) interval = 44;    // ~23Hz
   if (objCount > 150) interval = 55;   // ~18Hz
-  if (objCount > 250) interval = 70;   // ~14Hz
+  if (objCount > 250) interval = 70;   // ~14Hz（真·弹幕地狱才降频）
   if (now - netLastSnap < interval) return;
   netLastSnap = now;
   sendState();
@@ -8757,8 +8903,21 @@ function resetDomCache() {
   heartsLastHtml = null; // 强制下次重渲染血量
 }
 
+// 上一帧快照里「我自己」的子弹 id：用于识别房主新生成的那一发（顶替客机端本地预测的影子子弹）
+const lastMyBulletIds = new Set();
 function applyNetState(s) {
   if (!s) return;
+  // 快照到达时刻：客机渲染时按「快照位置 + 速度 × 已过时间」外推，
+  // 目标位置随时间连续前进，才不会每来一个快照就往回拉一次（那正是子弹一跳一跳的根因）
+  {
+    const nowMs = performance.now();
+    const gap = nowMs - (G.netSnapAt || 0);
+    if (G.netSnapAt && gap > 0 && gap < 500) {
+      // 平均快照间隔（EMA）：网络抖动时判断"这帧快照是不是迟到了"
+      G.netSnapGap = G.netSnapGap ? G.netSnapGap * 0.8 + gap * 0.2 : gap;
+    }
+    G.netSnapAt = nowMs;
+  }
   const prevState = G.state;  G.state = s.st;
   G.netPing = s.ping || 0;               // host 测得的 RTT（ms），HUD 显示用
   G.mode = 'net';
@@ -8846,7 +9005,15 @@ function applyNetState(s) {
     }
   }
   // 玩家子弹
-  syncById(G.bullets, s.bullets, sb => ({ x: sb.x, y: sb.y }), (b, sb) => { b.vx = sb.vx; b.vy = sb.vy; b.damage = sb.damage; });
+  syncById(G.bullets, s.bullets, sb => ({ x: sb.x, y: sb.y }), (b, sb) => { b.vx = sb.vx; b.vy = sb.vy; b.damage = sb.damage; b.o = sb.o; });
+  // 房主真子弹已到达 → 顶掉本地预测的影子子弹，避免同一发画两次（只认自己发的子弹）
+  if (G.ghostBullets && G.ghostBullets.length) {
+    for (const sb of s.bullets) {
+      if (sb.o === NET.slot && !lastMyBulletIds.has(sb.id)) { G.ghostBullets.length = 0; break; }
+    }
+  }
+  if (lastMyBulletIds.size) lastMyBulletIds.clear();
+  for (const sb of s.bullets) if (sb.o === NET.slot) lastMyBulletIds.add(sb.id);
   // 敌方弹幕
   syncById(G.enemyBullets, s.ebullets, sb => ({ x: sb.x, y: sb.y }), (b, sb) => { b.vx = sb.vx; b.vy = sb.vy; });
   // 黑洞（虚空坍缩）：guest 端只做渲染，伤害/吸引由房主计算
@@ -9064,6 +9231,7 @@ function showMenu() {
   G.enemies = [];
   G.bullets = [];
   G.enemyBullets = [];
+  if (G.ghostBullets) G.ghostBullets.length = 0;
   G.particles = [];
   G.popups = [];
   G.powerups = [];
@@ -9132,6 +9300,7 @@ function startGame() {
   G.hits = 0;
   G.bullets = [];
   G.enemyBullets = [];
+  if (G.ghostBullets) G.ghostBullets.length = 0;
   G.enemies = [];
   G.particles = [];
   G.popups = [];
@@ -9387,6 +9556,7 @@ function runFrame(now) {
       netSendInput();
       stepFx(dt);        // 本地演化粒子/飘字（纯视觉，不占网络带宽）
       guestPredictSelf(dt); // 自己的角色本地预测：移动/瞄准零延迟
+      ghostFire(dt);        // 开火本地预测：按下立刻出子弹，不等房主回传
       smoothNetState(dt); // 向最新快照位置平滑滑动，消除跳变
     }
   } else if (NET.role === 'host') {
@@ -9477,6 +9647,45 @@ function guestPredictSelf(dt) {
   me.angle = me.aimAngle;
 }
 
+// ---------- guest 开火本地预测（影子子弹） ----------
+// guest 端不跑 update()，子弹全部来自房主快照，按下开火要等一个 RTT 才看得到子弹。
+// 这里按下就立刻在本地画一颗"影子子弹"：纯视觉、不参与任何碰撞，
+// 房主那发真子弹随快照到达后（applyNetState 里按 ownerId 识别）自动顶替掉影子。
+function ghostFire(dt) {
+  if (!G.ghostBullets) G.ghostBullets = [];
+  const me = G.players.find(p => p.id === NET.slot);
+  if (me && !me.dead) {
+    const meFiring = Mobile.active ? mobileFiring() : mouse.down;
+    me._ghostCd = (me._ghostCd || 0) - dt;
+    if (meFiring && me._ghostCd <= 0) {
+      const gg = getActiveGun();
+      const ug = gunUpg(User.activeSlot === 2 ? User.gun2 : User.gun);
+      me._ghostCd = gg.fireRate * ug.rate * (G.rapidBoost > 0 ? 0.55 : 1) * (me.rainbow > 0 ? 0.5 : 1) * (me.fireMul || 1);
+      const ga = (me.aimAngle !== undefined) ? me.aimAngle : (me.angle || 0);
+      // 寿命 = 实测 RTT + 一点余量（真子弹通常在这个窗口内到达并把影子顶掉）
+      const life = Math.max(0.09, Math.min(0.3, (G.netPing || 0) / 1000 + 0.09));
+      const cnt = Math.max((G.spreadBoost > 0) ? CFG.spreadCount : 1, gg.spread || 1);
+      const sa = cnt > 1 ? (gg.spread > 1 ? gg.spreadAngle : 0.22) : 0;
+      for (let i = 0; i < cnt; i++) {
+        const a = ga + (cnt > 1 ? (i - (cnt - 1) / 2) * sa : 0);
+        G.ghostBullets.push({
+          x: me.x + Math.cos(a) * (me.r + 8), y: me.y + Math.sin(a) * (me.r + 8),
+          vx: Math.cos(a) * gg.speed, vy: Math.sin(a) * gg.speed,
+          r: gg.r, life, color: me.colors.glow,
+        });
+      }
+      Sfx.shoot();
+    }
+  }
+  // 影子子弹推进 + 过期
+  for (let i = G.ghostBullets.length - 1; i >= 0; i--) {
+    const gb = G.ghostBullets[i];
+    gb.x += gb.vx * dt; gb.y += gb.vy * dt;
+    gb.life -= dt;
+    if (gb.life <= 0) G.ghostBullets.splice(i, 1);
+  }
+}
+
 // ---------- guest 平滑插值：物体向最新快照目标位置滑动，消除跳变 ----------
 function smoothNetState(dt) {
   const k = Math.min(1, dt * 25);
@@ -9501,29 +9710,47 @@ function smoothNetState(dt) {
     }
   }
   const smoothArr = arr => { for (const o of arr) { if (o._tx !== undefined) { o.x += (o._tx - o.x) * k; o.y += (o._ty - o.y) * k; } } };
-  // 子弹/弹幕是高速直线运动：客机端用 vx/vy 本地推进（预测），再用小系数轻校正，
-  // 避免纯位置插值造成的拖尾/滞后（快照 15-30Hz，子弹 640px/s 时插值必卡）
-  const smoothProj = arr => {
+  // 快照到达至今的秒数（用于「位置 + 速度 × 已过时间」外推；夹住上限，断流时不会一路飞出去）
+  const age = Math.max(0, Math.min(0.2, (performance.now() - (G.netSnapAt || 0)) / 1000));
+  // 子弹/弹幕是匀速直线运动：目标 = 快照位置 + 速度 × 已过时间。
+  // 这个目标在两次快照之间是**连续前进**的（新快照到达时目标正好接上外推值），
+  // 所以渲染位置匀速推进，不再出现"每来一帧快照猛拉一下"的跳变。
+  // 旧实现是「本地推进 + 向**过去的**快照点收敛」，收敛目标永远落后一整个快照间隔，
+  // 于是子弹被反复往回拽、走走停停——这就是客机端看到的"一跳一跳"。
+  // 快照迟到了（网络抖了一下）：这期间纯靠速度匀速推进，不做位置校正。
+  // 校正目标本身带着抖动，硬校正会把网络的抖动直接画到屏幕上——宁可多飞一会儿再对齐。
+  const stale = age > (G.netSnapGap || 0.05) * 1.6;
+  const smoothProj = (arr, frozen) => {
+    const a = frozen ? 0 : age;      // 星辰崩解：敌弹凝固在空中，不能外推/推进
     for (const o of arr) {
       if (o._tx === undefined) continue;
-      o.x += o.vx * dt;
-      o.y += o.vy * dt;
-      const k2 = Math.min(1, dt * 12);
-      o.x += (o._tx - o.x) * k2;
-      o.y += (o._ty - o.y) * k2;
+      // ① 先按速度匀速推进：每帧位移恒等于 v*dt，这是"顺滑"的来源
+      o.x += (o.vx || 0) * dt;
+      o.y += (o.vy || 0) * dt;
+      if (stale) continue;
+      // ② 再向外推后的目标轻校正：目标 = 快照位置 + 速度 × 已过时间，
+      //    是连续前进的真实位置，不会把子弹往回拽（旧实现的收敛目标是"过去的"快照点，
+      //    于是子弹被反复拉回、走走停停 —— 这就是客机端看到的"一跳一跳"）
+      const tx = o._tx + (o.vx || 0) * a;
+      const ty = o._ty + (o.vy || 0) * a;
+      const k2 = Math.min(1, dt * 15);
+      o.x += (tx - o.x) * k2;
+      o.y += (ty - o.y) * k2;
     }
   };
-  smoothProj(G.bullets);
-  smoothProj(G.enemyBullets);
-  // 敌人：先用速度+朝向外推（快照间隔内的运动预测），再轻校正到快照位置
+  smoothProj(G.bullets, false);
+  smoothProj(G.enemyBullets, G.timeStop > 0);
+  // 敌人同样是朝当前朝向匀速走：用同样的外推目标（外推量减半，转向时不会冲过头）
   for (const e of G.enemies) {
     if (e._tx === undefined) continue;
+    let tx = e._tx, ty = e._ty;
     if (e.frozen <= 0 && e.speed && e.angle !== undefined) {
-      e.x += Math.cos(e.angle) * e.speed * dt;
-      e.y += Math.sin(e.angle) * e.speed * dt;
+      const ea = age * 0.5;
+      tx += Math.cos(e.angle) * e.speed * ea;
+      ty += Math.sin(e.angle) * e.speed * ea;
     }
-    e.x += (e._tx - e.x) * k;
-    e.y += (e._ty - e.y) * k;
+    e.x += (tx - e.x) * k;
+    e.y += (ty - e.y) * k;
   }
   smoothArr(G.obstacles);
   smoothArr(G.powerups);
@@ -10335,6 +10562,8 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
     snapshotState, applyNetState, netBroadcast, sendState,
     // 每日商店 / 排行榜调试钩子（新功能验证用）
     api, loadOnlineRank, loadDailyShop, renderShop, dailyShop: () => dailyShop,
+    // 账号体系调试钩子（自动建号 / 密码 / 切换账号）
+    ensureAccount, openAccount, closeAccount, resetUser,
   };
 }
 
