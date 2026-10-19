@@ -1267,6 +1267,50 @@ function pubUser(u: Record<string, any>) {
     expSpent: u.expSpent || 0,
     spendableExp: Math.max(0, (u.exp || 0) - (u.expSpent || 0)),
     mapPlays: (u.mapPlays as number) || 0, // 自己的地图被别人玩过的次数
+    account: u.account || null,           // 跨设备登录用的账号名（设备账号=6 位 ID，手机号账号=手机号）
+    hasPwd: u.pwdHash ? 1 : 0,            // 是否已设置密码（设过才能在别的设备切换过来）
+  };
+}
+
+// ======================= 账号体系：设备账号自动注册 + 密码跨设备切换 =======================
+// 账号名：6 位大写字母数字（去掉易混淆的 0/1/I/O），账号 key = 'g_<ID>'；
+// 历史手机号账号沿用手机号本身作为账号名，key 即手机号，两者都能用「账号 + 密码」登录。
+const ACCT_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function newAccountId(): string {
+  let s = '';
+  for (let i = 0; i < 6; i++) s += ACCT_CHARS[Math.floor(Math.random() * ACCT_CHARS.length)];
+  return s;
+}
+// 账号名 → 用户 key；格式不合法返回 null
+function accountKeyOf(account: string): string | null {
+  const a = String(account || '').trim().toUpperCase().replace(/[\s-]/g, '');
+  if (/^1\d{10}$/.test(a)) return a;            // 手机号账号
+  if (/^[A-Z2-9]{6}$/.test(a)) return 'g_' + a; // 设备账号
+  return null;
+}
+// 密码哈希：SHA-256(pwd + salt)，salt 用用户 key（绝不存明文密码）
+async function hashPwd(pwd: string, salt: string): Promise<string> {
+  const data = new TextEncoder().encode(pwd + '::bb::' + salt);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+function newUserRecord(kind?: string): Record<string, any> {
+  return {
+    name: '玩家' + String(Math.floor(1000 + Math.random() * 9000)),
+    coins: 0,
+    exp: 0,
+    level: 1,
+    ownedSkins: ['skin_default'],
+    ownedGuns: ['gun_pistol'],
+    skin: 'skin_default',
+    gun: 'gun_pistol',
+    kills: 0,
+    bcoin: 0,          // B 币：累计击杀每 300 个得 1 枚，用于抽盲盒
+    bcoinGiven: 0,     // 已发放过的 B 币数（按累计击杀算，防止重复发）
+    skills: [],        // 盲盒抽到的额外技能
+    friends: [],
+    kind: kind || 'guest',
+    created: Date.now(),
   };
 }
 
@@ -1428,6 +1472,50 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     const token = crypto.randomUUID();
     await kv.set(['session', token], p, { expireIn: 365 * 24 * 3600 * 1000 });
     return jsonResp({ ok: true, token, user: pubUser(u.value as Record<string, any>) });
+  }
+
+  // POST /api/auth/guest —— 首次进入自动建号：无需手机号/扫码，进游戏就有已保存进度的账号。
+  // 客户端只在本地没有 token 时调用一次；后续可在设置里设密码，用「账号 + 密码」在别的设备切回来。
+  if (path === '/api/auth/guest' && req.method === 'POST') {
+    const ip = getClientIp(req, connInfo);
+    const ck = ['gcount', ip || 'unknown'];
+    const gc = await kv.get(ck);
+    const made = (gc.value as number) || 0;
+    if (made >= 60) return jsonResp({ ok: false, msg: '本网络新建账号过多，请稍后再试' }, 429);
+    let key = '';
+    let id = '';
+    for (let i = 0; i < 8 && !key; i++) {
+      id = newAccountId();
+      const ex = await kv.get(['user', 'g_' + id]);
+      if (!ex.value) key = 'g_' + id;
+    }
+    if (!key) return jsonResp({ ok: false, msg: '账号创建失败，请重试' }, 500);
+    const rec = newUserRecord('guest');
+    rec.account = id;
+    await kv.set(['user', key], rec);
+    await kv.set(ck, made + 1, { expireIn: 3600 * 1000 });
+    const token = crypto.randomUUID();
+    await kv.set(['session', token], key, { expireIn: 365 * 24 * 3600 * 1000 });
+    return jsonResp({ ok: true, token, user: pubUser(rec) });
+  }
+
+  // POST /api/auth/login-pwd { account, pwd } —— 账号 + 密码登录（切换账号用）
+  // 只签发新会话，不删除任何旧会话：已在其它设备登录着的账号不会被踢下线。
+  if (path === '/api/auth/login-pwd' && req.method === 'POST') {
+    const { account, pwd } = await readBody(req);
+    const key = accountKeyOf(String(account || ''));
+    if (!key) return jsonResp({ ok: false, msg: '账号格式不对：6 位账号或 11 位手机号' }, 400);
+    const rec = await kv.get(['user', key]);
+    const uu = rec.value as Record<string, any> | null;
+    if (!uu) return jsonResp({ ok: false, msg: '账号不存在，请检查账号是否输错' }, 404);
+    if (!uu.pwdHash) {
+      return jsonResp({ ok: false, msg: '该账号还没设置密码，请在原设备「账号 → 设置密码」后再切换' }, 400);
+    }
+    const h = await hashPwd(String(pwd || ''), key);
+    if (h !== uu.pwdHash) return jsonResp({ ok: false, msg: '密码错误' }, 401);
+    const token = crypto.randomUUID();
+    await kv.set(['session', token], key, { expireIn: 365 * 24 * 3600 * 1000 });
+    return jsonResp({ ok: true, token, user: pubUser(uu) });
   }
 
   // ---------- 自建扫码登录（免资质）：电脑出码 → 手机扫 → 手机确认 → 电脑自动登录 ----------
@@ -1671,6 +1759,22 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
       return jsonResp({ ok: false, msg: '该用户名已被使用，换一个吧' }, 409);
     }
     u.name = n;
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u) });
+  }
+
+  // POST /api/user/password { pwd } —— 设置 / 修改密码（登录态）。
+  // 设过密码后，别的设备点「切换账号」输入账号 + 密码即可切到这个账号。
+  if (path === '/api/user/password' && req.method === 'POST') {
+    const { pwd } = await readBody(req);
+    const p = String(pwd || '');
+    if (p.length < 6 || p.length > 20) return jsonResp({ ok: false, msg: '密码需 6-20 位' }, 400);
+    // 老账号（手机号注册）补一个登录名：手机号账号就用手机号登录
+    if (!u.account) {
+      u.account = /^1\d{10}$/.test(auth.phone) ? auth.phone : null;
+    }
+    u.pwdHash = await hashPwd(p, auth.phone);
+    u.pwdSetAt = Date.now();
     await kv.set(['user', auth.phone], u);
     return jsonResp({ ok: true, user: pubUser(u) });
   }
