@@ -145,7 +145,10 @@
   #start-overlay > #home-view { margin: 0; position: absolute; inset: 0; }
   #start-overlay > #net-panel { margin: 0; position: absolute; inset: 0; background: rgba(8,15,26,.75); backdrop-filter: blur(6px); pointer-events: auto; }
   #home-view .home-user, #home-view .home-top-btns, #home-view .daily-map-card,
-  #home-view .home-bottom, #home-view .challenge-card { pointer-events: auto; }
+  #home-view .home-bottom, #home-view .challenge-card,
+  /* 排行榜面板必须恢复 auto：否则整个面板的点击/触摸都穿透到 canvas，
+     表现为「✕ 关不掉、本地/线上点不动、列表滑不动」（脚本 .click() 能生效，手指不行） */
+  #home-view > .lb-wrap { pointer-events: auto; }
 
   .game-title {
     font-size: clamp(36px, 7vw, 72px);
@@ -429,13 +432,21 @@
     border: 1px solid rgba(255,255,255,.25);
     border-radius: 8px;
     color: #fff;
-    width: 24px; height: 24px;
+    /* 触摸目标加大（原 24px 手指很难点中，是「关不掉」的帮凶） */
+    width: 30px; height: 30px; flex: none;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
+    touch-action: manipulation;
   }
   .lb-close:hover { background: rgba(255,255,255,.22); }
   .lb-close:active { transform: scale(.92); }
-  .lb-list { max-height: 200px; overflow-y: auto; }
+  .lb-list {
+    max-height: 200px; min-height: 96px;   /* 给最小高度：切 tab / 加载中面板高度不跳 */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;      /* iOS 惯性滚动 */
+    overscroll-behavior: contain;           /* 滚到头不要带着整页一起动 */
+    touch-action: pan-y;                    /* 只允许纵向滑动，避免与大厅摇杆抢手势 */
+  }
   .lb-row {
     display: grid;
     grid-template-columns: 28px 1fr auto auto 64px;
@@ -1186,6 +1197,11 @@
     font-size: 11.5px; font-family: inherit; letter-spacing: 1px;
   }
   .lb-tab.active { background: #ffd166; color: #0f172a; font-weight: 800; border-color: #ffd166; }
+  /* 排行榜那两个 tab（礼物选择器的 .lb-tab 共用样式，这里单独放大触摸目标） */
+  .lb-tabs .lb-tab { padding: 5px 14px; font-size: 12px; min-height: 28px; touch-action: manipulation; }
+  /* 标题里写明当前看的是哪个榜，避免只靠小药丸分辨 */
+  .lb-which { font-size: 12px; font-weight: 700; color: #38bdf8; letter-spacing: 1px; }
+  .lb-which.is-local { color: #a78bfa; }
   /* ---------- 私信 ---------- */
   .pm-friend { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
   .pm-friend:hover { border-color: #22d3ee; }
@@ -1419,7 +1435,7 @@
 
     <!-- 排行榜 -->
     <div class="lb-wrap">
-      <div class="lb-title">排行榜<span class="lb-tabs">
+      <div class="lb-title">排行榜<span class="lb-which" id="lb-which">线上榜</span><span class="lb-tabs">
         <button class="lb-tab" id="lb-tab-local">本地</button>
         <button class="lb-tab active" id="lb-tab-online">线上</button>
       </span><button class="lb-close" id="lb-close-start" title="关闭排行榜"><svg viewBox="0 0 24 24" width="12" height="12"><path d="M6 6l12 12M18 6L6 18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></button></div>
@@ -3550,18 +3566,22 @@ async function loadOnlineRank() {
     el.innerHTML = '<div class="lb-empty">线上排名加载失败，请检查网络后重试</div>';
   }
 }
-document.getElementById('lb-tab-local').addEventListener('click', () => {
-  lbOnline = false;
-  document.getElementById('lb-tab-local').classList.add('active');
-  document.getElementById('lb-tab-online').classList.remove('active');
-  renderLeaderboard(document.getElementById('lb-list-start'));
-});
-document.getElementById('lb-tab-online').addEventListener('click', () => {
-  lbOnline = true;
-  document.getElementById('lb-tab-local').classList.remove('active');
-  document.getElementById('lb-tab-online').classList.add('active');
-  loadOnlineRank();
-});
+// 本地 / 线上切换统一入口：同步 tab 高亮 + 标题里写明当前榜单，再渲染
+function setLbTab(online) {
+  lbOnline = online;
+  const tl = document.getElementById('lb-tab-local'), to = document.getElementById('lb-tab-online');
+  if (tl) tl.classList.toggle('active', !online);
+  if (to) to.classList.toggle('active', online);
+  const w = document.getElementById('lb-which');
+  if (w) {
+    w.textContent = online ? '线上榜（全服按经验）' : '本地榜（本机记录）';
+    w.classList.toggle('is-local', !online);
+  }
+  const el = document.getElementById('lb-list-start');
+  if (online) loadOnlineRank(); else renderLeaderboard(el);
+}
+document.getElementById('lb-tab-local').addEventListener('click', () => setLbTab(false));
+document.getElementById('lb-tab-online').addEventListener('click', () => setLbTab(true));
 
 // 顶部聊天 / 每日任务（右上角任务按钮开关挑战面板）
 // ---------- 大厅聊天 ----------
@@ -3726,11 +3746,16 @@ document.getElementById('nav-rank').addEventListener('click', () => {
   const el = document.getElementById('lb-list-start').parentElement;
   const open = el.style.display === 'block';
   el.style.display = open ? 'none' : 'block';
-  if (!open) { const le = document.getElementById('lb-list-start'); if (lbOnline) loadOnlineRank(); else renderLeaderboard(le); }
+  if (!open) setLbTab(lbOnline);
 });
-document.getElementById('lb-close-start').addEventListener('click', () => {
-  document.getElementById('lb-list-start').parentElement.style.display = 'none';
-});
+document.getElementById('lb-close-start').addEventListener('click', closeHomeLeaderboard);
+// 返回是否真的关掉了（ESC 复用：关掉排行榜时就不要再触发暂停）
+function closeHomeLeaderboard() {
+  const w = document.querySelector('#home-view > .lb-wrap');
+  if (!w || w.style.display !== 'block') return false;
+  w.style.display = 'none';
+  return true;
+}
 // 底部导航：地图 —— 先弹菜单（创建地图 / 游玩地图）
 document.getElementById('nav-create').addEventListener('click', () => {
   ensureAudio();
@@ -7964,6 +7989,8 @@ const mouse = { x: W / 2, y: H / 2, down: false };
 
 window.addEventListener('keydown', (e) => {
   keys.add(e.code);
+  // 排行榜开着时 ESC 先关它（不然在大厅按 ESC 会莫名其妙暂停）
+  if (e.code === 'Escape' && closeHomeLeaderboard()) return;
   // guest（加入者）无权暂停 / 开始，一切以房主为准
   if (NET.role !== 'guest' && (e.code === 'KeyP' || e.code === 'Escape')) {
     if (G.state === 'playing') pauseGame();
