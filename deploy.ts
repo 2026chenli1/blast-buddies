@@ -1395,15 +1395,32 @@ async function ensureAdminUser(): Promise<Record<string, any>> {
   await kv.set(['user', ADMIN_KEY], u);
   return u;
 }
-// 封禁判定 / 文案
-function banInfo(u: Record<string, any>): { banned: boolean; reason: string } {
-  const banned = !!u.banned;
+// 封禁判定 / 文案（支持「限时封禁」：banUntil 为 0 或缺失 = 永久）
+function banLeftText(ms: number): string {
+  if (!ms || ms <= 0) return '';
+  let s = Math.ceil(ms / 1000);              // 向上取整，封 1 小时不会显示成「59分钟」
+  let d = Math.floor(s / 86400); s -= d * 86400;
+  let h = Math.floor(s / 3600); s -= h * 3600;
+  let m = Math.ceil(s / 60);
+  if (m >= 60) { m = 0; h += 1; if (h >= 24) { h = 0; d += 1; } }
+  if (d > 0) return `${d}天${h ? h + '小时' : ''}`;
+  if (h > 0) return `${h}小时${m ? m + '分' : ''}`;
+  return `${Math.max(1, m)}分钟`;
+}
+function banInfo(u: Record<string, any>): { banned: boolean; reason: string; until: number; leftMs: number; leftText: string } {
+  const until = Number(u.banUntil || 0);
+  if (!u.banned) return { banned: false, reason: '', until: 0, leftMs: 0, leftText: '' };
+  // 到期自动失效（惰性判断，不回写 KV）
+  if (until > 0 && Date.now() >= until) return { banned: false, reason: '', until, leftMs: 0, leftText: '' };
   const reason = String(u.banReason || '').trim();
-  return { banned, reason };
+  const leftMs = until > 0 ? until - Date.now() : 0;
+  return { banned: true, reason, until, leftMs, leftText: banLeftText(leftMs) };
 }
 function bannedMsg(u: Record<string, any>): string {
   const b = banInfo(u);
-  return b.reason ? `账号已被封禁：${b.reason}` : '账号已被封禁，如有疑问请联系管理员';
+  const dur = b.until > 0 ? `（剩余 ${b.leftText}）` : '（永久）';
+  const why = b.reason ? `：${b.reason}` : '';
+  return `账号已被封禁${dur}${why}，如有疑问请联系管理员`;
 }
 
 // ======================= 腾讯云短信（可选，未配置环境变量时回退测试模式） =======================
@@ -1709,7 +1726,14 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     const ur2 = await kv.get<any>(['user', key2]);
     if (!ur2.value) return jsonResp({ ok: true, banned: 0, expired: 1 });
     const b2 = banInfo(ur2.value);
-    return jsonResp({ ok: true, banned: b2.banned ? 1 : 0, reason: b2.reason });
+    return jsonResp({
+      ok: true,
+      banned: b2.banned ? 1 : 0,
+      reason: b2.reason,
+      until: b2.until || 0,
+      leftText: b2.leftText || '',
+      msg: b2.banned ? bannedMsg(ur2.value) : '',
+    });
   }
 
   // GET /api/maps/list —— 分享地图池列表（游玩别人的地图）
@@ -1774,6 +1798,7 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
       if (!p) continue;
       const key = String(e.key[1]);
       if (key === ADMIN_KEY || p.role === 'admin') continue;
+      const bi = banInfo(p);
       rows.push({
         key,
         name: p.name || '',
@@ -1792,9 +1817,11 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
         skills: (p.skills || []).length,
         hasPwd: p.pwdHash ? 1 : 0,
         kind: p.kind || '',
-        banned: p.banned ? 1 : 0,
-        banReason: p.banReason || '',
+        banned: bi.banned ? 1 : 0,
+        banReason: bi.reason || '',
         banAt: p.banAt || 0,
+        banUntil: bi.until || 0,
+        banLeft: bi.leftText || '',
         created: p.created || 0,
       });
     }
@@ -1809,6 +1836,7 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     const r = await kv.get<any>(['user', key]);
     if (!r.value) return jsonResp({ ok: false, msg: '玩家不存在' }, 404);
     const p = r.value as Record<string, any>;
+    const bi = banInfo(p);
     // 创作了多少皮肤 + 被多少人使用
     let skinMade = 0, skinUsed = 0;
     for await (const e of kv.list<any>({ prefix: ['skin'] })) {
@@ -1857,27 +1885,36 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
         hasPwd: p.pwdHash ? 1 : 0,
         kind: p.kind || '',
         created: p.created || 0,
-        banned: p.banned ? 1 : 0,
-        banReason: p.banReason || '',
+        banned: bi.banned ? 1 : 0,
+        banReason: bi.reason || '',
         banAt: p.banAt || 0,
+        banUntil: bi.until || 0,
+        banLeft: bi.leftText || '',
+        banBy: p.banBy || '',
         stats: { skinMade, skinUsed, maps, chatRooms, chatMsgs },
       },
     });
   }
 
-  // POST /api/admin/ban { key, reason? } —— 封禁玩家：立刻作废其全部登录会话
+  // POST /api/admin/ban { key, reason?, hours? } —— 封禁玩家（hours<=0 或省略 = 永久）
+  // hours 支持小数（前端档位：0.5/1/6/24/72/168/720），上限 1 年
   if (path === '/api/admin/ban' && req.method === 'POST') {
     if (!isAdminUser(u)) return jsonResp({ ok: false, msg: '没有权限' }, 403);
-    const { key, reason } = await readBody(req);
+    const { key, reason, hours } = await readBody(req);
     const kk = String(key || '');
     if (!kk || kk === ADMIN_KEY) return jsonResp({ ok: false, msg: '不能封禁管理员账号' }, 400);
     const r = await kv.get<any>(['user', kk]);
     if (!r.value) return jsonResp({ ok: false, msg: '玩家不存在' }, 404);
     const p = r.value as Record<string, any>;
     if (p.role === 'admin') return jsonResp({ ok: false, msg: '不能封禁管理员账号' }, 400);
+    let h = Number(hours);
+    if (!isFinite(h) || h <= 0) h = 0;                 // 0 = 永久
+    h = Math.min(h, 24 * 365);                          // 最多 1 年
     p.banned = 1;
     p.banReason = String(reason || '').trim().slice(0, 60);
     p.banAt = Date.now();
+    p.banUntil = h > 0 ? Date.now() + Math.round(h * 3600_000) : 0;
+    p.banHours = h;
     p.banBy = String(u.name || '管理员');
     await kv.set(['user', kk], p);
     // 不删会话：authUser() 已统一拦截，业务能力等于立刻下线。
@@ -1897,6 +1934,8 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     p.banned = 0;
     p.banReason = '';
     p.banAt = 0;
+    p.banUntil = 0;
+    p.banHours = 0;
     p.banBy = '';
     await kv.set(['user', kk], p);
     return jsonResp({ ok: true, banned: 0 });
