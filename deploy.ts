@@ -605,6 +605,19 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       // 进入房间后离开大厅
       lobbyPlayers.delete(connId);
       broadcast({ type: 'lobby', action: 'leave', id: connId });
+      // 封禁拦截：客户端进房会带上登录 token（没登录就放行，单游客客观存在，不误伤）
+      const jtok = String(msg.tok || '').trim();
+      if (jtok) {
+        const js = await kv.get(['session', jtok]);
+        const jkey = js.value as string;
+        if (jkey) {
+          const ju = await kv.get<any>(['user', jkey]);
+          if (ju.value && banInfo(ju.value).banned && !isAdminUser(ju.value)) {
+            send(ws, { t: 'error', msg: bannedMsg(ju.value) });
+            return;
+          }
+        }
+      }
       const room = String(msg.room || '').trim();
       const res = await joinRoom(
         connId,
@@ -852,42 +865,47 @@ function setupSocket(ws: WebSocket, ip: string) {
 const kv = await Deno.openKv();
 
 // 商城目录：皮肤 + 枪（价格单位：金币；price=0 为初始赠送；lv 为枪械解锁等级）
-const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: number; lv?: number; pass?: number; box?: number; killReq?: number; rank?: number }> = {
+// 皮肤体系重构：主商店只卖「蓝色（免费）/ 绿色」两款，
+// 其余官方皮肤全部移入「特殊商店」，需 SPECIAL_SKIN_LV 级解锁（技能普遍更强，作为后期追求目标）。
+// 盲盒专属与排行榜专属不走等级门禁——它们各有各的获取方式（B 币抽取 / 每日结算前三）。
+const SPECIAL_SKIN_LV = 2000;
+const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: number; lv?: number; pass?: number; box?: number; killReq?: number; rank?: number; special?: number }> = {
   skin_default: { type: 'skin', name: '蓝色战士', price: 0 },
   skin_green:   { type: 'skin', name: '翠绿战士', price: 200 },
-  skin_pink:    { type: 'skin', name: '樱花甜心', price: 200 },
-  skin_gold:    { type: 'skin', name: '黄金武士', price: 500 },
-  skin_purple:  { type: 'skin', name: '紫电幻影', price: 500 },
-  skin_dark:    { type: 'skin', name: '暗夜行者', price: 1000 },
-  skin_fire:    { type: 'skin', name: '烈焰战神', price: 1500 },
-  skin_ice:     { type: 'skin', name: '寒冰射手', price: 1500 },
-  skin_mecha:   { type: 'skin', name: '机甲武装', price: 3000 },
-  skin_rainbow: { type: 'skin', name: '彩虹独角兽', price: 5000 },
+  // ↓ 特殊商店：2000 级解锁
+  skin_pink:    { type: 'skin', name: '樱花甜心', price: 200,  special: 1, lv: SPECIAL_SKIN_LV },
+  skin_gold:    { type: 'skin', name: '黄金武士', price: 500,  special: 1, lv: SPECIAL_SKIN_LV },
+  skin_purple:  { type: 'skin', name: '紫电幻影', price: 500,  special: 1, lv: SPECIAL_SKIN_LV },
+  skin_dark:    { type: 'skin', name: '暗夜行者', price: 1000, special: 1, lv: SPECIAL_SKIN_LV },
+  skin_fire:    { type: 'skin', name: '烈焰战神', price: 1500, special: 1, lv: SPECIAL_SKIN_LV },
+  skin_ice:     { type: 'skin', name: '寒冰射手', price: 1500, special: 1, lv: SPECIAL_SKIN_LV },
+  skin_mecha:   { type: 'skin', name: '机甲武装', price: 3000, special: 1, lv: SPECIAL_SKIN_LV },
+  skin_rainbow: { type: 'skin', name: '彩虹独角兽', price: 5000, special: 1, lv: SPECIAL_SKIN_LV },
   // 战斗通行证：每款独立击杀门槛 killReq（与客户端 SKIN_DEFS 保持一致）
-  skin_void:     { type: 'skin', name: '虚空行者', price: 6000,   pass: 1, killReq: 1000 },
-  skin_crimson:  { type: 'skin', name: '猩红裁决', price: 9000,   pass: 1, killReq: 3000 },
-  skin_astral:   { type: 'skin', name: '星辰主宰', price: 15000,  pass: 1, killReq: 4000 },
-  skin_phoenix:  { type: 'skin', name: '不死凤凰', price: 22000,  pass: 1, killReq: 8000 },
-  skin_abyss:    { type: 'skin', name: '深渊泰坦', price: 28000,  pass: 1, killReq: 10000 },
-  skin_storm:    { type: 'skin', name: '雷霆之主', price: 36000,  pass: 1, killReq: 15000 },
-  skin_necro:    { type: 'skin', name: '亡灵君主', price: 45000,  pass: 1, killReq: 20000 },
-  skin_celestial:{ type: 'skin', name: '天界圣骑', price: 60000,  pass: 1, killReq: 30000 },
-  skin_chaos:    { type: 'skin', name: '混沌魔神', price: 80000,  pass: 1, killReq: 50000 },
-  skin_eternal:  { type: 'skin', name: '永恒至尊', price: 120000, pass: 1, killReq: 80000 },
+  skin_void:     { type: 'skin', name: '虚空行者', price: 6000,   special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 1000 },
+  skin_crimson:  { type: 'skin', name: '猩红裁决', price: 9000,   special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 3000 },
+  skin_astral:   { type: 'skin', name: '星辰主宰', price: 15000,  special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 4000 },
+  skin_phoenix:  { type: 'skin', name: '不死凤凰', price: 22000,  special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 8000 },
+  skin_abyss:    { type: 'skin', name: '深渊泰坦', price: 28000,  special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 10000 },
+  skin_storm:    { type: 'skin', name: '雷霆之主', price: 36000,  special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 15000 },
+  skin_necro:    { type: 'skin', name: '亡灵君主', price: 45000,  special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 20000 },
+  skin_celestial:{ type: 'skin', name: '天界圣骑', price: 60000,  special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 30000 },
+  skin_chaos:    { type: 'skin', name: '混沌魔神', price: 80000,  special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 50000 },
+  skin_eternal:  { type: 'skin', name: '永恒至尊', price: 120000, special: 1, lv: SPECIAL_SKIN_LV, pass: 1, killReq: 80000 },
   // 排行榜专属：商城不卖、盲盒抽不到，只能靠「每日结算进前三」拿到（rank = 对应名次）
-  skin_champion: { type: 'skin', name: '至尊冠军', price: 0, rank: 1 },
-  skin_runnerup: { type: 'skin', name: '星辰亚军', price: 0, rank: 2 },
-  skin_third:    { type: 'skin', name: '荣耀季军', price: 0, rank: 3 },
+  skin_champion: { type: 'skin', name: '至尊冠军', price: 0, special: 1, rank: 1 },
+  skin_runnerup: { type: 'skin', name: '星辰亚军', price: 0, special: 1, rank: 2 },
+  skin_third:    { type: 'skin', name: '荣耀季军', price: 0, special: 1, rank: 3 },
   // 盲盒专属：商城不卖，只能抽（price 0 表示非卖品）
-  skin_jester:   { type: 'skin', name: '诡笑小丑',   price: 0, box: 1 },
-  skin_ghost:    { type: 'skin', name: '幽灵旅者',   price: 0, box: 1 },
-  skin_robot:    { type: 'skin', name: '报废机器人', price: 0, box: 1 },
-  skin_candy:    { type: 'skin', name: '糖果恶魔',   price: 0, box: 1 },
-  skin_samurai:  { type: 'skin', name: '浪人剑客',   price: 0, box: 1 },
-  skin_alien:    { type: 'skin', name: '异星来客',   price: 0, box: 1 },
-  skin_mummy:    { type: 'skin', name: '诅咒木乃伊', price: 0, box: 1 },
-  skin_dragon:   { type: 'skin', name: '幼龙术士',   price: 0, box: 1 },
-  skin_glitch:   { type: 'skin', name: '故障幻影',   price: 0, box: 1 },
+  skin_jester:   { type: 'skin', name: '诡笑小丑',   price: 0, special: 1, box: 1 },
+  skin_ghost:    { type: 'skin', name: '幽灵旅者',   price: 0, special: 1, box: 1 },
+  skin_robot:    { type: 'skin', name: '报废机器人', price: 0, special: 1, box: 1 },
+  skin_candy:    { type: 'skin', name: '糖果恶魔',   price: 0, special: 1, box: 1 },
+  skin_samurai:  { type: 'skin', name: '浪人剑客',   price: 0, special: 1, box: 1 },
+  skin_alien:    { type: 'skin', name: '异星来客',   price: 0, special: 1, box: 1 },
+  skin_mummy:    { type: 'skin', name: '诅咒木乃伊', price: 0, special: 1, box: 1 },
+  skin_dragon:   { type: 'skin', name: '幼龙术士',   price: 0, special: 1, box: 1 },
+  skin_glitch:   { type: 'skin', name: '故障幻影',   price: 0, special: 1, box: 1 },
   gun_pistol:   { type: 'gun', name: '标准手枪', price: 0,   lv: 1 },
   gun_rapid:    { type: 'gun', name: '冲锋枪',   price: 300, lv: 2 },
   gun_shotgun:  { type: 'gun', name: '散弹枪',   price: 600, lv: 4 },
@@ -897,6 +915,33 @@ const SHOP_ITEMS: Record<string, { type: 'skin' | 'gun'; name: string; price: nu
   gun_dual:     { type: 'gun', name: '双管机枪', price: 2500, lv: 12 },
   gun_plasma:   { type: 'gun', name: '等离子炮', price: 4000, lv: 15 },
 };
+// ---------- 玩家创作皮肤（UGC）常量与工具 ----------
+const SKIN_CREATE_COST = 1;        // 创建一款自定义皮肤花费的 B 币
+const CREATOR_REWARD_B = 0.02;     // 每有一个玩家使用，创作者获得的 B 币
+const SKIN_IMG_MAX = 60000;        // dataURL 字符数上限（Deno KV 单值上限 64KB，留足余量）
+const SKIN_LIST_MAX = 30;          // 公共列表最多返回多少款（含图片，控制响应体积）
+const SKIN_NAME_MAX = 12;          // 皮肤名最长字数
+function newSkinId(): string {
+  const cs = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < 8; i++) s += cs[Math.floor(Math.random() * cs.length)];
+  return 'sk_' + s;
+}
+async function loadSkin(id: string): Promise<Record<string, any> | null> {
+  const r = await kv.get<any>(['skin', id]);
+  return (r.value && r.value.id) ? r.value : null;
+}
+function pubSkin(s: Record<string, any>) {
+  return {
+    id: s.id,
+    name: s.name,
+    img: s.img,
+    creator: s.creatorName || '匿名',
+    users: Object.keys(s.usedBy || {}).length,
+    createdAt: s.createdAt || 0,
+  };
+}
+
 // 盲盒专属皮肤 id 列表（必须在 SHOP_ITEMS 声明之后才能取到）
 const BOX_SKIN_IDS = Object.keys(SHOP_ITEMS).filter((k) => SHOP_ITEMS[k].box);
 // 排行榜专属皮肤：名次 → 皮肤 id（与客户端 RANK_SKINS 保持一致）
@@ -1209,7 +1254,11 @@ async function authUser(req: Request) {
   const phone = await kv.get(['session', token]);
   if (!phone.value) return null;
   const u = await kv.get(['user', phone.value as string]);
-  return u.value ? { phone: phone.value as string, user: u.value as Record<string, any> } : null;
+  if (!u.value) return null;
+  const rec = u.value as Record<string, any>;
+  // 封禁：管理员例外（防止把自己锁死），普通玩家一被封就失去所有已登录会话
+  if (banInfo(rec).banned && !isAdminUser(rec)) return null;
+  return { phone: phone.value as string, user: rec };
 }
 
 // 系统默认名（还没起名的账号）：形如 玩家1234
@@ -1284,6 +1333,7 @@ function newAccountId(): string {
 // 账号名 → 用户 key；格式不合法返回 null
 function accountKeyOf(account: string): string | null {
   const a = String(account || '').trim().toUpperCase().replace(/[\s-]/g, '');
+  if (a === ADMIN_ACCOUNT.toUpperCase()) return ADMIN_KEY; // 管理员账号
   if (/^1\d{10}$/.test(a)) return a;            // 手机号账号
   if (/^[A-Z2-9]{6}$/.test(a)) return 'g_' + a; // 设备账号
   return null;
@@ -1312,6 +1362,48 @@ function newUserRecord(kind?: string): Record<string, any> {
     kind: kind || 'guest',
     created: Date.now(),
   };
+}
+
+// ======================= 管理员账号 + 封禁 =======================
+// 固定管理员：账号 guanliyuan、密码 1@3$。走普通「账号 + 密码」登录通道，
+// 登录成功后因为 u.role === 'admin' 才获得管理权限，服务端不做任何 IP/白名单之外的放行。
+const ADMIN_KEY = '__admin__';
+const ADMIN_ACCOUNT = 'guanliyuan';
+const ADMIN_PWD = '1@3$';
+function isAdminUser(u: Record<string, any> | null | undefined): boolean {
+  return !!u && u.role === 'admin';
+}
+// 保障管理员账号存在且口令正确（每次登录都校正一次：口令是写死的，不接受修改）
+async function ensureAdminUser(): Promise<Record<string, any>> {
+  const r = await kv.get<any>(['user', ADMIN_KEY]);
+  const u: Record<string, any> = r.value || {};
+  if (!r.value) {
+    u.name = '管理员';
+    u.coins = 999999;
+    u.exp = 0;
+    u.level = 1;
+    u.ownedSkins = Object.keys(SHOP_ITEMS).filter((k) => SHOP_ITEMS[k].type === 'skin');
+    u.ownedGuns = Object.keys(SHOP_ITEMS).filter((k) => SHOP_ITEMS[k].type === 'gun');
+    u.skin = 'skin_rainbow';
+    u.gun = 'gun_plasma';
+    u.created = Date.now();
+  }
+  u.role = 'admin';
+  u.account = ADMIN_ACCOUNT;
+  u.pwdHash = await hashPwd(ADMIN_PWD, ADMIN_KEY);
+  u.banned = 0;
+  await kv.set(['user', ADMIN_KEY], u);
+  return u;
+}
+// 封禁判定 / 文案
+function banInfo(u: Record<string, any>): { banned: boolean; reason: string } {
+  const banned = !!u.banned;
+  const reason = String(u.banReason || '').trim();
+  return { banned, reason };
+}
+function bannedMsg(u: Record<string, any>): string {
+  const b = banInfo(u);
+  return b.reason ? `账号已被封禁：${b.reason}` : '账号已被封禁，如有疑问请联系管理员';
 }
 
 // ======================= 腾讯云短信（可选，未配置环境变量时回退测试模式） =======================
@@ -1419,31 +1511,14 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     const { phone, code } = await readBody(req);
     const p = String(phone || '').trim();
     const c = String(code || '').trim();
-    // ---------- 管理员模式：手机号和验证码都输管理员口令，直接登录管理员账号 ----------
-    const ADMIN_KEY = '1@3$';
-    if (p === ADMIN_KEY && c === ADMIN_KEY) {
-      const akey = '__admin__';
-      let au = await kv.get(['user', akey]);
-      if (!au.value) {
-        const allSkins = Object.keys(SHOP_ITEMS).filter((k) => SHOP_ITEMS[k].type === 'skin');
-        const allGuns = Object.keys(SHOP_ITEMS).filter((k) => SHOP_ITEMS[k].type === 'gun');
-        au.value = {
-          name: '管理员',
-          role: 'admin',
-          coins: 999999,
-          exp: 0,
-          level: 1,
-          ownedSkins: allSkins,
-          ownedGuns: allGuns,
-          skin: 'skin_rainbow',
-          gun: 'gun_plasma',
-          created: Date.now(),
-        };
-        await kv.set(['user', akey], au.value);
-      }
+    // ---------- 旧管理员入口兼容：手机号和验证码都输口令，也能进管理员账号 ----------
+    // 新入口是「账号 guanliyuan + 密码」走 /api/auth/login-pwd，两条路等价。
+    const ADMIN_PASS_KEY = ADMIN_PWD;
+    if (p === ADMIN_PASS_KEY && c === ADMIN_PASS_KEY) {
+      const au = await ensureAdminUser();
       const atoken = crypto.randomUUID();
-      await kv.set(['session', atoken], akey, { expireIn: 365 * 24 * 3600 * 1000 });
-      return jsonResp({ ok: true, token: atoken, user: pubUser(au.value as Record<string, any>) });
+      await kv.set(['session', atoken], ADMIN_KEY, { expireIn: 365 * 24 * 3600 * 1000 });
+      return jsonResp({ ok: true, token: atoken, user: pubUser(au) });
     }
     const saved = await kv.get(['code', p]);
     if (!saved.value || saved.value !== c) {
@@ -1505,6 +1580,8 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     const { account, pwd } = await readBody(req);
     const key = accountKeyOf(String(account || ''));
     if (!key) return jsonResp({ ok: false, msg: '账号格式不对：6 位账号或 11 位手机号' }, 400);
+    // 管理员账号不存在时自动建好，保证 guanliyuan / 1@3$ 在任何环境都能登进去
+    if (key === ADMIN_KEY) await ensureAdminUser();
     const rec = await kv.get(['user', key]);
     const uu = rec.value as Record<string, any> | null;
     if (!uu) return jsonResp({ ok: false, msg: '账号不存在，请检查账号是否输错' }, 404);
@@ -1513,6 +1590,7 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     }
     const h = await hashPwd(String(pwd || ''), key);
     if (h !== uu.pwdHash) return jsonResp({ ok: false, msg: '密码错误' }, 401);
+    if (!isAdminUser(uu) && banInfo(uu).banned) return jsonResp({ ok: false, msg: bannedMsg(uu) }, 403);
     const token = crypto.randomUUID();
     await kv.set(['session', token], key, { expireIn: 365 * 24 * 3600 * 1000 });
     return jsonResp({ ok: true, token, user: pubUser(uu) });
@@ -1618,6 +1696,22 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     return jsonResp({ ok: true, map: pubMap(map), date });
   }
 
+  // GET /api/ban/check —— 客户端自查自己是否被封（只回答持有者本人，不泄露他人信息）
+  // authUser() 会把封禁玩家挡在所有业务接口之外，因此需要这个独立入口给出明确提示，
+  // 否则客户端只会看到「请先登录」而以为 token 过期，转头又自动建了个新号。
+  if (path === '/api/ban/check' && req.method === 'GET') {
+    const h2 = req.headers.get('authorization') || '';
+    const tk = h2.replace(/^Bearer\s+/i, '').trim();
+    if (!tk) return jsonResp({ ok: true, banned: 0 });
+    const sr = await kv.get(['session', tk]);
+    const key2 = sr.value as string;
+    if (!key2) return jsonResp({ ok: true, banned: 0, expired: 1 });
+    const ur2 = await kv.get<any>(['user', key2]);
+    if (!ur2.value) return jsonResp({ ok: true, banned: 0, expired: 1 });
+    const b2 = banInfo(ur2.value);
+    return jsonResp({ ok: true, banned: b2.banned ? 1 : 0, reason: b2.reason });
+  }
+
   // GET /api/maps/list —— 分享地图池列表（游玩别人的地图）
   if (path === '/api/maps/list' && req.method === 'GET') {
     const e = await kv.get(['maps']);
@@ -1669,6 +1763,144 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
   const auth = await authUser(req);
   if (!auth) return jsonResp({ ok: false, msg: '请先登录' }, 401);
   const u = auth.user;
+
+  // ======================= 管理员后台（role === 'admin' 才可访问） =======================
+  // GET /api/admin/players —— 全服玩家列表（不含管理员自己），按最近活跃排序
+  if (path === '/api/admin/players' && req.method === 'GET') {
+    if (!isAdminUser(u)) return jsonResp({ ok: false, msg: '没有权限' }, 403);
+    const rows: any[] = [];
+    for await (const e of kv.list<any>({ prefix: ['user'] })) {
+      const p = e.value as Record<string, any>;
+      if (!p) continue;
+      const key = String(e.key[1]);
+      if (key === ADMIN_KEY || p.role === 'admin') continue;
+      rows.push({
+        key,
+        name: p.name || '',
+        account: p.account || (key.startsWith('g_') ? key.slice(2) : key),
+        level: 1 + Math.floor((p.exp || 0) / 180),
+        exp: p.exp || 0,
+        coins: p.coins || 0,
+        bcoin: Math.round((Number(p.bcoin) || 0) * 100) / 100,
+        kills: p.kills || 0,
+        mapPlays: p.mapPlays || 0,
+        skin: p.skin || '',
+        gun: p.gun || '',
+        skins: (p.ownedSkins || []).length,
+        guns: (p.ownedGuns || []).length,
+        friends: (p.friends || []).length,
+        skills: (p.skills || []).length,
+        hasPwd: p.pwdHash ? 1 : 0,
+        kind: p.kind || '',
+        banned: p.banned ? 1 : 0,
+        banReason: p.banReason || '',
+        banAt: p.banAt || 0,
+        created: p.created || 0,
+      });
+    }
+    rows.sort((a, b) => (b.created || 0) - (a.created || 0));
+    return jsonResp({ ok: true, list: rows, total: rows.length });
+  }
+
+  // GET /api/admin/player?key= —— 单个玩家详细信息（含地图发布数、创作皮肤数、最近聊天数）
+  if (path === '/api/admin/player' && req.method === 'GET') {
+    if (!isAdminUser(u)) return jsonResp({ ok: false, msg: '没有权限' }, 403);
+    const key = String(url.searchParams.get('key') || '');
+    const r = await kv.get<any>(['user', key]);
+    if (!r.value) return jsonResp({ ok: false, msg: '玩家不存在' }, 404);
+    const p = r.value as Record<string, any>;
+    // 创作了多少皮肤 + 被多少人使用
+    let skinMade = 0, skinUsed = 0;
+    for await (const e of kv.list<any>({ prefix: ['skin'] })) {
+      const s = e.value as Record<string, any>;
+      if (!s || s.creatorId !== key) continue;
+      skinMade++;
+      skinUsed += Object.keys(s.usedBy || {}).length;
+    }
+    // 分享了几张地图、被玩了多少次
+    let maps = 0;
+    for (const m of ((await kv.get<any[]>(['maps'])).value || [])) {
+      if (m && m.authorId === key) maps++;
+    }
+    // 最近友好/clan？这里给最近的聊天条数（私信留存在 ['chat', kA, kB] 结构）
+    let chatRooms = 0, chatMsgs = 0;
+    for await (const e of kv.list<any>({ prefix: ['chat'] })) {
+      if (!e.value) continue;
+      const kk = String(e.key[1] || '');
+      const kk2 = String(e.key[2] || '');
+      if (kk !== key && kk2 !== key) continue;
+      chatRooms++;
+      chatMsgs += Array.isArray(e.value) ? e.value.length : 0;
+    }
+    return jsonResp({
+      ok: true,
+      player: {
+        key,
+        name: p.name || '',
+        account: p.account || (key.startsWith('g_') ? key.slice(2) : key),
+        role: p.role || 'player',
+        level: 1 + Math.floor((p.exp || 0) / 180),
+        exp: p.exp || 0,
+        expSpent: p.expSpent || 0,
+        coins: p.coins || 0,
+        bcoin: Math.round((Number(p.bcoin) || 0) * 100) / 100,
+        kills: p.kills || 0,
+        mapPlays: p.mapPlays || 0,
+        skin: p.skin || '',
+        gun: p.gun || '',
+        ownedSkins: p.ownedSkins || [],
+        ownedGuns: p.ownedGuns || [],
+        skills: p.skills || [],
+        upgrades: p.upgrades || {},
+        friends: p.friends || [],
+        pass: p.pass ? 1 : 0,
+        hasPwd: p.pwdHash ? 1 : 0,
+        kind: p.kind || '',
+        created: p.created || 0,
+        banned: p.banned ? 1 : 0,
+        banReason: p.banReason || '',
+        banAt: p.banAt || 0,
+        stats: { skinMade, skinUsed, maps, chatRooms, chatMsgs },
+      },
+    });
+  }
+
+  // POST /api/admin/ban { key, reason? } —— 封禁玩家：立刻作废其全部登录会话
+  if (path === '/api/admin/ban' && req.method === 'POST') {
+    if (!isAdminUser(u)) return jsonResp({ ok: false, msg: '没有权限' }, 403);
+    const { key, reason } = await readBody(req);
+    const kk = String(key || '');
+    if (!kk || kk === ADMIN_KEY) return jsonResp({ ok: false, msg: '不能封禁管理员账号' }, 400);
+    const r = await kv.get<any>(['user', kk]);
+    if (!r.value) return jsonResp({ ok: false, msg: '玩家不存在' }, 404);
+    const p = r.value as Record<string, any>;
+    if (p.role === 'admin') return jsonResp({ ok: false, msg: '不能封禁管理员账号' }, 400);
+    p.banned = 1;
+    p.banReason = String(reason || '').trim().slice(0, 60);
+    p.banAt = Date.now();
+    p.banBy = String(u.name || '管理员');
+    await kv.set(['user', kk], p);
+    // 不删会话：authUser() 已统一拦截，业务能力等于立刻下线。
+    // 保留会话是为了让 /api/ban/check 还能认出他是谁——删了的话客户端只会当成 token 过期，
+    // 转头调 /api/auth/guest 自动建个新号，封禁就被绕过去了。
+    return jsonResp({ ok: true, banned: 1 });
+  }
+
+  // POST /api/admin/unban { key } —— 解封（此人需要重新登录）
+  if (path === '/api/admin/unban' && req.method === 'POST') {
+    if (!isAdminUser(u)) return jsonResp({ ok: false, msg: '没有权限' }, 403);
+    const { key } = await readBody(req);
+    const kk = String(key || '');
+    const r = await kv.get<any>(['user', kk]);
+    if (!r.value) return jsonResp({ ok: false, msg: '玩家不存在' }, 404);
+    const p = r.value as Record<string, any>;
+    p.banned = 0;
+    p.banReason = '';
+    p.banAt = 0;
+    p.banBy = '';
+    await kv.set(['user', kk], p);
+    return jsonResp({ ok: true, banned: 0 });
+  }
 
   // POST /api/maps/delete { id } —— 从分享池删除地图（管理员，或该地图的发布者本人）
   if (path === '/api/maps/delete' && req.method === 'POST') {
@@ -1895,6 +2127,82 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     else u.gun = item;
     await kv.set(['user', auth.phone], u);
     return jsonResp({ ok: true, user: pubUser(u) });
+  }
+
+  // ======================= 玩家创作皮肤（UGC） =======================
+  // 花 1B 创建一款自定义皮肤（80x80 透明 PNG，可图库导入也可手绘），进公共列表；
+  // 别人每装备一次（每个玩家只计一次），创作者得 CREATOR_REWARD_B 枚 B 币。
+  // GET /api/skin/list —— 公共自定义皮肤，按使用人数降序（同人数时新的在前）
+  if (path === '/api/skin/list' && req.method === 'GET') {
+    const out: any[] = [];
+    const it = kv.list<any>({ prefix: ['skin'] });
+    for await (const e of it) if (e.value && e.value.id) out.push(e.value);
+    out.sort((a, b) =>
+      (Object.keys(b.usedBy || {}).length - Object.keys(a.usedBy || {}).length) ||
+      ((b.createdAt || 0) - (a.createdAt || 0)));
+    const top = out.slice(0, SKIN_LIST_MAX);
+    // 自己正穿着的皮肤即使掉出前 30 也要带回来，否则刷新后客户端找不到它的贴图会退回默认皮肤
+    const my = String(u.skin || '');
+    if (my.startsWith('sk_') && !top.some((s) => s.id === my)) {
+      const mine = await loadSkin(my);
+      if (mine) top.push(mine);
+    }
+    return jsonResp({ ok: true, list: top.map(pubSkin) });
+  }
+
+  // POST /api/skin/create { name, img } —— 花 1B 发布一款自定义皮肤
+  if (path === '/api/skin/create' && req.method === 'POST') {
+    const { name, img } = await readBody(req);
+    const nm = String(name || '').trim().slice(0, SKIN_NAME_MAX);
+    if (!nm) return jsonResp({ ok: false, msg: '请给皮肤起个名字' }, 400);
+    const im = String(img || '');
+    if (!im.startsWith('data:image/png;base64,')) {
+      return jsonResp({ ok: false, msg: '皮肤图片格式不对（需要 PNG）' }, 400);
+    }
+    if (im.length > SKIN_IMG_MAX) {
+      return jsonResp({ ok: false, msg: '皮肤图片太大了，请画得简单一点再试' }, 400);
+    }
+    const bc = Number(u.bcoin) || 0;
+    if (bc < SKIN_CREATE_COST) {
+      return jsonResp({ ok: false, msg: `B 币不足（需要 ${SKIN_CREATE_COST} 枚，当前 ${bc}）` }, 400);
+    }
+    // 8 次重试生成不冲突的 id（撞库概率极低，但也别死循环）
+    let id = newSkinId();
+    for (let i = 0; i < 8; i++) { if (!(await loadSkin(id))) break; id = newSkinId(); }
+    const s = {
+      id, name: nm, img: im,
+      creatorId: auth.phone,
+      creatorName: String(u.name || '').trim() || '匿名',
+      usedBy: {} as Record<string, number>,
+      createdAt: Date.now(),
+    };
+    u.bcoin = Math.round((bc - SKIN_CREATE_COST) * 100) / 100;
+    await kv.set(['skin', id], s);
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, skin: pubSkin(s), user: pubUser(u) });
+  }
+
+  // POST /api/skin/equip { id } —— 免费装备自定义皮肤；首次使用给创作者发 0.02B
+  if (path === '/api/skin/equip' && req.method === 'POST') {
+    const { id } = await readBody(req);
+    const s = await loadSkin(String(id || ''));
+    if (!s) return jsonResp({ ok: false, msg: '皮肤不存在' }, 400);
+    u.skin = String(s.id);
+    if (!s.usedBy) s.usedBy = {};
+    let rewarded = 0;
+    if (!s.usedBy[auth.phone]) {
+      s.usedBy[auth.phone] = Date.now();
+      // 每个玩家只计一次：换下再换上不会重复发奖励
+      const cr = await kv.get<any>(['user', s.creatorId]);
+      if (cr.value) {
+        cr.value.bcoin = Math.round(((Number(cr.value.bcoin) || 0) + CREATOR_REWARD_B) * 100) / 100;
+        await kv.set(['user', s.creatorId], cr.value);
+        rewarded = CREATOR_REWARD_B;
+      }
+    }
+    await kv.set(['skin', String(s.id)], s);
+    await kv.set(['user', auth.phone], u);
+    return jsonResp({ ok: true, user: pubUser(u), skin: pubSkin(s), rewarded });
   }
 
   // POST /api/user/upgrade { item } —— 花经验升级武器/皮肤技能/手榴弹
