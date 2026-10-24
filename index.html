@@ -1122,6 +1122,24 @@
   .admin-detail dd { font-size: 13px; color: #e8f0f7; margin: 0 0 6px; word-break: break-all; }
   .admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px 12px; }
   .admin-empty { text-align: center; color: #8fa6bb; font-size: 13px; padding: 18px 0; }
+  .ban-box { width: min(420px, 92vw); }
+  .ban-who { font-size: 13px; color: #e8f0f7; margin-bottom: 10px; }
+  .ban-who b { color: #fff; }
+  .ban-sec { font-size: 11.5px; color: #8fa6bb; margin: 10px 0 6px; }
+  .ban-dur { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .ban-dur button {
+    font-family: inherit; font-size: 12.5px; padding: 7px 2px; border-radius: 9px; cursor: pointer;
+    color: #cfe0f0; background: rgba(255,255,255,.06); border: 1px solid rgba(148,163,184,.28);
+    transition: all .12s ease;
+  }
+  .ban-dur button:hover { background: rgba(255,255,255,.13); }
+  .ban-dur button.on { color: #fff; background: rgba(248,113,113,.22); border-color: rgba(248,113,113,.6); }
+  .ban-custom { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+  .ban-custom input { width: 90px; }
+  .ban-reason { width: 100%; font-family: inherit; font-size: 13px; padding: 8px 10px; border-radius: 9px;
+    color: #e8f0f7; background: rgba(255,255,255,.07); border: 1px solid rgba(148,163,184,.28); }
+  .ban-foot { display: flex; gap: 8px; margin-top: 14px; }
+  .ban-foot button { flex: 1; }
   .qr-login-btn { width: 100%; border: 1px dashed rgba(255,183,3,.5) !important; color: #ffb703 !important; background: rgba(255,183,3,.06) !important; }
   .mode-big-btn {
     width: 100%; font-size: 17px; font-weight: 800;
@@ -1899,6 +1917,26 @@
       <button class="btn btn-secondary btn-small" id="acct-other-login" style="margin-top:0;">手机号 / 扫码登录其它账号</button>
       <button class="btn btn-secondary btn-small" id="acct-logout" style="margin-top:0;">退出登录（本机）</button>
       <button class="btn btn-secondary btn-small" id="acct-close" style="margin-top:0;">关闭</button>
+    </div>
+  </div>
+
+  <!-- 封禁时长选择（管理员点「封禁」时弹出） -->
+  <div class="modal-mask" id="ban-modal" style="display:none;z-index:120;">
+    <div class="modal-box ban-box">
+      <div class="modal-title">封禁玩家</div>
+      <div class="ban-who">玩家：<b id="ban-who-name">—</b><span style="color:#8fa6bb;">　账号 <span id="ban-who-acct">—</span></span></div>
+      <div class="ban-sec">封禁时长</div>
+      <div class="ban-dur" id="ban-dur"></div>
+      <div class="ban-custom">
+        <input class="ban-reason" id="ban-hours-custom" type="number" min="1" max="8760" step="1" placeholder="自定义小时数" style="flex:1;">
+        <span style="font-size:11.5px;color:#8fa6bb;">小时（1–8760）</span>
+      </div>
+      <div class="ban-sec">封禁理由（会显示给该玩家，可留空）</div>
+      <input class="ban-reason" id="ban-reason" maxlength="60" placeholder="例如：使用外挂 / 恶意刷屏">
+      <div class="ban-foot">
+        <button class="btn btn-secondary btn-small" id="ban-cancel" style="margin-top:0;">取消</button>
+        <button class="btn btn-small" id="ban-confirm" style="margin-top:0;">确认封禁</button>
+      </div>
     </div>
   </div>
 
@@ -3339,7 +3377,10 @@ function renderAdminList() {
   if (!rows.length) { box.innerHTML = `<div class="admin-empty">没有匹配的玩家</div>`; return; }
   box.innerHTML = rows.map((p) => {
     const sub = `账号 ${escapeHtml(p.account || '—')} · Lv.${p.level} · ${p.coins} 金币 · ${p.bcoin} B · ${p.kills} 击杀 · 注册 ${fmtTime(p.created)}`;
-    const tag = p.banned ? `<span class="admin-tag">已封禁${p.banReason ? '：' + escapeHtml(p.banReason) : ''}</span>` : '';
+    const durTxt = p.banned ? (p.banLeft ? `剩 ${escapeHtml(p.banLeft)}` : '永久') : '';
+    const tag = p.banned
+      ? `<span class="admin-tag">已封禁 · ${durTxt}${p.banReason ? '：' + escapeHtml(p.banReason) : ''}</span>`
+      : '';
     return `<div class="admin-row ${p.banned ? 'banned' : ''}">
       <div>
         <div class="admin-name">${escapeHtml(p.name || '未命名')}${tag}</div>
@@ -3378,21 +3419,68 @@ async function adminDetail(key) {
       <dt>聊天</dt><dd>${s.chatRooms} 个会话　${s.chatMsgs} 条消息</dd>
       <dt>通行证 / 密码 / 来源</dt><dd>${p.pass ? '已开通' : '无'}　${p.hasPwd ? '已设密码' : '未设密码'}　${g(p.kind || '—')}</dd>
       <dt>注册时间</dt><dd>${fmtTime(p.created)}</dd>
-      <dt>封禁状态</dt><dd>${p.banned ? `已封禁　理由：${g(p.banReason)}　时间：${fmtTime(p.banAt)}` : '正常'}</dd>
+      <dt>封禁状态</dt><dd>${p.banned
+        ? `已封禁　时长：${p.banUntil ? '至 ' + fmtTime(p.banUntil) + '（剩 ' + g(p.banLeft) + '）' : '永久'}　理由：${g(p.banReason)}　执行：${fmtTime(p.banAt)}${p.banBy ? '　by ' + g(p.banBy) : ''}`
+        : '正常'}</dd>
     </dl>`;
   } catch (e) { el.innerHTML = '<div class="admin-empty">网络错误</div>'; }
 }
+// ---------- 封禁：可选时长（限时到点自动解封，永久则 hours=0） ----------
+const BAN_OPTS = [
+  { h: 0.5, label: '30 分钟' },
+  { h: 1, label: '1 小时' },
+  { h: 6, label: '6 小时' },
+  { h: 24, label: '1 天' },
+  { h: 72, label: '3 天' },
+  { h: 168, label: '7 天' },
+  { h: 720, label: '30 天' },
+  { h: 0, label: '永久' },
+];
+let banPick = { key: '', hours: 24 };
+function openBanModal(key) {
+  const p = ADMIN_STATE.list.find((x) => x.key === key) || {};
+  banPick = { key, hours: 24 };
+  document.getElementById('ban-who-name').textContent = p.name || '未命名';
+  document.getElementById('ban-who-acct').textContent = p.account || '—';
+  document.getElementById('ban-reason').value = '';
+  document.getElementById('ban-hours-custom').value = '';
+  const box = document.getElementById('ban-dur');
+  box.innerHTML = BAN_OPTS.map((o) => `<button data-h="${o.h}">${o.label}</button>`).join('');
+  const paint = () => {
+    for (const b of box.querySelectorAll('button')) b.classList.toggle('on', Number(b.dataset.h) === banPick.hours && !document.getElementById('ban-hours-custom').value);
+  };
+  for (const b of box.querySelectorAll('button')) {
+    b.addEventListener('click', () => {
+      banPick.hours = Number(b.dataset.h);
+      document.getElementById('ban-hours-custom').value = '';
+      paint();
+    });
+  }
+  paint();
+  document.getElementById('ban-modal').style.display = 'flex';
+}
+function closeBanModal() { document.getElementById('ban-modal').style.display = 'none'; }
 async function adminToggleBan(key, isBanned) {
   if (isBanned) {
     const r = await api('/api/admin/unban', { key });
     if (!r.ok) { alert(r.msg || '解封失败'); return; }
-  } else {
-    const reason = prompt('封禁理由（会显示给该玩家，可留空）', '');
-    if (reason === null) return;
-    if (!confirm('确定封禁该玩家？他将立刻被踢下线且无法再登录。')) return;
-    const r = await api('/api/admin/ban', { key, reason });
-    if (!r.ok) { alert(r.msg || '封禁失败'); return; }
+    await adminLoad();
+    return;
   }
+  openBanModal(key);
+}
+async function banConfirm() {
+  const cv = Number(document.getElementById('ban-hours-custom').value);
+  let hours = banPick.hours;
+  if (cv > 0) hours = Math.min(8760, Math.max(1, Math.round(cv))); // 自定义小时优先，上限 1 年
+  const reason = String(document.getElementById('ban-reason').value || '').trim();
+  const key = banPick.key;
+  const r = await api('/api/admin/ban', { key, reason, hours });
+  if (!r.ok) { alert(r.msg || '封禁失败'); return; }
+  closeBanModal();
+  const opt = BAN_OPTS.find((o) => o.h === hours);
+  const label = opt ? opt.label : `${hours} 小时`;
+  alert(hours > 0 ? `已封禁 ${label}，到点自动解封。` : '已永久封禁。');
   await adminLoad();
 }
 async function adminLoad() {
@@ -3421,6 +3509,13 @@ document.getElementById('admin-banfilter').addEventListener('click', () => {
   renderAdminList();
 });
 document.getElementById('admin-search').addEventListener('input', renderAdminList);
+document.getElementById('ban-cancel').addEventListener('click', closeBanModal);
+document.getElementById('ban-confirm').addEventListener('click', banConfirm);
+document.getElementById('ban-hours-custom').addEventListener('input', () => {
+  const box = document.getElementById('ban-dur');
+  const v = String(document.getElementById('ban-hours-custom').value || '');
+  for (const b of box.querySelectorAll('button')) b.classList.toggle('on', v === '' && Number(b.dataset.h) === banPick.hours);
+});
 
 document.getElementById('switch-account-btn').addEventListener('click', async (ev) => {
   ev.stopPropagation(); // 不触发卡片改名
@@ -5255,7 +5350,8 @@ async function ensureAccount() {
       try {
         const b = await api('/api/ban/check');
         if (b && b.banned) {
-          alert('账号已被封禁\n' + (b.reason ? '理由：' + b.reason + '\n' : '') + '如有疑问请联系管理员。');
+          const dur = b.until ? (b.leftText ? `剩余 ${b.leftText}` : '即将到期') : '永久';
+          alert('账号已被封禁\n时长：' + dur + '\n' + (b.reason ? '理由：' + b.reason + '\n' : '') + '如有疑问请联系管理员。');
           try { localStorage.removeItem('bb_token'); } catch (e) {}
           User.logged = false; renderHomeUser();
           return false;
