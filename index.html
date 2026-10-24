@@ -1092,6 +1092,36 @@
   .acct-id { font-size: 20px; font-weight: 700; letter-spacing: 3px; color: #ffd166; }
   .acct-sep { height: 1px; background: rgba(148,163,184,.22); margin: 10px 0 8px; }
   .acct-sec { font-size: 12.5px; color: #7dd3fc; text-align: center; margin-bottom: 6px; }
+
+  /* ---------- 管理员后台 ---------- */
+  .admin-box { width: min(760px, 94vw); max-height: 88vh; overflow: auto; }
+  .admin-bar { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 2; padding: 6px 0; background: rgba(20,38,60,.98); }
+  /* 吸底：列表几十行时不用滚到最后也能关闭 */
+  .admin-foot { position: sticky; bottom: 0; z-index: 2; margin-top: 10px; padding: 8px 0 2px;
+    display: flex; gap: 6px; justify-content: center; background: rgba(13,27,42,.98); }
+  .admin-bar input { flex: 1 1 140px; min-width: 0; background: rgba(255,255,255,.08); border: 1px solid rgba(148,163,184,.28);
+    border-radius: 8px; color: #e8f0f7; padding: 7px 10px; font-size: 13px; outline: none; }
+  .admin-tip { font-size: 12px; color: #9fb3c8; margin-bottom: 8px; }
+  .admin-list { display: flex; flex-direction: column; gap: 6px; }
+  .admin-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center;
+    padding: 8px 10px; border: 1px solid rgba(148,163,184,.22); border-radius: 10px; background: rgba(255,255,255,.04); }
+  .admin-row.banned { border-color: rgba(248,113,113,.5); background: rgba(248,113,113,.09); }
+  .admin-name { font-size: 13.5px; font-weight: 600; color: #e8f0f7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-sub { font-size: 11.5px; color: #8fa6bb; margin-top: 2px; }
+  .admin-tag { display: inline-block; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; margin-left: 4px;
+    background: rgba(248,113,113,.22); color: #fca5a5; border: 1px solid rgba(248,113,113,.4); }
+  .admin-mini { font-size: 11.5px; padding: 5px 9px; border-radius: 8px; border: 1px solid rgba(148,163,184,.3);
+    background: rgba(255,255,255,.07); color: #cfe3f2; cursor: pointer; white-space: nowrap; }
+  .admin-mini:hover { background: rgba(255,255,255,.13); }
+  .admin-mini.danger { border-color: rgba(248,113,113,.45); color: #fca5a5; }
+  .admin-mini.danger:hover { background: rgba(248,113,113,.16); }
+  .admin-detail { margin-top: 10px; padding: 10px 12px; border: 1px solid rgba(125,211,252,.35);
+    border-radius: 10px; background: rgba(125,211,252,.07); }
+  .admin-detail dt { font-size: 11.5px; color: #8fa6bb; }
+  .admin-detail dd { font-size: 13px; color: #e8f0f7; margin: 0 0 6px; word-break: break-all; }
+  .admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px 12px; }
+  .admin-empty { text-align: center; color: #8fa6bb; font-size: 13px; padding: 18px 0; }
   .qr-login-btn { width: 100%; border: 1px dashed rgba(255,183,3,.5) !important; color: #ffb703 !important; background: rgba(255,183,3,.06) !important; }
   .mode-big-btn {
     width: 100%; font-size: 17px; font-weight: 800;
@@ -1153,6 +1183,71 @@
   .shop-buy.own { background: rgba(255,255,255,.14); color: #cfe0f0; }
   .shop-buy.equipped { background: rgba(46,196,182,.22); color: #2ec4b6; border: 1px solid rgba(46,196,182,.5); }
   .shop-msg { font-size: 12.5px; color: #ff6b6b; text-align: center; min-height: 16px; }
+
+  /* ---------- 皮肤创作器 ---------- */
+  .sm-tip { font-size: 12px; color: #9fb3c8; text-align: center; margin-bottom: 8px; line-height: 1.6; }
+  .sm-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .sm-label { font-size: 12px; color: #7d93a8; min-width: 32px; }
+  .sm-input {
+    flex: 1; min-width: 120px; background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.16); border-radius: 8px;
+    color: #eef4ff; padding: 6px 10px; font-size: 13px; outline: none;
+  }
+  .sm-input:focus { border-color: rgba(110,203,255,.6); }
+  .sm-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sm-tool {
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
+    border-radius: 8px; color: #cfe0f0; padding: 5px 10px; font-size: 12px; cursor: pointer;
+    touch-action: manipulation;
+  }
+  .sm-tool.active { background: #ffd166; color: #0f172a; font-weight: 800; border-color: #ffd166; }
+  .sm-tools input[type=color] {
+    width: 30px; height: 28px; padding: 0; border: 1px solid rgba(255,255,255,.2);
+    border-radius: 6px; background: transparent; cursor: pointer;
+  }
+  .sm-tools input[type=range] { width: 78px; accent-color: #ffd166; }
+  .sm-canvas-wrap { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 6px 0 10px; }
+  #sm-canvas {
+    width: 200px; height: 200px; border-radius: 12px;
+    border: 2px solid rgba(255,255,255,.2); background: #0b1220;
+    /* 棋盘格表示透明，画上去一眼能看出哪里是空的 */
+    background-image:
+      linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.05) 75%),
+      linear-gradient(45deg, rgba(255,255,255,.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.05) 75%);
+    background-size: 20px 20px; background-position: 0 0, 10px 10px;
+    cursor: crosshair; touch-action: none;
+  }
+  #sm-preview {
+    width: 60px; height: 60px; border-radius: 50%;
+    border: 2px solid rgba(255,209,102,.5); background: #0b1220;
+  }
+  .sm-hint { font-size: 11px; color: #6b8098; flex: 1; min-width: 130px; line-height: 1.4; }
+  .sm-msg { font-size: 12.5px; color: #ff6b6b; text-align: center; min-height: 18px; margin-bottom: 4px; }
+  .sm-actions { display: flex; justify-content: center; gap: 10px; }
+  /* 自定义皮肤卡片：排名 / 创作者 / 使用人数 */
+  .skin-rank-badge {
+    position: absolute; top: 6px; left: 6px; z-index: 2;
+    background: linear-gradient(135deg, #ffd166, #f59e0b);
+    color: #3b2400; font-weight: 900; font-size: 10px;
+    border-radius: 999px; padding: 2px 7px; box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  }
+  .skin-rank-badge.top { background: linear-gradient(135deg, #fff1a8, #ffb703); }
+  .skin-meta { font-size: 10.5px; color: #8fa6bb; margin-top: 2px; line-height: 1.4; }
+  .skin-meta b { color: #ffd166; font-weight: 700; }
+  .shop-item.custom { position: relative; }
+  .sm-create-bar {
+    grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: rgba(255,209,102,.1); border: 1.5px dashed rgba(255,209,102,.45);
+    border-radius: 12px; padding: 10px; cursor: pointer; color: #ffd166;
+    font-size: 13px; font-weight: 700; touch-action: manipulation;
+  }
+  .sm-create-bar:hover { background: rgba(255,209,102,.18); }
+  .shop-sec-title {
+    grid-column: 1 / -1; font-size: 13px; font-weight: 800; color: #ffd166;
+    margin: 6px 0 2px; display: flex; align-items: center; gap: 6px;
+  }
+  .shop-sec-title small { color: #7d93a8; font-weight: 400; font-size: 11px; }
+
   /* ---------- 升级页 ---------- */
   .upg-list { display: flex; flex-direction: column; gap: 8px; max-height: 56vh; overflow-y: auto; padding: 4px; }
   .upg-row {
@@ -1796,13 +1891,32 @@
       <button class="btn btn-small" id="acct-pwd-btn">设置密码</button>
       <div class="acct-sep"></div>
       <div class="acct-sec">切换账号</div>
-      <input class="modal-input" id="switch-acct-input" maxlength="11" placeholder="输入要切换的账号（6 位）">
+      <input class="modal-input" id="switch-acct-input" maxlength="20" placeholder="输入要切换的账号（6 位）">
       <input class="modal-input" id="switch-pwd-input" maxlength="20" type="password" placeholder="输入该账号的密码">
       <button class="btn btn-small" id="switch-confirm-btn">切换过去</button>
       <div class="login-hint" id="acct-msg"></div>
+      <button class="btn btn-small" id="acct-admin-btn" style="margin-top:0;display:none;">管理后台</button>
       <button class="btn btn-secondary btn-small" id="acct-other-login" style="margin-top:0;">手机号 / 扫码登录其它账号</button>
       <button class="btn btn-secondary btn-small" id="acct-logout" style="margin-top:0;">退出登录（本机）</button>
       <button class="btn btn-secondary btn-small" id="acct-close" style="margin-top:0;">关闭</button>
+    </div>
+  </div>
+
+  <!-- 管理员后台：查看玩家详情 + 封禁 / 解封 -->
+  <div class="modal-mask" id="admin-modal" style="display:none;">
+    <div class="modal-box admin-box">
+      <div class="modal-title">管理后台</div>
+      <div class="admin-bar">
+        <input id="admin-search" placeholder="搜昵称 / 账号" maxlength="20">
+        <button class="admin-mini" id="admin-refresh">刷新</button>
+        <button class="admin-mini" id="admin-banfilter">只看封禁</button>
+      </div>
+      <div class="admin-tip" id="admin-tip">共 0 名玩家</div>
+      <div class="admin-list" id="admin-list"></div>
+      <div class="admin-detail" id="admin-detail" style="display:none;"></div>
+      <div class="admin-foot">
+        <button class="btn btn-secondary btn-small" id="admin-close" style="margin-top:0;">关闭</button>
+      </div>
     </div>
   </div>
 
@@ -1823,6 +1937,7 @@
       <div class="modal-title">🛒 商城<span class="shop-coins" id="shop-coins">💰 0</span></div>
       <div class="shop-tabs">
         <button class="mode-btn active" id="shop-tab-skin">皮肤</button>
+        <button class="mode-btn" id="shop-tab-special">特殊</button>
         <button class="mode-btn" id="shop-tab-gun">枪械</button>
         <button class="mode-btn" id="shop-tab-daily">每日特惠</button>
         <button class="mode-btn" id="shop-tab-upg">升级</button>
@@ -1830,6 +1945,47 @@
       <div class="shop-grid" id="shop-list"></div>
       <div class="shop-msg" id="shop-msg"></div>
       <button class="btn btn-secondary btn-small" id="shop-close" style="margin-top:0;">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 皮肤创作器：花 1B 发布自定义皮肤（图库导入 / 手动绘制） -->
+<div class="modal-mask" id="skin-maker-modal" style="display:none;">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-title">🎨 创作皮肤<span class="shop-coins" id="sm-bcoin">0 B</span></div>
+    <div class="sm-tip">花 <b style="color:#fbbf24;">1 B</b> 发布到公共皮肤库 · 别人每装备一次，你得 <b style="color:#fbbf24;">0.02 B</b></div>
+
+    <div class="sm-row">
+      <span class="sm-label">名字</span>
+      <input id="sm-name" maxlength="12" placeholder="给皮肤起个名字" class="sm-input">
+    </div>
+
+    <div class="sm-row">
+      <span class="sm-label">画板</span>
+      <div class="sm-tools">
+        <button class="sm-tool active" id="sm-tool-brush">画笔</button>
+        <button class="sm-tool" id="sm-tool-eraser">橡皮</button>
+        <input type="color" id="sm-color" value="#ff5a5a" title="颜色">
+        <input type="range" id="sm-size" min="1" max="14" value="5" title="笔刷大小">
+        <button class="sm-tool" id="sm-clear">清空</button>
+      </div>
+    </div>
+
+    <div class="sm-canvas-wrap">
+      <canvas id="sm-canvas" width="240" height="240"></canvas>
+      <canvas id="sm-preview" width="60" height="60" title="游戏内预览"></canvas>
+    </div>
+
+    <div class="sm-row">
+      <button class="btn btn-secondary btn-small" id="sm-import">图库导入</button>
+      <input type="file" id="sm-file" accept="image/*" style="display:none;">
+      <span class="sm-hint" id="sm-hint">透明区域在游戏中是透明的，画个小人最好看</span>
+    </div>
+
+    <div class="sm-msg" id="sm-msg"></div>
+    <div class="sm-actions">
+      <button class="btn btn-small" id="sm-publish">发布（1 B）</button>
+      <button class="btn btn-secondary btn-small" id="sm-close">关闭</button>
     </div>
   </div>
 </div>
@@ -1912,40 +2068,40 @@ function escapeHtml(s) {
 const SKIN_DEFS = {
   skin_default: { name: '蓝色战士', price: 0,   desc: '经典初始造型', body1: '#6ecbff', body2: '#2196f3', gun1: '#1565c0', gun2: '#0d47a1', glow: '#ffd166', deco: 'cap',      texture: 'clean',   eye: 'normal', skill: { icon: '💨', name: '战术冲刺', cd: 8,  desc: '高速冲刺并无敌，落点冲击造成 2 点伤害', power: 2 } },
   skin_green:   { name: '翠绿战士', price: 200, desc: '森林迷彩配色', body1: '#86efac', body2: '#16a34a', gun1: '#15803d', gun2: '#14532d', glow: '#86efac', deco: 'leaf',     texture: 'camo',    eye: 'normal', skill: { icon: '💚', name: '生命绽放', cd: 20, desc: '恢复 2 点生命；生命已满时溢出转为 3 秒护盾（挡 2 次）', power: 3 } },
-  skin_pink:    { name: '樱花甜心', price: 200, desc: '甜美粉色系',   body1: '#f9a8d4', body2: '#db2777', gun1: '#9d174d', gun2: '#831843', glow: '#f9a8d4', deco: 'bow',      texture: 'petal',   eye: 'normal', skill: { icon: '🌸', name: '樱花弹幕', cd: 14, desc: '迸发 12 发花瓣弹，命中的敌人减速 1.5 秒', power: 4 } },
-  skin_gold:    { name: '黄金武士', price: 500, desc: '闪亮土豪金',   body1: '#fde68a', body2: '#d97706', gun1: '#b45309', gun2: '#92400e', glow: '#fcd34d', deco: 'crown',    texture: 'shine',   eye: 'normal', skill: { icon: '⚜️', name: '黄金圣裁', cd: 16, desc: '金光斩击 3 点伤害；残血敌人（≤50%）翻倍，每击杀 +40 分', power: 6 } },
-  skin_purple:  { name: '紫电幻影', price: 500, desc: '神秘紫电光',   body1: '#c4b5fd', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#c4b5fd', deco: 'bolt',     texture: 'vein',    eye: 'normal', trail: 'spark',   skill: { icon: '⚡', name: '闪电链',   cd: 12, desc: '闪电连锁 5 个敌人，伤害逐跳递增 3→4→5→6→7', power: 7 } },
-  skin_dark:    { name: '暗夜行者', price: 1000, desc: '低调暗黑忍者', body1: '#64748b', body2: '#1e293b', gun1: '#0f172a', gun2: '#020617', glow: '#94a3b8', deco: 'headband', texture: 'clean',   eye: 'narrow', trail: 'smoke',   skill: { icon: '🌑', name: '暗影隐身', cd: 15, desc: '隐身 4 秒且移速 +40%；下一发变暗杀（3 倍伤害）后现身', power: 9 } },
-  skin_fire:    { name: '烈焰战神', price: 1500, desc: '炽热红焰，所向披靡', body1: '#ffb347', body2: '#e63946', gun1: '#9b2226', gun2: '#6a040f', glow: '#ffb703', deco: 'flame',  texture: 'stripe',  eye: 'normal', trail: 'ember',   skill: { icon: '🔥', name: '烈焰火墙', cd: 12, desc: '铺开一道 5 秒火墙，持续灼烧范围内的敌人', power: 12 } },
-  skin_ice:     { name: '寒冰射手', price: 1500, desc: '冰蓝冻结，冷静致命', body1: '#a5f3fc', body2: '#0ea5e9', gun1: '#075985', gun2: '#0c4a6e', glow: '#67e8f9', deco: 'icicle',  texture: 'crack',   eye: 'normal', trail: 'frost',   skill: { icon: '❄️', name: '冰霜陷阱', cd: 14, desc: '埋下 3 根冰刺（持续 8 秒），敌人踩中冻结 2 秒并受 3 伤', power: 13 } },
-  skin_mecha:   { name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc', visorCol: '#22d3ee', deco: 'mecha',    texture: 'metal',   eye: 'visor',  trail: 'thrust',  skill: { icon: '🛡️', name: '能量护盾', cd: 15, desc: '6 秒抵挡 4 次；护盾破碎时释放冲击波造成 4 点伤害', power: 15 } },
-  skin_rainbow: { name: '彩虹独角兽', price: 5000, desc: '七彩祥云，至尊限定', body1: '#fda4af', body2: '#f472b6', gun1: '#c026d3', gun2: '#a21caf', glow: '#f0abfc', deco: 'horn',   texture: 'shimmer', eye: 'star',    trail: 'rainbow', skill: { icon: '🌈', name: '彩虹狂暴', cd: 18, desc: '6 秒射速翻倍 + 移速 30%；期间每击杀延长 1 秒（上限 10 秒）', power: 18 } },
+  skin_pink:    { special: 1, lv: 2000, name: '樱花甜心', price: 200, desc: '甜美粉色系',   body1: '#f9a8d4', body2: '#db2777', gun1: '#9d174d', gun2: '#831843', glow: '#f9a8d4', deco: 'bow',      texture: 'petal',   eye: 'normal', skill: { icon: '🌸', name: '樱花弹幕', cd: 14, desc: '迸发 12 发花瓣弹，命中的敌人减速 1.5 秒', power: 4 } },
+  skin_gold:    { special: 1, lv: 2000, name: '黄金武士', price: 500, desc: '闪亮土豪金',   body1: '#fde68a', body2: '#d97706', gun1: '#b45309', gun2: '#92400e', glow: '#fcd34d', deco: 'crown',    texture: 'shine',   eye: 'normal', skill: { icon: '⚜️', name: '黄金圣裁', cd: 16, desc: '金光斩击 3 点伤害；残血敌人（≤50%）翻倍，每击杀 +40 分', power: 6 } },
+  skin_purple:  { special: 1, lv: 2000, name: '紫电幻影', price: 500, desc: '神秘紫电光',   body1: '#c4b5fd', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#c4b5fd', deco: 'bolt',     texture: 'vein',    eye: 'normal', trail: 'spark',   skill: { icon: '⚡', name: '闪电链',   cd: 12, desc: '闪电连锁 5 个敌人，伤害逐跳递增 3→4→5→6→7', power: 7 } },
+  skin_dark:    { special: 1, lv: 2000, name: '暗夜行者', price: 1000, desc: '低调暗黑忍者', body1: '#64748b', body2: '#1e293b', gun1: '#0f172a', gun2: '#020617', glow: '#94a3b8', deco: 'headband', texture: 'clean',   eye: 'narrow', trail: 'smoke',   skill: { icon: '🌑', name: '暗影隐身', cd: 15, desc: '隐身 4 秒且移速 +40%；下一发变暗杀（3 倍伤害）后现身', power: 9 } },
+  skin_fire:    { special: 1, lv: 2000, name: '烈焰战神', price: 1500, desc: '炽热红焰，所向披靡', body1: '#ffb347', body2: '#e63946', gun1: '#9b2226', gun2: '#6a040f', glow: '#ffb703', deco: 'flame',  texture: 'stripe',  eye: 'normal', trail: 'ember',   skill: { icon: '🔥', name: '烈焰火墙', cd: 12, desc: '铺开一道 5 秒火墙，持续灼烧范围内的敌人', power: 12 } },
+  skin_ice:     { special: 1, lv: 2000, name: '寒冰射手', price: 1500, desc: '冰蓝冻结，冷静致命', body1: '#a5f3fc', body2: '#0ea5e9', gun1: '#075985', gun2: '#0c4a6e', glow: '#67e8f9', deco: 'icicle',  texture: 'crack',   eye: 'normal', trail: 'frost',   skill: { icon: '❄️', name: '冰霜陷阱', cd: 14, desc: '埋下 3 根冰刺（持续 8 秒），敌人踩中冻结 2 秒并受 3 伤', power: 13 } },
+  skin_mecha:   { special: 1, lv: 2000, name: '机甲武装', price: 3000, desc: '钢铁机甲，重型火力', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#f8fafc', visorCol: '#22d3ee', deco: 'mecha',    texture: 'metal',   eye: 'visor',  trail: 'thrust',  skill: { icon: '🛡️', name: '能量护盾', cd: 15, desc: '6 秒抵挡 4 次；护盾破碎时释放冲击波造成 4 点伤害', power: 15 } },
+  skin_rainbow: { special: 1, lv: 2000, name: '彩虹独角兽', price: 5000, desc: '七彩祥云，至尊限定', body1: '#fda4af', body2: '#f472b6', gun1: '#c026d3', gun2: '#a21caf', glow: '#f0abfc', deco: 'horn',   texture: 'shimmer', eye: 'star',    trail: 'rainbow', skill: { icon: '🌈', name: '彩虹狂暴', cd: 18, desc: '6 秒射速翻倍 + 移速 30%；期间每击杀延长 1 秒（上限 10 秒）', power: 18 } },
   // ↓ 战斗通行证专属：每款有独立的累计击杀门槛（killReq），达标才解锁购买资格
-  skin_void:    { name: '虚空行者', price: 6000, desc: '★通行证 掌控虚空之力', body1: '#c4b5fd', body2: '#4c1d95', gun1: '#3b0764', gun2: '#1e1b4b', glow: '#a78bfa', pass: 1, killReq: 1000, deco: 'void',    texture: 'void',    eye: 'glow',   trail: 'void',    skill: { icon: '🌀', name: '虚空坍缩', cd: 22, desc: '召唤黑洞 4 秒，持续吸引周围敌人并每 0.4 秒造成 2 点伤害', power: 20 } },
-  skin_crimson: { name: '猩红裁决', price: 9000, desc: '★通行证 一刀断罪，血染战场', body1: '#fca5a5', body2: '#b91c1c', gun1: '#7f1d1d', gun2: '#450a0a', glow: '#ef4444', pass: 1, killReq: 3000, deco: 'crimson', texture: 'crimson', eye: 'narrow', trail: 'blood',   skill: { icon: '⚔️', name: '裁决天罚', cd: 28, desc: '一刀断罪：瞬杀全场所有敌人，BOSS 受到 25 点伤害', power: 26 } },
-  skin_astral:  { name: '星辰主宰', price: 15000, desc: '★通行证 星辰之力，逆转战局', body1: '#e0e7ff', body2: '#312e81', gun1: '#1e1b4b', gun2: '#0f172a', glow: '#fbbf24', visorCol: '#fbbf24', pass: 1, killReq: 4000, deco: 'astral',  texture: 'astral',  eye: 'star',   trail: 'astral',  skill: { icon: '✨', name: '星辰崩解', cd: 32, desc: '时间凝滞 4 秒（含 BOSS），期间自身无敌且射速提升至 3 倍', power: 34 } },
-  skin_phoenix: { name: '不死凤凰', price: 22000, desc: '★通行证 浴火重生，涅槃不息', body1: '#fed7aa', body2: '#ea580c', gun1: '#9a3412', gun2: '#7c2d12', glow: '#fb923c', pass: 1, killReq: 8000, deco: 'phoenix', texture: 'ember', eye: 'blaze', trail: 'ember', skill: { icon: '🕊️', name: '涅槃重生', cd: 40, desc: '主动释放立即回满血并清除负面；携带时阵亡会自动原地复活一次', power: 38 } },
-  skin_abyss:   { name: '深渊泰坦', price: 28000, desc: '★通行证 深海霸主，吞噬一切', body1: '#5eead4', body2: '#0f766e', gun1: '#115e59', gun2: '#134e4a', glow: '#2dd4bf', pass: 1, killReq: 10000, deco: 'abyss', texture: 'wave', eye: 'glow', trail: 'bubble', skill: { icon: '🌊', name: '深海漩涡', cd: 20, desc: '掀起巨浪击退全场敌人并造成 4 点伤害，被击退撞墙的敌人额外受 2 伤', power: 42 } },
-  skin_storm:   { name: '雷霆之主', price: 36000, desc: '★通行证 掌控天雷，审判众生', body1: '#fef08a', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#fde047', pass: 1, killReq: 15000, deco: 'storm', texture: 'vein', eye: 'glow', trail: 'spark', skill: { icon: '🌩️', name: '天雷审判', cd: 24, desc: '天降 8 道落雷随机轰击全场，每道 5 点伤害并附带 1 秒麻痹', power: 46 } },
-  skin_necro:   { name: '亡灵君主', price: 45000, desc: '★通行证 号令亡者，生生不息', body1: '#bef264', body2: '#365314', gun1: '#1a2e05', gun2: '#0f172a', glow: '#84cc16', pass: 1, killReq: 20000, deco: 'necro', texture: 'bone', eye: 'hollow', trail: 'soul', skill: { icon: '💀', name: '亡者行军', cd: 26, desc: '召唤 4 只骷髅战士为你作战，持续 12 秒；骷髅击杀的敌人也计入你的得分', power: 50 } },
-  skin_celestial:{ name: '天界圣骑', price: 60000, desc: '★通行证 圣光庇佑，邪祟退散', body1: '#fef9c3', body2: '#a16207', gun1: '#854d0e', gun2: '#713f12', glow: '#fef08a', visorCol: '#fde047', pass: 1, killReq: 30000, deco: 'halo', texture: 'shine', eye: 'visor', trail: 'holy', skill: { icon: '🗡️', name: '圣光裁决', cd: 22, desc: '展开圣光领域 8 秒：领域内队友无敌，敌人持续受到 2 点/秒伤害', power: 55 } },
-  skin_chaos:   { name: '混沌魔神', price: 80000, desc: '★通行证 无序即真理，混乱即力量', body1: '#f0abfc', body2: '#581c87', gun1: '#3b0764', gun2: '#0f172a', glow: '#d946ef', pass: 1, killReq: 50000, deco: 'chaos', texture: 'chaos', eye: 'chaos', trail: 'chaos', skill: { icon: '🌀', name: '混沌崩坏', cd: 30, desc: '扭曲空间 6 秒：敌人随机传送且互相伤害，期间自身射速翻倍', power: 60 } },
-  skin_eternal: { name: '永恒至尊', price: 120000, desc: '★通行证 超越时空，永恒不灭', body1: '#ffffff', body2: '#1e1b4b', gun1: '#312e81', gun2: '#0f172a', glow: '#fde047', visorCol: '#ffffff', pass: 1, killReq: 80000, deco: 'eternal', texture: 'astral', eye: 'star', trail: 'eternal', skill: { icon: '♾️', name: '永恒领域', cd: 35, desc: '展开永恒领域 10 秒：全场敌人被冻结，自身无敌且射速 3 倍，每击杀延长 1 秒', power: 66 } },
+  skin_void:    { special: 1, lv: 2000, name: '虚空行者', price: 6000, desc: '★通行证 掌控虚空之力', body1: '#c4b5fd', body2: '#4c1d95', gun1: '#3b0764', gun2: '#1e1b4b', glow: '#a78bfa', pass: 1, killReq: 1000, deco: 'void',    texture: 'void',    eye: 'glow',   trail: 'void',    skill: { icon: '🌀', name: '虚空坍缩', cd: 22, desc: '召唤黑洞 4 秒，持续吸引周围敌人并每 0.4 秒造成 2 点伤害', power: 20 } },
+  skin_crimson: { special: 1, lv: 2000, name: '猩红裁决', price: 9000, desc: '★通行证 一刀断罪，血染战场', body1: '#fca5a5', body2: '#b91c1c', gun1: '#7f1d1d', gun2: '#450a0a', glow: '#ef4444', pass: 1, killReq: 3000, deco: 'crimson', texture: 'crimson', eye: 'narrow', trail: 'blood',   skill: { icon: '⚔️', name: '裁决天罚', cd: 28, desc: '一刀断罪：瞬杀全场所有敌人，BOSS 受到 25 点伤害', power: 26 } },
+  skin_astral:  { special: 1, lv: 2000, name: '星辰主宰', price: 15000, desc: '★通行证 星辰之力，逆转战局', body1: '#e0e7ff', body2: '#312e81', gun1: '#1e1b4b', gun2: '#0f172a', glow: '#fbbf24', visorCol: '#fbbf24', pass: 1, killReq: 4000, deco: 'astral',  texture: 'astral',  eye: 'star',   trail: 'astral',  skill: { icon: '✨', name: '星辰崩解', cd: 32, desc: '时间凝滞 4 秒（含 BOSS），期间自身无敌且射速提升至 3 倍', power: 34 } },
+  skin_phoenix: { special: 1, lv: 2000, name: '不死凤凰', price: 22000, desc: '★通行证 浴火重生，涅槃不息', body1: '#fed7aa', body2: '#ea580c', gun1: '#9a3412', gun2: '#7c2d12', glow: '#fb923c', pass: 1, killReq: 8000, deco: 'phoenix', texture: 'ember', eye: 'blaze', trail: 'ember', skill: { icon: '🕊️', name: '涅槃重生', cd: 40, desc: '主动释放立即回满血并清除负面；携带时阵亡会自动原地复活一次', power: 38 } },
+  skin_abyss:   { special: 1, lv: 2000, name: '深渊泰坦', price: 28000, desc: '★通行证 深海霸主，吞噬一切', body1: '#5eead4', body2: '#0f766e', gun1: '#115e59', gun2: '#134e4a', glow: '#2dd4bf', pass: 1, killReq: 10000, deco: 'abyss', texture: 'wave', eye: 'glow', trail: 'bubble', skill: { icon: '🌊', name: '深海漩涡', cd: 20, desc: '掀起巨浪击退全场敌人并造成 4 点伤害，被击退撞墙的敌人额外受 2 伤', power: 42 } },
+  skin_storm:   { special: 1, lv: 2000, name: '雷霆之主', price: 36000, desc: '★通行证 掌控天雷，审判众生', body1: '#fef08a', body2: '#7c3aed', gun1: '#5b21b6', gun2: '#4c1d95', glow: '#fde047', pass: 1, killReq: 15000, deco: 'storm', texture: 'vein', eye: 'glow', trail: 'spark', skill: { icon: '🌩️', name: '天雷审判', cd: 24, desc: '天降 8 道落雷随机轰击全场，每道 5 点伤害并附带 1 秒麻痹', power: 46 } },
+  skin_necro:   { special: 1, lv: 2000, name: '亡灵君主', price: 45000, desc: '★通行证 号令亡者，生生不息', body1: '#bef264', body2: '#365314', gun1: '#1a2e05', gun2: '#0f172a', glow: '#84cc16', pass: 1, killReq: 20000, deco: 'necro', texture: 'bone', eye: 'hollow', trail: 'soul', skill: { icon: '💀', name: '亡者行军', cd: 26, desc: '召唤 4 只骷髅战士为你作战，持续 12 秒；骷髅击杀的敌人也计入你的得分', power: 50 } },
+  skin_celestial:{ special: 1, lv: 2000, name: '天界圣骑', price: 60000, desc: '★通行证 圣光庇佑，邪祟退散', body1: '#fef9c3', body2: '#a16207', gun1: '#854d0e', gun2: '#713f12', glow: '#fef08a', visorCol: '#fde047', pass: 1, killReq: 30000, deco: 'halo', texture: 'shine', eye: 'visor', trail: 'holy', skill: { icon: '🗡️', name: '圣光裁决', cd: 22, desc: '展开圣光领域 8 秒：领域内队友无敌，敌人持续受到 2 点/秒伤害', power: 55 } },
+  skin_chaos:   { special: 1, lv: 2000, name: '混沌魔神', price: 80000, desc: '★通行证 无序即真理，混乱即力量', body1: '#f0abfc', body2: '#581c87', gun1: '#3b0764', gun2: '#0f172a', glow: '#d946ef', pass: 1, killReq: 50000, deco: 'chaos', texture: 'chaos', eye: 'chaos', trail: 'chaos', skill: { icon: '🌀', name: '混沌崩坏', cd: 30, desc: '扭曲空间 6 秒：敌人随机传送且互相伤害，期间自身射速翻倍', power: 60 } },
+  skin_eternal: { special: 1, lv: 2000, name: '永恒至尊', price: 120000, desc: '★通行证 超越时空，永恒不灭', body1: '#ffffff', body2: '#1e1b4b', gun1: '#312e81', gun2: '#0f172a', glow: '#fde047', visorCol: '#ffffff', pass: 1, killReq: 80000, deco: 'eternal', texture: 'astral', eye: 'star', trail: 'eternal', skill: { icon: '♾️', name: '永恒领域', cd: 35, desc: '展开永恒领域 10 秒：全场敌人被冻结，自身无敌且射速 3 倍，每击杀延长 1 秒', power: 66 } },
   // ↓ 排行榜专属：商城不卖、盲盒抽不到，只有线上排行榜前三名能拿到。
   //   每天结算一次，掉出前三会被收回（rank 字段 = 对应名次，1 冠军 / 2 亚军 / 3 季军）
-  skin_champion:{ name: '至尊冠军', price: 0, rank: 1, desc: '★排行 第 1 名专属 · 每日结算发放', body1: '#ffe9a8', body2: '#f59e0b', gun1: '#b45309', gun2: '#92400e', glow: '#ffd166', deco: 'crown',    texture: 'shine',   eye: 'star',   trail: 'holy',    skill: { icon: '♛', name: '王者号令', cd: 26, desc: '号令全场 6 秒：射速翻倍、移速 +30%，期间所有敌人减速 50%', power: 48 } },
-  skin_runnerup:{ name: '星辰亚军', price: 0, rank: 2, desc: '★排行 第 2 名专属 · 每日结算发放', body1: '#e2e8f0', body2: '#94a3b8', gun1: '#64748b', gun2: '#475569', glow: '#e2e8f0', visorCol: '#cbd5e1', deco: 'halo', texture: 'metal', eye: 'visor', trail: 'frost', skill: { icon: '❈', name: '银月裁决', cd: 24, desc: '银月横扫全场：所有敌人受到 6 点伤害并被击退，BOSS 额外受 8 点', power: 40 } },
-  skin_third:   { name: '荣耀季军', price: 0, rank: 3, desc: '★排行 第 3 名专属 · 每日结算发放', body1: '#fcd9b6', body2: '#c2703f', gun1: '#8a4b25', gun2: '#5c3218', glow: '#fbbf24', deco: 'headband', texture: 'stripe', eye: 'normal', trail: 'ember', skill: { icon: '❉', name: '荣耀冲锋', cd: 20, desc: '向准星方向荣耀冲锋：沿途敌人受到 8 点伤害，终点造成范围冲击', power: 36 } },
+  skin_champion:{ special: 1, name: '至尊冠军', price: 0, rank: 1, desc: '★排行 第 1 名专属 · 每日结算发放', body1: '#ffe9a8', body2: '#f59e0b', gun1: '#b45309', gun2: '#92400e', glow: '#ffd166', deco: 'crown',    texture: 'shine',   eye: 'star',   trail: 'holy',    skill: { icon: '♛', name: '王者号令', cd: 26, desc: '号令全场 6 秒：射速翻倍、移速 +30%，期间所有敌人减速 50%', power: 48 } },
+  skin_runnerup:{ special: 1, name: '星辰亚军', price: 0, rank: 2, desc: '★排行 第 2 名专属 · 每日结算发放', body1: '#e2e8f0', body2: '#94a3b8', gun1: '#64748b', gun2: '#475569', glow: '#e2e8f0', visorCol: '#cbd5e1', deco: 'halo', texture: 'metal', eye: 'visor', trail: 'frost', skill: { icon: '❈', name: '银月裁决', cd: 24, desc: '银月横扫全场：所有敌人受到 6 点伤害并被击退，BOSS 额外受 8 点', power: 40 } },
+  skin_third:   { special: 1, name: '荣耀季军', price: 0, rank: 3, desc: '★排行 第 3 名专属 · 每日结算发放', body1: '#fcd9b6', body2: '#c2703f', gun1: '#8a4b25', gun2: '#5c3218', glow: '#fbbf24', deco: 'headband', texture: 'stripe', eye: 'normal', trail: 'ember', skill: { icon: '❉', name: '荣耀冲锋', cd: 20, desc: '向准星方向荣耀冲锋：沿途敌人受到 8 点伤害，终点造成范围冲击', power: 36 } },
   // ↓ 盲盒专属：商城不卖，只能用 B 币在盲盒里抽到
-  skin_jester:  { name: '诡笑小丑', price: 0, box: 1, desc: '🎁盲盒 猜猜盒子里是什么', body1: '#fca5a5', body2: '#be123c', gun1: '#4c0519', gun2: '#0f172a', glow: '#fda4af', deco: 'jester', texture: 'harlequin', eye: 'jester', trail: 'confetti', skill: { icon: '🃏', name: '诡术扑克', cd: 16, desc: '掷出 5 张扑克随机造成 1~6 点伤害；抽到王牌则全场敌人受到 8 点伤害', power: 10 } },
-  skin_ghost:   { name: '幽灵旅者', price: 0, box: 1, desc: '🎁盲盒 飘忽不定，来去无踪', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#cbd5e1', deco: 'ghost', texture: 'ghost', eye: 'hollow', trail: 'smoke', skill: { icon: '👻', name: '灵体穿梭', cd: 14, desc: '进入灵体状态 5 秒：可穿过墙壁与障碍，期间移速 +50%', power: 11 } },
-  skin_robot:   { name: '报废机器人', price: 0, box: 1, desc: '🎁盲盒 零件散落，勉强能跑', body1: '#d6d3d1', body2: '#78716c', gun1: '#44403c', gun2: '#1c1917', glow: '#f59e0b', visorCol: '#f59e0b', deco: 'scrap', texture: 'rust', eye: 'visor', trail: 'spark', skill: { icon: '🔧', name: '过载自毁', cd: 25, desc: '引燃自身零件：对周围造成 12 点伤害，随后以半血复活', power: 14 } },
-  skin_candy:   { name: '糖果恶魔', price: 0, box: 1, desc: '🎁盲盒 甜到蛀牙，毒到致命', body1: '#fbcfe8', body2: '#db2777', gun1: '#831843', gun2: '#500724', glow: '#f9a8d4', deco: 'candy', texture: 'candy', eye: 'star', trail: 'confetti', skill: { icon: '🍬', name: '糖霜爆破', cd: 15, desc: '抛洒 6 颗糖果炸弹，爆炸造成 3 点伤害并留下减速糖浆 4 秒', power: 12 } },
-  skin_samurai: { name: '浪人剑客', price: 0, box: 1, desc: '🎁盲盒 一斩断念，无牵无挂', body1: '#fecaca', body2: '#991b1b', gun1: '#450a0a', gun2: '#1c1917', glow: '#fca5a5', deco: 'samurai', texture: 'clean', eye: 'narrow', trail: 'slash', skill: { icon: '🗡️', name: '拔刀术', cd: 18, desc: '瞬移到最近敌人身后并造成 10 点伤害；若击杀则立即重置冷却', power: 16 } },
-  skin_alien:   { name: '异星来客', price: 0, box: 1, desc: '🎁盲盒 来自银河彼端的问候', body1: '#86efac', body2: '#047857', gun1: '#064e3b', gun2: '#022c22', glow: '#6ee7b7', deco: 'alien', texture: 'scale', eye: 'alien', trail: 'void', skill: { icon: '🛸', name: '母舰召唤', cd: 28, desc: '召唤母舰扫射 8 秒，每 0.5 秒对随机敌人造成 2 点伤害', power: 18 } },
-  skin_mummy:   { name: '诅咒木乃伊', price: 0, box: 1, desc: '🎁盲盒 三千年的怨念缠身', body1: '#fef3c7', body2: '#92400e', gun1: '#78350f', gun2: '#451a03', glow: '#fcd34d', deco: 'mummy', texture: 'bandage', eye: 'glow', trail: 'dust', skill: { icon: '🪦', name: '亡者诅咒', cd: 20, desc: '诅咒全场敌人 6 秒：受诅咒的敌人死亡时会爆炸，对周围造成 3 点伤害', power: 15 } },
-  skin_dragon:  { name: '幼龙术士', price: 0, box: 1, desc: '🎁盲盒 还没长大的喷火高手', body1: '#bbf7d0', body2: '#15803d', gun1: '#14532d', gun2: '#052e16', glow: '#4ade80', deco: 'dragon', texture: 'scale', eye: 'dragon', trail: 'ember', skill: { icon: '🐉', name: '龙息吐焰', cd: 17, desc: '喷出锥形龙息 3 秒，持续造成 3 点/秒伤害并点燃敌人', power: 17 } },
-  skin_glitch:  { name: '故障幻影', price: 0, box: 1, desc: '🎁盲盒 数据错乱中的幽灵', body1: '#a5f3fc', body2: '#0e7490', gun1: '#155e75', gun2: '#083344', glow: '#22d3ee', deco: 'glitch', texture: 'glitch', eye: 'glitch', trail: 'glitch', skill: { icon: '📺', name: '数据错乱', cd: 19, desc: '撕裂画面 5 秒：敌人随机瞬移且无法攻击，自身射速 +80%', power: 19 } },
+  skin_jester:  { special: 1, name: '诡笑小丑', price: 0, box: 1, desc: '🎁盲盒 猜猜盒子里是什么', body1: '#fca5a5', body2: '#be123c', gun1: '#4c0519', gun2: '#0f172a', glow: '#fda4af', deco: 'jester', texture: 'harlequin', eye: 'jester', trail: 'confetti', skill: { icon: '🃏', name: '诡术扑克', cd: 16, desc: '掷出 5 张扑克随机造成 1~6 点伤害；抽到王牌则全场敌人受到 8 点伤害', power: 10 } },
+  skin_ghost:   { special: 1, name: '幽灵旅者', price: 0, box: 1, desc: '🎁盲盒 飘忽不定，来去无踪', body1: '#e2e8f0', body2: '#475569', gun1: '#1e293b', gun2: '#0f172a', glow: '#cbd5e1', deco: 'ghost', texture: 'ghost', eye: 'hollow', trail: 'smoke', skill: { icon: '👻', name: '灵体穿梭', cd: 14, desc: '进入灵体状态 5 秒：可穿过墙壁与障碍，期间移速 +50%', power: 11 } },
+  skin_robot:   { special: 1, name: '报废机器人', price: 0, box: 1, desc: '🎁盲盒 零件散落，勉强能跑', body1: '#d6d3d1', body2: '#78716c', gun1: '#44403c', gun2: '#1c1917', glow: '#f59e0b', visorCol: '#f59e0b', deco: 'scrap', texture: 'rust', eye: 'visor', trail: 'spark', skill: { icon: '🔧', name: '过载自毁', cd: 25, desc: '引燃自身零件：对周围造成 12 点伤害，随后以半血复活', power: 14 } },
+  skin_candy:   { special: 1, name: '糖果恶魔', price: 0, box: 1, desc: '🎁盲盒 甜到蛀牙，毒到致命', body1: '#fbcfe8', body2: '#db2777', gun1: '#831843', gun2: '#500724', glow: '#f9a8d4', deco: 'candy', texture: 'candy', eye: 'star', trail: 'confetti', skill: { icon: '🍬', name: '糖霜爆破', cd: 15, desc: '抛洒 6 颗糖果炸弹，爆炸造成 3 点伤害并留下减速糖浆 4 秒', power: 12 } },
+  skin_samurai: { special: 1, name: '浪人剑客', price: 0, box: 1, desc: '🎁盲盒 一斩断念，无牵无挂', body1: '#fecaca', body2: '#991b1b', gun1: '#450a0a', gun2: '#1c1917', glow: '#fca5a5', deco: 'samurai', texture: 'clean', eye: 'narrow', trail: 'slash', skill: { icon: '🗡️', name: '拔刀术', cd: 18, desc: '瞬移到最近敌人身后并造成 10 点伤害；若击杀则立即重置冷却', power: 16 } },
+  skin_alien:   { special: 1, name: '异星来客', price: 0, box: 1, desc: '🎁盲盒 来自银河彼端的问候', body1: '#86efac', body2: '#047857', gun1: '#064e3b', gun2: '#022c22', glow: '#6ee7b7', deco: 'alien', texture: 'scale', eye: 'alien', trail: 'void', skill: { icon: '🛸', name: '母舰召唤', cd: 28, desc: '召唤母舰扫射 8 秒，每 0.5 秒对随机敌人造成 2 点伤害', power: 18 } },
+  skin_mummy:   { special: 1, name: '诅咒木乃伊', price: 0, box: 1, desc: '🎁盲盒 三千年的怨念缠身', body1: '#fef3c7', body2: '#92400e', gun1: '#78350f', gun2: '#451a03', glow: '#fcd34d', deco: 'mummy', texture: 'bandage', eye: 'glow', trail: 'dust', skill: { icon: '🪦', name: '亡者诅咒', cd: 20, desc: '诅咒全场敌人 6 秒：受诅咒的敌人死亡时会爆炸，对周围造成 3 点伤害', power: 15 } },
+  skin_dragon:  { special: 1, name: '幼龙术士', price: 0, box: 1, desc: '🎁盲盒 还没长大的喷火高手', body1: '#bbf7d0', body2: '#15803d', gun1: '#14532d', gun2: '#052e16', glow: '#4ade80', deco: 'dragon', texture: 'scale', eye: 'dragon', trail: 'ember', skill: { icon: '🐉', name: '龙息吐焰', cd: 17, desc: '喷出锥形龙息 3 秒，持续造成 3 点/秒伤害并点燃敌人', power: 17 } },
+  skin_glitch:  { special: 1, name: '故障幻影', price: 0, box: 1, desc: '🎁盲盒 数据错乱中的幽灵', body1: '#a5f3fc', body2: '#0e7490', gun1: '#155e75', gun2: '#083344', glow: '#22d3ee', deco: 'glitch', texture: 'glitch', eye: 'glitch', trail: 'glitch', skill: { icon: '📺', name: '数据错乱', cd: 19, desc: '撕裂画面 5 秒：敌人随机瞬移且无法攻击，自身射速 +80%', power: 19 } },
 };
 
 // 通行证皮肤解锁门槛：每款独立分档（原本统一 PASS_KILLS，现在按各自的 killReq 判定）
@@ -2831,9 +2987,12 @@ function applyUser(u) {
   User.kills = u.kills || 0;
   User.pass = u.pass ? 1 : 0;
   // 排行榜奖励皮肤掉出前三会被服务端收回：背包里已经没有却还穿着 → 退回初始装备
-  let nextSkin = SKIN_DEFS[u.skin] ? u.skin : 'skin_default';
+  // 注意：玩家创作的皮肤是 'sk_' 前缀，不在 SKIN_DEFS 里（由 /api/skin/list 动态注册），
+  // 也不能要求 ownedSkins 包含它——自定义皮肤是免费装备的，不能被当成未知 id 回退。
+  const isCustomSkin = typeof u.skin === 'string' && u.skin.indexOf('sk_') === 0;
+  let nextSkin = isCustomSkin ? u.skin : (SKIN_DEFS[u.skin] ? u.skin : 'skin_default');
   let nextGun = GUN_DEFS[u.gun] ? u.gun : 'gun_pistol';
-  if (!User.ownedSkins.includes(nextSkin)) nextSkin = 'skin_default';
+  if (!isCustomSkin && !User.ownedSkins.includes(nextSkin)) nextSkin = 'skin_default';
   if (!User.ownedGuns.includes(nextGun)) nextGun = 'gun_pistol';
   User.skin = nextSkin;
   User.gun = nextGun;
@@ -3096,6 +3255,8 @@ function openAccount() {
   document.getElementById('switch-acct-input').value = '';
   document.getElementById('switch-pwd-input').value = '';
   acctMsg('');
+  // 管理员账号才有后台入口
+  document.getElementById('acct-admin-btn').style.display = (User.role === 'admin') ? '' : 'none';
   document.getElementById('account-modal').style.display = 'flex';
 }
 function closeAccount() { document.getElementById('account-modal').style.display = 'none'; }
@@ -3154,6 +3315,113 @@ document.getElementById('acct-logout').addEventListener('click', async () => {
   resetUser();
   ensureAccount();   // 立刻补一个新设备账号，保证进度继续保存
 });
+// ---------- 管理员后台：玩家列表 / 详情 / 封禁 ----------
+const ADMIN_STATE = { list: [], onlyBanned: false, openKey: null };
+function fmtTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function adminRows() {
+  const q = String(document.getElementById('admin-search').value || '').trim().toLowerCase();
+  return ADMIN_STATE.list.filter((p) => {
+    if (ADMIN_STATE.onlyBanned && !p.banned) return false;
+    if (!q) return true;
+    return String(p.name).toLowerCase().includes(q) || String(p.account).toLowerCase().includes(q);
+  });
+}
+function renderAdminList() {
+  const rows = adminRows();
+  const box = document.getElementById('admin-list');
+  document.getElementById('admin-tip').textContent =
+    `共 ${ADMIN_STATE.list.length} 名玩家` + (rows.length !== ADMIN_STATE.list.length ? `，筛出 ${rows.length} 名` : '');
+  if (!rows.length) { box.innerHTML = `<div class="admin-empty">没有匹配的玩家</div>`; return; }
+  box.innerHTML = rows.map((p) => {
+    const sub = `账号 ${escapeHtml(p.account || '—')} · Lv.${p.level} · ${p.coins} 金币 · ${p.bcoin} B · ${p.kills} 击杀 · 注册 ${fmtTime(p.created)}`;
+    const tag = p.banned ? `<span class="admin-tag">已封禁${p.banReason ? '：' + escapeHtml(p.banReason) : ''}</span>` : '';
+    return `<div class="admin-row ${p.banned ? 'banned' : ''}">
+      <div>
+        <div class="admin-name">${escapeHtml(p.name || '未命名')}${tag}</div>
+        <div class="admin-sub">${sub}</div>
+      </div>
+      <button class="admin-mini" data-adetail="${p.key}">详情</button>
+      <button class="admin-mini ${p.banned ? '' : 'danger'}" data-aban="${p.key}" data-banned="${p.banned}">${p.banned ? '解封' : '封禁'}</button>
+    </div>`;
+  }).join('');
+  for (const b of box.querySelectorAll('[data-adetail]')) b.addEventListener('click', () => adminDetail(b.dataset.adetail));
+  for (const b of box.querySelectorAll('[data-aban]')) {
+    b.addEventListener('click', () => adminToggleBan(b.dataset.aban, b.dataset.banned === '1'));
+  }
+}
+async function adminDetail(key) {
+  ADMIN_STATE.openKey = key;
+  const el = document.getElementById('admin-detail');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="admin-empty">加载中…</div>';
+  try {
+    const r = await api('/api/admin/player?key=' + encodeURIComponent(key));
+    if (!r.ok) { el.innerHTML = `<div class="admin-empty">${escapeHtml(r.msg || '加载失败')}</div>`; return; }
+    const p = r.player, s = p.stats || {};
+    const g = (v) => escapeHtml(String(v === undefined || v === null || v === '' ? '—' : v));
+    el.innerHTML = `<dl>
+      <dt>昵称 / 账号</dt><dd>${g(p.name)}　<span style="color:#9fb3c8;">${g(p.account)}</span></dd>
+      <dt>内部 KEY</dt><dd style="font-size:11.5px;color:#8fa6bb;">${g(p.key)}</dd>
+      <dt>等级 / 经验</dt><dd>Lv.${p.level}　累计 ${p.exp}（已消耗 ${p.expSpent}）</dd>
+      <dt>金币 / B 币</dt><dd>${p.coins}　　　${p.bcoin} B</dd>
+      <dt>击杀数</dt><dd>${p.kills}</dd>
+      <dt>当前皮肤 / 武器</dt><dd>${g(SKIN_DEFS[p.skin] ? SKIN_DEFS[p.skin].name : p.skin)}　/　${g(GUN_DEFS[p.gun] ? GUN_DEFS[p.gun].name : p.gun)}</dd>
+      <dt>拥有皮肤 / 武器</dt><dd>${p.ownedSkins.length} 款　/　${p.ownedGuns.length} 把</dd>
+      <dt>盲盒技能 / 好友</dt><dd>${p.skills.length} 个　/　${p.friends.length} 位</dd>
+      <dt>创作皮肤 / 被使用</dt><dd>${s.skinMade} 款　/　${s.skinUsed} 人次</dd>
+      <dt>分享地图 / 被玩次数</dt><dd>${s.maps} 张　/　${p.mapPlays} 次</dd>
+      <dt>聊天</dt><dd>${s.chatRooms} 个会话　${s.chatMsgs} 条消息</dd>
+      <dt>通行证 / 密码 / 来源</dt><dd>${p.pass ? '已开通' : '无'}　${p.hasPwd ? '已设密码' : '未设密码'}　${g(p.kind || '—')}</dd>
+      <dt>注册时间</dt><dd>${fmtTime(p.created)}</dd>
+      <dt>封禁状态</dt><dd>${p.banned ? `已封禁　理由：${g(p.banReason)}　时间：${fmtTime(p.banAt)}` : '正常'}</dd>
+    </dl>`;
+  } catch (e) { el.innerHTML = '<div class="admin-empty">网络错误</div>'; }
+}
+async function adminToggleBan(key, isBanned) {
+  if (isBanned) {
+    const r = await api('/api/admin/unban', { key });
+    if (!r.ok) { alert(r.msg || '解封失败'); return; }
+  } else {
+    const reason = prompt('封禁理由（会显示给该玩家，可留空）', '');
+    if (reason === null) return;
+    if (!confirm('确定封禁该玩家？他将立刻被踢下线且无法再登录。')) return;
+    const r = await api('/api/admin/ban', { key, reason });
+    if (!r.ok) { alert(r.msg || '封禁失败'); return; }
+  }
+  await adminLoad();
+}
+async function adminLoad() {
+  const el = document.getElementById('admin-list');
+  el.innerHTML = '<div class="admin-empty">加载中…</div>';
+  const r = await api('/api/admin/players');
+  if (!r.ok) { el.innerHTML = `<div class="admin-empty">${escapeHtml(r.msg || '加载失败')}</div>`; return; }
+  ADMIN_STATE.list = r.list || [];
+  renderAdminList();
+}
+function openAdmin() {
+  if (User.role !== 'admin') return;
+  document.getElementById('admin-modal').style.display = 'flex';
+  ADMIN_STATE.onlyBanned = false;
+  document.getElementById('admin-detail').style.display = 'none';
+  document.getElementById('admin-search').value = '';
+  adminLoad();
+}
+function closeAdmin() { document.getElementById('admin-modal').style.display = 'none'; }
+document.getElementById('acct-admin-btn').addEventListener('click', () => { closeAccount(); openAdmin(); });
+document.getElementById('admin-close').addEventListener('click', closeAdmin);
+document.getElementById('admin-refresh').addEventListener('click', adminLoad);
+document.getElementById('admin-banfilter').addEventListener('click', () => {
+  ADMIN_STATE.onlyBanned = !ADMIN_STATE.onlyBanned;
+  document.getElementById('admin-banfilter').style.borderColor = ADMIN_STATE.onlyBanned ? 'rgba(248,113,113,.6)' : '';
+  renderAdminList();
+});
+document.getElementById('admin-search').addEventListener('input', renderAdminList);
+
 document.getElementById('switch-account-btn').addEventListener('click', async (ev) => {
   ev.stopPropagation(); // 不触发卡片改名
   if (!User.logged) { openLogin(); return; }
@@ -3174,6 +3442,20 @@ document.getElementById('delete-account-btn').addEventListener('click', async (e
 
 // ---------- 商城 ----------
 let shopTab = 'skin';
+// ---------- 自定义皮肤：把玩家画的图裁到圆形身体上 ----------
+// 图片按 dataURL 缓存，避免每帧重新解码；没解码完就先不画（下一帧自然出现），绝不在这里同步等待。
+const CUSTOM_IMG_CACHE = new Map();
+function customSkinImg(def) {
+  if (!def || !def.img) return null;
+  let el = CUSTOM_IMG_CACHE.get(def.img);
+  if (el === undefined) {
+    el = new Image();
+    el.src = def.img;
+    CUSTOM_IMG_CACHE.set(def.img, el);
+  }
+  return (el.complete && el.naturalWidth) ? el : null;
+}
+
 function drawMiniPlayer(cv, def, isGun) {
   const x = cv.getContext('2d');
   const w = cv.width, h = cv.height;
@@ -3191,20 +3473,33 @@ function drawMiniPlayer(cv, def, isGun) {
   x.save();
   x.translate(cx, cy);
   x.rotate(-Math.PI / 2); // 朝上
-  drawSkinDeco(x, r, col, 0); // 皮肤主题装饰（静态预览用 t=0）
+  const cimg = customSkinImg(col);
+  if (!cimg) drawSkinDeco(x, r, col, 0); // 皮肤主题装饰（静态预览用 t=0）
   // 身体
-  const grad = x.createRadialGradient(-r * .3, -r * .3, r * .2, 0, 0, r);
-  grad.addColorStop(0, col.body1);
-  grad.addColorStop(1, col.body2);
-  x.fillStyle = grad;
-  x.beginPath(); x.arc(0, 0, r, 0, TAU); x.fill();
-  drawSkinMark(x, r, col, 0); // 皮肤身体大色块（静态预览用 t=0）
-  x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 2; x.stroke();
-  // 高光
-  x.fillStyle = 'rgba(255,255,255,.4)';
-  x.beginPath(); x.ellipse(-r * .3, -r * .33, r * .26, r * .16, -.6, 0, TAU); x.fill();
-  // 眼睛（样式随皮肤）
-  drawSkinEyes(x, r, col, 0);
+  if (cimg) {
+    // 自定义皮肤：把玩家画的图裁进圆形；反向旋转抵消「朝上」，保证画的小人不被转歪
+    x.save();
+    x.rotate(Math.PI / 2);
+    x.beginPath(); x.arc(0, 0, r, 0, TAU); x.clip();
+    x.drawImage(cimg, -r, -r, r * 2, r * 2);
+    x.restore();
+  } else {
+    const grad = x.createRadialGradient(-r * .3, -r * .3, r * .2, 0, 0, r);
+    grad.addColorStop(0, col.body1);
+    grad.addColorStop(1, col.body2);
+    x.fillStyle = grad;
+    x.beginPath(); x.arc(0, 0, r, 0, TAU); x.fill();
+    drawSkinMark(x, r, col, 0); // 皮肤身体大色块（静态预览用 t=0）
+  }
+  x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 2;
+  x.beginPath(); x.arc(0, 0, r, 0, TAU); x.stroke();
+  if (!cimg) {
+    // 高光
+    x.fillStyle = 'rgba(255,255,255,.4)';
+    x.beginPath(); x.ellipse(-r * .3, -r * .33, r * .26, r * .16, -.6, 0, TAU); x.fill();
+    // 眼睛（样式随皮肤）
+    drawSkinEyes(x, r, col, 0);
+  }
   // 炮口
   x.fillStyle = isGun ? (def.c1 || '#334155') : col.gun1;
   x.beginPath(); x.roundRect(r * .5, -gunW / 2, gunLen, gunW, 3); x.fill();
@@ -3221,15 +3516,28 @@ function renderShop() {
   document.getElementById('shop-tab-gun').classList.toggle('active', shopTab === 'gun');
   document.getElementById('shop-tab-upg').classList.toggle('active', shopTab === 'upg');
   document.getElementById('shop-tab-daily').classList.toggle('active', shopTab === 'daily');
+  const spTab = document.getElementById('shop-tab-special');
+  if (spTab) spTab.classList.toggle('active', shopTab === 'special');
   if (shopTab === 'upg') { renderUpgradeTab(); return; }
   if (shopTab === 'daily') { renderDailyTab(); return; }
   listEl.classList.remove('upg-list');
   listEl.classList.add('shop-grid');
-  const defs = shopTab === 'skin' ? SKIN_DEFS : GUN_DEFS;
-  const owned = shopTab === 'skin' ? User.ownedSkins : User.ownedGuns;
-  const equipped = shopTab === 'skin' ? User.skin : User.gun;
+  // 皮肤体系：主商店只卖蓝色 / 绿色；其余官方皮肤（技能更强）在「特殊」页，2000 级解锁
+  const isSkin = shopTab === 'skin' || shopTab === 'special';
+  const defs = isSkin ? SKIN_DEFS : GUN_DEFS;
+  const owned = isSkin ? User.ownedSkins : User.ownedGuns;
+  const equipped = isSkin ? User.skin : User.gun;
   let h = '';
-  for (const id of Object.keys(defs)) {
+  const ids = isSkin
+    ? Object.keys(defs).filter((id) => (shopTab === 'special') ? !!defs[id].special : !defs[id].special)
+    : Object.keys(defs);
+  if (shopTab === 'special') {
+    h += `<div class="shop-sec-title">✨ 特殊皮肤 <small>Lv.2000 解锁 · 技能超强，中后期的追求目标</small></div>`;
+  }
+  if (shopTab === 'skin') {
+    h += `<div class="sm-create-bar" id="sm-open-bar">🎨 花 1 B 创作一款属于自己的皮肤</div>`;
+  }
+  for (const id of ids) {
     const d = defs[id];
     const isOwned = owned.includes(id);
     const isEq = equipped === id;
@@ -3244,7 +3552,7 @@ function renderShop() {
     else if (needPass) btn = `<button class="shop-buy locked" disabled>🎖 通行证解锁</button>`;
     else if (lvLock) btn = `<button class="shop-buy locked" disabled>🔒 Lv.${d.lv} 解锁</button>`;
     else btn = `<button class="shop-buy" data-buy="${id}">💰 ${d.price}</button>`;
-    const skillLine = (shopTab === 'skin' && d.skill)
+    const skillLine = (isSkin && d.skill)
       ? `<div class="shop-item-skill">${d.skill.icon} 技能 · ${d.skill.name} <span class="skill-cd">冷却 ${d.skill.cd}s</span><br><span class="shop-item-skill-desc">${d.skill.desc}</span></div>`
       : '';
     h += `<div class="shop-item ${isEq ? 'equipped' : ''} ${(lvLock || needPass || (rankNo && !isOwned)) ? 'locked' : ''}">
@@ -3255,14 +3563,240 @@ function renderShop() {
       ${btn}
     </div>`;
   }
+  if (shopTab === 'skin') h += customSkinSectionHtml(equipped);
   listEl.innerHTML = h;
   for (const cv of listEl.querySelectorAll('canvas[data-prev]')) {
     const id = cv.dataset.prev;
     drawMiniPlayer(cv, defs[id], shopTab === 'gun');
   }
+  for (const cv of listEl.querySelectorAll('canvas[data-cprev]')) {
+    const sk = (CUSTOM_SKINS.list || []).find((s) => s.id === cv.dataset.cprev);
+    if (sk && SKIN_DEFS[sk.id]) drawMiniPlayer(cv, SKIN_DEFS[sk.id], false);
+  }
   for (const b of listEl.querySelectorAll('[data-buy]')) b.addEventListener('click', () => shopBuy(b.dataset.buy));
   for (const b of listEl.querySelectorAll('[data-eq]')) b.addEventListener('click', () => shopEquip(b.dataset.eq));
+  for (const b of listEl.querySelectorAll('[data-ceq]')) b.addEventListener('click', () => equipCustomSkin(b.dataset.ceq));
+  const bar = document.getElementById('sm-open-bar');
+  if (bar) bar.addEventListener('click', openSkinMaker);
 }
+
+// ---------- 玩家创作的公共皮肤（按使用人数排名，免费装备） ----------
+const CUSTOM_SKINS = { list: [] };
+// 自定义皮肤直接注册进 SKIN_DEFS，这样绘制 / 技能 / 联机同步等既有逻辑全部自动生效；
+// 不在 ownedSkins 里，所以不会混进升级页和赠礼列表。
+function registerCustomSkin(s) {
+  SKIN_DEFS[s.id] = {
+    name: s.name, price: 0, desc: '玩家创作', custom: 1,
+    body1: '#6ecbff', body2: '#2196f3', gun1: '#1565c0', gun2: '#0d47a1', glow: '#ffd166',
+    deco: 'none', texture: 'clean', eye: 'none',
+    img: s.img, creator: s.creator, users: s.users,
+    // 外观自由、玩法不变：沿用蓝色款的战术冲刺，避免自绘皮肤变成强度选项
+    skill: SKIN_DEFS.skin_default.skill,
+  };
+}
+async function loadCustomSkins() {
+  try {
+    const r = await api('/api/skin/list');
+    if (r && r.ok && Array.isArray(r.list)) {
+      CUSTOM_SKINS.list = r.list;
+      for (const s of r.list) registerCustomSkin(s);
+    }
+  } catch (e) { /* 拉不到就当没有，不影响主流程 */ }
+}
+function customSkinSectionHtml(equipped) {
+  const list = CUSTOM_SKINS.list || [];
+  let h = `<div class="shop-sec-title">🎨 玩家创作 <small>按使用人数排名 · 免费装备，创作者得 0.02 B/人</small></div>`;
+  if (!list.length) {
+    h += `<div class="sm-create-bar" style="cursor:default;border-style:solid;color:#8fa6bb;border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.04);">还没有人创作皮肤，来当第一个吧</div>`;
+    return h;
+  }
+  list.forEach((s, i) => {
+    const rank = i + 1;
+    const isEq = equipped === s.id;
+    h += `<div class="shop-item custom ${isEq ? 'equipped' : ''}">
+      <span class="skin-rank-badge ${rank <= 3 ? 'top' : ''}">#${rank}</span>
+      <canvas data-cprev="${s.id}" width="88" height="88"></canvas>
+      <div class="shop-item-name">${escapeHtml(s.name)}</div>
+      <div class="skin-meta">作者 <b>${escapeHtml(s.creator)}</b> · <b>${s.users || 0}</b> 人在用</div>
+      ${isEq
+        ? `<button class="shop-buy equipped" disabled>装备中</button>`
+        : `<button class="shop-buy own" data-ceq="${s.id}">免费装备</button>`}
+    </div>`;
+  });
+  return h;
+}
+async function equipCustomSkin(id) {
+  if (!User.logged) { openLogin(); shopMsg('登录后即可装备'); return; }
+  try {
+    const r = await api('/api/skin/equip', { id });
+    if (r.ok) {
+      applyUser(r.user);
+      renderShop();
+      Sfx.powerup();
+      const s = (CUSTOM_SKINS.list || []).find((x) => x.id === id);
+      if (s && r.rewarded) shopMsg(`已装备「${s.name}」，作者 ${s.creator} 获得 ${r.rewarded} B`);
+      else shopMsg('已装备');
+    } else shopMsg(r.msg || '装备失败');
+  } catch (e) { shopMsg('网络错误'); }
+}
+
+// ---------- 皮肤创作器：图库导入 / 手动绘制 ----------
+const SM_SIZE = 240;      // 画板分辨率（显示 200px）
+const SM_EXPORT = 80;     // 上传分辨率：游戏里角色直径才 40px，80 足够且能压住体积
+const SM_MAX_LEN = 60000; // dataURL 长度上限（服务端同阈值）
+let smCv = null, smCtx = null, smTool = 'brush', smPainting = false, smLast = null;
+
+function smMsg(t) { const el = document.getElementById('sm-msg'); if (el) el.textContent = t || ''; }
+function openSkinMaker() {
+  const m = document.getElementById('skin-maker-modal');
+  if (!m) return;
+  if (!User.logged) { shopMsg('登录后才能创作皮肤'); return; }
+  m.style.display = 'flex';
+  smMsg('');
+  const bc = document.getElementById('sm-bcoin');
+  if (bc) bc.textContent = (User.bcoin || 0) + ' B';
+  if (!smCv) {
+    smCv = document.getElementById('sm-canvas');
+    smCtx = smCv.getContext('2d');
+    smCtx.lineCap = 'round';
+    smCtx.lineJoin = 'round';
+    smBindPad();
+  }
+  smRedrawPreview();
+}
+function closeSkinMaker() {
+  const m = document.getElementById('skin-maker-modal');
+  if (m) m.style.display = 'none';
+  renderShop();
+}
+function smPos(e) {
+  const r = smCv.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) * (smCv.width / r.width),
+    y: (e.clientY - r.top) * (smCv.height / r.height),
+  };
+}
+function smStroke(a, b) {
+  smCtx.save();
+  smCtx.globalCompositeOperation = (smTool === 'eraser') ? 'destination-out' : 'source-over';
+  smCtx.strokeStyle = document.getElementById('sm-color').value;
+  smCtx.lineWidth = Number(document.getElementById('sm-size').value);
+  smCtx.beginPath();
+  smCtx.moveTo(a.x, a.y);
+  smCtx.lineTo(b.x, b.y);
+  smCtx.stroke();
+  smCtx.restore();
+  smRedrawPreview();
+}
+function smBindPad() {
+  const down = (e) => {
+    e.preventDefault();
+    smPainting = true;
+    smLast = smPos(e);
+    if (smCv.setPointerCapture && e.pointerId !== undefined) { try { smCv.setPointerCapture(e.pointerId); } catch (err) { } }
+    // 单击也落一个点，否则点一下不画东西
+    smStroke(smLast, { x: smLast.x + 0.01, y: smLast.y + 0.01 });
+  };
+  const move = (e) => {
+    if (!smPainting) return;
+    e.preventDefault();
+    const p = smPos(e);
+    smStroke(smLast, p);
+    smLast = p;
+  };
+  const up = () => { smPainting = false; smLast = null; };
+  if (window.PointerEvent) {
+    smCv.addEventListener('pointerdown', down);
+    smCv.addEventListener('pointermove', move);
+    smCv.addEventListener('pointerup', up);
+    smCv.addEventListener('pointercancel', up);
+  } else { // 兜底：老浏览器用 mouse 事件
+    smCv.addEventListener('mousedown', down);
+    smCv.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  }
+}
+function smRedrawPreview() {
+  const pc = document.getElementById('sm-preview');
+  if (!pc || !smCv) return;
+  const px = pc.getContext('2d');
+  px.clearRect(0, 0, pc.width, pc.height);
+  px.save();
+  px.beginPath(); px.arc(30, 30, 26, 0, TAU); px.clip();
+  px.drawImage(smCv, 4, 4, 52, 52);
+  px.restore();
+  px.strokeStyle = 'rgba(0,0,0,.35)'; px.lineWidth = 2;
+  px.beginPath(); px.arc(30, 30, 26, 0, TAU); px.stroke();
+}
+// 图库导入：等比铺满画板（cover），透明区域保持透明，玩家画的小人才不会被拉变形
+function smImportImage(img) {
+  smCtx.clearRect(0, 0, SM_SIZE, SM_SIZE);
+  const sc = Math.max(SM_SIZE / img.width, SM_SIZE / img.height);
+  const w = img.width * sc, h = img.height * sc;
+  smCtx.drawImage(img, (SM_SIZE - w) / 2, (SM_SIZE - h) / 2, w, h);
+  smRedrawPreview();
+}
+function smExport(size) {
+  const t = document.createElement('canvas');
+  t.width = size; t.height = size;
+  const tx = t.getContext('2d');
+  tx.imageSmoothingEnabled = true;
+  tx.drawImage(smCv, 0, 0, SM_SIZE, SM_SIZE, 0, 0, size, size);
+  return t.toDataURL('image/png');
+}
+async function smPublish() {
+  const name = (document.getElementById('sm-name').value || '').trim();
+  if (!name) { smMsg('先给皮肤起个名字'); return; }
+  if (!User.logged) { smMsg('请先登录'); return; }
+  if ((User.bcoin || 0) < 1) { smMsg(`B 币不足（需要 1 枚，当前 ${User.bcoin || 0}）`); return; }
+  let img = smExport(SM_EXPORT);
+  // 服务端单值上限 64KB：画得太花就逐级降分辨率，再超就明确拒绝（不能让 KV 写入失败）
+  if (img.length > SM_MAX_LEN) img = smExport(64);
+  if (img.length > SM_MAX_LEN) img = smExport(48);
+  if (img.length > SM_MAX_LEN) { smMsg('画得太复杂了，简化一点再发布'); return; }
+  smMsg('发布中…');
+  try {
+    const r = await api('/api/skin/create', { name, img });
+    if (r.ok) {
+      applyUser(r.user);
+      await loadCustomSkins();
+      smMsg('发布成功，已加入公共皮肤库');
+      setTimeout(closeSkinMaker, 800);
+    } else smMsg(r.msg || '发布失败');
+  } catch (e) { smMsg('网络错误'); }
+}
+function smBindUI() {
+  const brush = document.getElementById('sm-tool-brush'), eraser = document.getElementById('sm-tool-eraser');
+  const setTool = (t) => {
+    smTool = t;
+    if (brush) brush.classList.toggle('active', t === 'brush');
+    if (eraser) eraser.classList.toggle('active', t === 'eraser');
+  };
+  if (brush) brush.addEventListener('click', () => setTool('brush'));
+  if (eraser) eraser.addEventListener('click', () => setTool('eraser'));
+  const clr = document.getElementById('sm-clear');
+  if (clr) clr.addEventListener('click', () => { smCtx.clearRect(0, 0, SM_SIZE, SM_SIZE); smRedrawPreview(); });
+  const file = document.getElementById('sm-file'), imp = document.getElementById('sm-import');
+  if (imp && file) imp.addEventListener('click', () => file.click());
+  if (file) file.addEventListener('change', () => {
+    const f = file.files && file.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      const img = new Image();
+      img.onload = () => { smImportImage(img); smMsg('已导入，可以继续在上面画'); };
+      img.onerror = () => smMsg('这张图读不了，换一张试试');
+      img.src = String(rd.result);
+    };
+    rd.readAsDataURL(f);
+    file.value = '';   // 允许连续导入同一张
+  });
+  const pub = document.getElementById('sm-publish');
+  if (pub) pub.addEventListener('click', smPublish);
+  const close = document.getElementById('sm-close');
+  if (close) close.addEventListener('click', closeSkinMaker);
+}
+smBindUI();
 function shopMsg(text) {
   const el = document.getElementById('shop-msg');
   if (el) { el.textContent = text || ''; setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 2500); }
@@ -3362,6 +3896,7 @@ function openShop() {
   document.getElementById('shop-modal').style.display = 'flex';
   document.getElementById('shop-msg').textContent = '';
   renderShop();
+  loadCustomSkins().then(() => { if (document.getElementById('shop-modal').style.display === 'flex') renderShop(); });
   if (shopTab === 'daily') loadDailyShop();   // 停在「每日特惠」时打开就刷新一次
 }
 document.getElementById('shop-btn').addEventListener('click', openShop);
@@ -3369,6 +3904,7 @@ document.getElementById('shop-close').addEventListener('click', () => {
   document.getElementById('shop-modal').style.display = 'none';
 });
 document.getElementById('shop-tab-skin').addEventListener('click', () => { shopTab = 'skin'; renderShop(); });
+document.getElementById('shop-tab-special').addEventListener('click', () => { shopTab = 'special'; renderShop(); });
 document.getElementById('shop-tab-gun').addEventListener('click', () => { shopTab = 'gun'; renderShop(); });
 document.getElementById('shop-tab-upg').addEventListener('click', () => { shopTab = 'upg'; renderShop(); });
 document.getElementById('shop-tab-daily').addEventListener('click', () => { shopTab = 'daily'; renderShop(); loadDailyShop(); });
@@ -4714,6 +5250,17 @@ async function ensureAccount() {
   if (tok) {
     User.token = tok;
     try {
+      // 先自查封禁：被封的玩家拿不到任何业务数据，若不先问一句，
+      // 客户端会把「请先登录」当成 token 过期，清掉后又自动重建一个新号 —— 封禁形同虚设。
+      try {
+        const b = await api('/api/ban/check');
+        if (b && b.banned) {
+          alert('账号已被封禁\n' + (b.reason ? '理由：' + b.reason + '\n' : '') + '如有疑问请联系管理员。');
+          try { localStorage.removeItem('bb_token'); } catch (e) {}
+          User.logged = false; renderHomeUser();
+          return false;
+        }
+      } catch (e) { /* 查不到就继续正常流程 */ }
       const r = await api('/api/user/me');
       if (r.ok) { applyUser(r.user); renderHomeUser(); return true; }
       // token 失效（服务端清库 / 换环境）：清掉后重新建号，不让玩家卡在未登录态
@@ -4738,6 +5285,8 @@ async function ensureAccount() {
   return false;
 }
 ensureAccount();
+// 公共自定义皮肤要先拉下来：已装备的自绘皮肤只有在 SKIN_DEFS 里注册过才画得出来
+loadCustomSkins();
 
 // ---------- 主界面人物预览（旋转展示当前皮肤+枪） ----------
 const pcv = document.getElementById('preview-canvas');
@@ -4767,20 +5316,33 @@ function drawPreview(dt) {
   x.rotate(previewT * 0.9); // 缓慢旋转展示
   const gunLen = 22 + (gd === GUN_DEFS.gun_sniper ? 14 : gd === GUN_DEFS.gun_shotgun ? 4 : 8);
   const gunW = gd === GUN_DEFS.gun_sniper ? 6 : 9;
-  drawSkinDeco(x, r, col, previewT); // 皮肤主题装饰
+  const pimg = customSkinImg(col);
+  if (!pimg) drawSkinDeco(x, r, col, previewT); // 皮肤主题装饰
   // 身体
-  const grad = x.createRadialGradient(-r * .3, -r * .3, r * .2, 0, 0, r);
-  grad.addColorStop(0, col.body1);
-  grad.addColorStop(1, col.body2);
-  x.fillStyle = grad;
-  x.beginPath(); x.arc(0, 0, r, 0, TAU); x.fill();
-  drawSkinMark(x, r, col, previewT); // 皮肤身体大色块
-  x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 3; x.stroke();
-  // 高光
-  x.fillStyle = 'rgba(255,255,255,.45)';
-  x.beginPath(); x.ellipse(-r * .3, -r * .33, r * .26, r * .15, -.6, 0, TAU); x.fill();
-  // 眼睛（样式随皮肤）
-  drawSkinEyes(x, r, col, 0);
+  if (pimg) {
+    // 自绘皮肤：反向旋转抵消展示台的缓慢自转，画的小人始终正着看
+    x.save();
+    x.rotate(-previewT * 0.9);
+    x.beginPath(); x.arc(0, 0, r, 0, TAU); x.clip();
+    x.drawImage(pimg, -r, -r, r * 2, r * 2);
+    x.restore();
+  } else {
+    const grad = x.createRadialGradient(-r * .3, -r * .3, r * .2, 0, 0, r);
+    grad.addColorStop(0, col.body1);
+    grad.addColorStop(1, col.body2);
+    x.fillStyle = grad;
+    x.beginPath(); x.arc(0, 0, r, 0, TAU); x.fill();
+    drawSkinMark(x, r, col, previewT); // 皮肤身体大色块
+  }
+  x.strokeStyle = 'rgba(0,0,0,.25)'; x.lineWidth = 3;
+  x.beginPath(); x.arc(0, 0, r, 0, TAU); x.stroke();
+  if (!pimg) {
+    // 高光
+    x.fillStyle = 'rgba(255,255,255,.45)';
+    x.beginPath(); x.ellipse(-r * .3, -r * .33, r * .26, r * .15, -.6, 0, TAU); x.fill();
+    // 眼睛（样式随皮肤）
+    drawSkinEyes(x, r, col, 0);
+  }
   // 炮口（按装备的枪变化）
   x.fillStyle = col.gun1;
   x.beginPath(); x.roundRect(r * .5, -gunW / 2, gunLen, gunW, 4); x.fill();
@@ -5261,7 +5823,8 @@ function useSkill(p) {
   p.skillCd = def.skill.cd * (p.id === 1 ? skillUpg(skId).cd : (p.netSkillCdMul || 1));
   const sk = def.skill;
   const fx = (c) => skillFlashFx(p, sk, c);
-  switch (skId) {
+  // 玩家自绘皮肤没有专属技能分支，统一走蓝色款的「战术冲刺」（保持平衡，不变成强度选项）
+  switch (def.custom ? 'skin_default' : skId) {
     case 'skin_default': { // 战术冲刺：突进 + 落地冲击（冲进人堆里才打得满）
       const a = p.angle;
       p.dashVx = Math.cos(a) * CFG.playerSpeed * 5.2;
@@ -7073,34 +7636,48 @@ function drawLobbyPlayer(x, y, angle, skinId, name, isMe = false) {
   ctx.fill();
 
   // 身体
-  const grad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.2, 0, 0, r);
-  grad.addColorStop(0, def.body1);
-  grad.addColorStop(1, def.body2);
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, TAU);
-  ctx.fill();
+  const limg = customSkinImg(def);
+  if (limg) {
+    ctx.save();
+    ctx.rotate(-angle);                      // 抵消朝向旋转，自绘的小人始终朝上
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.clip();
+    ctx.drawImage(limg, -r, -r, r * 2, r * 2);
+    ctx.restore();
+  } else {
+    const grad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.2, 0, 0, r);
+    grad.addColorStop(0, def.body1);
+    grad.addColorStop(1, def.body2);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, TAU);
+    ctx.fill();
+  }
   ctx.strokeStyle = isMe ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.25)';
   ctx.lineWidth = isMe ? 3 : 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
   ctx.stroke();
 
-  // 高光
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.beginPath();
-  ctx.ellipse(-r * 0.3, -r * 0.35, r * 0.28, r * 0.18, -0.6, 0, TAU);
-  ctx.fill();
+  // 自绘皮肤：不画高光和眼睛，让画面自己说话（炮口和昵称照旧，方向/身份还是要看得出）
+  if (!limg) {
+    // 高光
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.3, -r * 0.35, r * 0.28, r * 0.18, -0.6, 0, TAU);
+    ctx.fill();
 
-  // 眼睛
-  ctx.fillStyle = '#0d1b2a';
-  ctx.beginPath();
-  ctx.arc(r * 0.34, -r * 0.3, 3.4, 0, TAU);
-  ctx.arc(r * 0.34, r * 0.3, 3.4, 0, TAU);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(r * 0.34 + 1.2, -r * 0.3 - 1.2, 1.2, 0, TAU);
-  ctx.arc(r * 0.34 + 1.2, r * 0.3 - 1.2, 1.2, 0, TAU);
-  ctx.fill();
+    // 眼睛
+    ctx.fillStyle = '#0d1b2a';
+    ctx.beginPath();
+    ctx.arc(r * 0.34, -r * 0.3, 3.4, 0, TAU);
+    ctx.arc(r * 0.34, r * 0.3, 3.4, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(r * 0.34 + 1.2, -r * 0.3 - 1.2, 1.2, 0, TAU);
+    ctx.arc(r * 0.34 + 1.2, r * 0.3 - 1.2, 1.2, 0, TAU);
+    ctx.fill();
+  }
 
   // 炮口
   ctx.fillStyle = def.gun1;
@@ -7163,35 +7740,54 @@ function drawPlayer(p) {
   ctx.ellipse(0, 4, p.r, p.r * 0.8, 0, 0, TAU);
   ctx.fill();
 
+  // 玩家自绘皮肤：图片优先，且不随瞄准方向旋转（画的脸不能跟着枪口转）
+  const cimg = customSkinImg(c);
+
   // 皮肤主题装饰：在身体下层绘制，且固定朝上、不随枪口旋转，
   // 避免皇冠/犄角等被枪口方向带到身体侧面而"聚在一边"。
-  ctx.save();
-  ctx.rotate(-p.angle);
-  drawSkinDeco(ctx, p.r, c, G.time);
-  ctx.restore();
+  if (!cimg) {
+    ctx.save();
+    ctx.rotate(-p.angle);
+    drawSkinDeco(ctx, p.r, c, G.time);
+    ctx.restore();
+  }
 
   // 身体
-  const grad = ctx.createRadialGradient(-p.r*0.3, -p.r*0.3, p.r*0.2, 0, 0, p.r);
-  grad.addColorStop(0, c.body1);
-  grad.addColorStop(1, c.body2);
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(0, 0, p.r, 0, TAU);
-  ctx.fill();
-  drawSkinMark(ctx, p.r, c, G.time); // 皮肤身体大色块（clip 在圆内，不遮五官与枪口）
+  if (cimg) {
+    ctx.save();
+    ctx.rotate(-p.angle);
+    ctx.beginPath();
+    ctx.arc(0, 0, p.r, 0, TAU);
+    ctx.clip();
+    ctx.drawImage(cimg, -p.r, -p.r, p.r * 2, p.r * 2);
+    ctx.restore();
+  } else {
+    const grad = ctx.createRadialGradient(-p.r*0.3, -p.r*0.3, p.r*0.2, 0, 0, p.r);
+    grad.addColorStop(0, c.body1);
+    grad.addColorStop(1, c.body2);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.r, 0, TAU);
+    ctx.fill();
+    drawSkinMark(ctx, p.r, c, G.time); // 皮肤身体大色块（clip 在圆内，不遮五官与枪口）
+  }
   ctx.strokeStyle = 'rgba(0,0,0,0.25)';
   ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, p.r, 0, TAU);
   ctx.stroke();
 
-  // 高光
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.beginPath();
-  ctx.ellipse(-p.r*0.3, -p.r*0.35, p.r*0.28, p.r*0.18, -0.6, 0, TAU);
-  ctx.fill();
+  if (!cimg) {
+    // 高光
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(-p.r*0.3, -p.r*0.35, p.r*0.28, p.r*0.18, -0.6, 0, TAU);
+    ctx.fill();
 
-  // 眼睛（样式随皮肤：普通 / 眯眼 / 机甲目镜 / 星星眼）
-  const bob = p.moving ? Math.sin(p.anim) * 1.2 : 0;
-  drawSkinEyes(ctx, p.r, c, bob);
+    // 眼睛（样式随皮肤：普通 / 眯眼 / 机甲目镜 / 星星眼）
+    const bob = p.moving ? Math.sin(p.anim) * 1.2 : 0;
+    drawSkinEyes(ctx, p.r, c, bob);
+  }
 
   // 炮口
   ctx.fillStyle = c.gun1;
@@ -8742,7 +9338,10 @@ function netJoin(room) {
   ws.onerror = () => {
     setNetStatus('join', '❌ 连不上服务器：' + wsURL() + '。常见原因：浏览器开了代理/VPN、或页面在受限的预览面板中。请用 Chrome/Edge 直接打开地址重试。', 'err');
   };
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'join', room, name: User.name, skin: User.skin }));
+  ws.onopen = () => ws.send(JSON.stringify({
+    t: 'join', room, name: User.name, skin: User.skin,
+    tok: localStorage.getItem('bb_token') || '',   // 带登录态，服务端据此拦截封禁玩家
+  }));
   ws.onmessage = (e) => {
     let m;
     try { m = JSON.parse(e.data); } catch (err) { return; }
