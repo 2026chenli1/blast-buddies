@@ -1122,6 +1122,22 @@
   .admin-detail dd { font-size: 13px; color: #e8f0f7; margin: 0 0 6px; word-break: break-all; }
   .admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px 12px; }
   .admin-empty { text-align: center; color: #8fa6bb; font-size: 13px; padding: 18px 0; }
+  .admin-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+  .admin-tab { font-family: inherit; font-size: 12.5px; padding: 5px 12px; border-radius: 9px; cursor: pointer;
+    color: #9fb3c8; background: rgba(255,255,255,.05); border: 1px solid rgba(148,163,184,.25); }
+  .admin-tab.on { color: #fff; background: rgba(125,211,252,.18); border-color: rgba(125,211,252,.5); }
+  .admin-hide { display: none !important; }
+  .ch-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid rgba(248,113,113,.35); background: rgba(248,113,113,.07); }
+  .ch-row.low { border-color: rgba(148,163,184,.28); background: rgba(255,255,255,.04); }
+  .ch-codes { display: flex; flex-wrap: wrap; gap: 4px; }
+  .ch-code { font-size: 10.5px; padding: 1px 6px; border-radius: 6px; color: #fca5a5;
+    background: rgba(248,113,113,.14); border: 1px solid rgba(248,113,113,.3); }
+  .ch-note { font-size: 11px; color: #8fa6bb; line-height: 1.4; }
+  .rm-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid rgba(148,163,184,.25); background: rgba(255,255,255,.04); }
+  .rm-meta { flex: 1; min-width: 0; }
+  .rm-mem { font-size: 11px; color: #8fa6bb; margin-top: 3px; word-break: break-all; }
   .ban-box { width: min(420px, 92vw); }
   .ban-who { font-size: 13px; color: #e8f0f7; margin-bottom: 10px; }
   .ban-who b { color: #fff; }
@@ -1940,11 +1956,34 @@
     </div>
   </div>
 
+  <!-- 管理员隐身观战 HUD：只读，房间里的玩家看不到你 -->
+  <div id="spec-hud" style="display:none;position:fixed;inset:0;z-index:90;pointer-events:none;">
+    <div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);
+      padding:6px 14px;border-radius:12px;font-size:12.5px;font-weight:700;color:#fff;
+      background:rgba(167,139,250,.28);border:1px solid rgba(167,139,250,.6);backdrop-filter:blur(6px);">
+      🔍 管理员隐身观战 · 房间 <span id="spec-room">----</span> · 房间内玩家不会看到你
+    </div>
+    <div id="spec-panel" style="position:absolute;top:48px;right:10px;width:min(280px,44vw);
+      max-height:70vh;overflow:auto;padding:8px 10px;border-radius:12px;pointer-events:auto;
+      background:rgba(16,20,34,.82);border:1px solid rgba(167,139,250,.4);backdrop-filter:blur(8px);">
+      <div style="font-size:11.5px;color:#c4b5fd;font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;">
+        <span>玩家状态</span><span id="spec-ping" style="color:#8fa6bb;">—</span>
+      </div>
+      <div id="spec-list" style="display:flex;flex-direction:column;gap:5px;"></div>
+      <button class="btn btn-secondary btn-small" id="spec-exit" style="margin-top:8px;width:100%;">退出观战</button>
+    </div>
+  </div>
+
   <!-- 管理员后台：查看玩家详情 + 封禁 / 解封 -->
   <div class="modal-mask" id="admin-modal" style="display:none;">
     <div class="modal-box admin-box">
       <div class="modal-title">管理后台</div>
-      <div class="admin-bar">
+      <div class="admin-tabs" id="admin-tabs">
+        <button class="admin-tab on" data-atab="players">玩家</button>
+        <button class="admin-tab" data-atab="rooms">房间监控</button>
+        <button class="admin-tab" data-atab="cheat">外挂检测</button>
+      </div>
+      <div class="admin-bar" id="admin-bar-players">
         <input id="admin-search" placeholder="搜昵称 / 账号" maxlength="20">
         <button class="admin-mini" id="admin-refresh">刷新</button>
         <button class="admin-mini" id="admin-banfilter">只看封禁</button>
@@ -1952,6 +1991,8 @@
       <div class="admin-tip" id="admin-tip">共 0 名玩家</div>
       <div class="admin-list" id="admin-list"></div>
       <div class="admin-detail" id="admin-detail" style="display:none;"></div>
+      <div class="admin-list admin-hide" id="admin-rooms"></div>
+      <div class="admin-list admin-hide" id="admin-cheat"></div>
       <div class="admin-foot">
         <button class="btn btn-secondary btn-small" id="admin-close" style="margin-top:0;">关闭</button>
       </div>
@@ -3354,7 +3395,7 @@ document.getElementById('acct-logout').addEventListener('click', async () => {
   ensureAccount();   // 立刻补一个新设备账号，保证进度继续保存
 });
 // ---------- 管理员后台：玩家列表 / 详情 / 封禁 ----------
-const ADMIN_STATE = { list: [], onlyBanned: false, openKey: null };
+const ADMIN_STATE = { list: [], onlyBanned: false, openKey: null, tab: 'players' };
 function fmtTime(ts) {
   if (!ts) return '—';
   const d = new Date(ts);
@@ -3497,18 +3538,115 @@ function openAdmin() {
   ADMIN_STATE.onlyBanned = false;
   document.getElementById('admin-detail').style.display = 'none';
   document.getElementById('admin-search').value = '';
-  adminLoad();
+  setAdminTab('players');   // 统一入口：切回玩家 tab 并加载
 }
 function closeAdmin() { document.getElementById('admin-modal').style.display = 'none'; }
 document.getElementById('acct-admin-btn').addEventListener('click', () => { closeAccount(); openAdmin(); });
 document.getElementById('admin-close').addEventListener('click', closeAdmin);
-document.getElementById('admin-refresh').addEventListener('click', adminLoad);
+document.getElementById('admin-refresh').addEventListener('click', () => {
+  if (ADMIN_STATE.tab === 'players') adminLoad();
+  else if (ADMIN_STATE.tab === 'rooms') adminLoadRooms();
+  else adminLoadCheaters();
+});
 document.getElementById('admin-banfilter').addEventListener('click', () => {
   ADMIN_STATE.onlyBanned = !ADMIN_STATE.onlyBanned;
   document.getElementById('admin-banfilter').style.borderColor = ADMIN_STATE.onlyBanned ? 'rgba(248,113,113,.6)' : '';
   renderAdminList();
 });
 document.getElementById('admin-search').addEventListener('input', renderAdminList);
+
+// ---------- 后台三个 tab：玩家 / 房间监控 / 外挂检测 ----------
+const CHEAT_LABEL = {
+  speed: '移动速度异常', fire_rate: '射速异常', damage: '伤害异常',
+  hp: '血量异常', resource: '资源异常', tamper: '数据异常', stat: '战绩异常',
+};
+function setAdminTab(tab) {
+  ADMIN_STATE.tab = tab;
+  for (const b of document.querySelectorAll('#admin-tabs .admin-tab')) {
+    b.classList.toggle('on', b.dataset.atab === tab);
+  }
+  const isP = tab === 'players';
+  document.getElementById('admin-bar-players').classList.toggle('admin-hide', !isP);
+  document.getElementById('admin-tip').classList.toggle('admin-hide', !isP);
+  document.getElementById('admin-list').classList.toggle('admin-hide', !isP);
+  document.getElementById('admin-detail').classList.toggle('admin-hide', !isP);
+  document.getElementById('admin-rooms').classList.toggle('admin-hide', tab !== 'rooms');
+  document.getElementById('admin-cheat').classList.toggle('admin-hide', tab !== 'cheat');
+  if (tab === 'players') adminLoad();
+  else if (tab === 'rooms') adminLoadRooms();
+  else if (tab === 'cheat') adminLoadCheaters();
+}
+for (const b of document.querySelectorAll('#admin-tabs .admin-tab')) {
+  b.addEventListener('click', () => setAdminTab(b.dataset.atab));
+}
+const GM_LABEL = { coop: '协作', stronghold: '据点', tdm: '团队死斗' };
+async function adminLoadRooms() {
+  const box = document.getElementById('admin-rooms');
+  box.innerHTML = '<div class="admin-empty">加载中…</div>';
+  try {
+    const r = await api('/api/admin/rooms');
+    if (!r.ok) { box.innerHTML = `<div class="admin-empty">${escapeHtml(r.msg || '加载失败')}</div>`; return; }
+    const list = r.list || [];
+    if (!list.length) { box.innerHTML = '<div class="admin-empty">当前没有房间</div>'; return; }
+    box.innerHTML = list.map((m) => {
+      const mems = (m.guests || []).map(g => `P${g.slot} ${escapeHtml(g.name || '')}`).join('　');
+      return `<div class="rm-row">
+        <div class="rm-meta">
+          <div class="admin-name">房间 ${escapeHtml(String(m.room))}
+            <span class="admin-tag">${m.mode === 'private' ? '私有' : '公开'}</span>
+            <span class="admin-tag">${escapeHtml(GM_LABEL[m.gm] || m.gm)}</span>
+          </div>
+          <div class="admin-sub">${m.n}/${m.cap || '∞'} 人 · 已开 ${m.age}s${mems ? '<br>成员：' + mems : ''}</div>
+        </div>
+        <button class="admin-mini" data-aspec="${escapeHtml(String(m.room))}">隐身观战</button>
+      </div>`;
+    }).join('');
+    for (const b of box.querySelectorAll('[data-aspec]')) {
+      b.addEventListener('click', () => { closeAdmin(); specStart(b.dataset.aspec); });
+    }
+  } catch (e) { box.innerHTML = '<div class="admin-empty">网络错误</div>'; }
+}
+async function adminLoadCheaters() {
+  const box = document.getElementById('admin-cheat');
+  box.innerHTML = '<div class="admin-empty">加载中…</div>';
+  try {
+    const r = await api('/api/admin/cheaters');
+    if (!r.ok) { box.innerHTML = `<div class="admin-empty">${escapeHtml(r.msg || '加载失败')}</div>`; return; }
+    const list = r.list || [];
+    document.getElementById('admin-tip').textContent =
+      `外挂检测：${list.length} 名可疑（自动封禁线 ${r.autoScore} 分 / ≥${r.autoKinds} 类信号）`;
+    if (!list.length) { box.innerHTML = '<div class="admin-empty">暂无可疑玩家</div>'; return; }
+    box.innerHTML = list.map((p) => {
+      const codes = Object.keys(p.codes || {}).map(c => `<span class="ch-code">${escapeHtml(CHEAT_LABEL[c] || c)}</span>`).join('');
+      const notes = (p.notes || []).slice(0, 3).map(n => `<div>· ${escapeHtml(fmtTime(n.t))} ${escapeHtml(n.d || '')}</div>`).join('');
+      const st = p.banned
+        ? `<span class="admin-tag">已封禁${p.banLeft ? '（剩 ' + escapeHtml(p.banLeft) + '）' : '（永久）'}</span>`
+        : '<span class="admin-tag">未处理</span>';
+      return `<div class="ch-row ${p.score < r.autoScore ? 'low' : ''}">
+        <div class="admin-name">${escapeHtml(p.name || '未命名')}<span style="color:#8fa6bb;">　${escapeHtml(String(p.account || '—'))}</span>　${st}
+          <span style="color:#fca5a5;font-size:12px;">可疑度 ${p.score}</span></div>
+        <div class="admin-sub">最近一次：${escapeHtml(fmtTime(p.last))} · 累计 ${p.kinds} 类信号</div>
+        <div class="ch-codes">${codes}</div>
+        <div class="ch-note">${notes}</div>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button class="admin-mini ${p.banned ? '' : 'danger'}" data-aban="${escapeHtml(p.key)}" data-banned="${p.banned}">${p.banned ? '解封' : '封禁'}</button>
+          <button class="admin-mini" data-aclear="${escapeHtml(p.key)}">清除记录</button>
+        </div>
+      </div>`;
+    }).join('');
+    for (const b of box.querySelectorAll('[data-aban]')) {
+      b.addEventListener('click', () => adminToggleBan(b.dataset.aban, b.dataset.banned === '1'));
+    }
+    for (const b of box.querySelectorAll('[data-aclear]')) {
+      b.addEventListener('click', async () => {
+        await api('/api/admin/cheat-clear', { key: b.dataset.aclear });
+        adminLoadCheaters();
+      });
+    }
+  } catch (e) { box.innerHTML = '<div class="admin-empty">网络错误</div>'; }
+}
+
+document.getElementById('spec-exit').addEventListener('click', () => specStop());
 document.getElementById('ban-cancel').addEventListener('click', closeBanModal);
 document.getElementById('ban-confirm').addEventListener('click', banConfirm);
 document.getElementById('ban-hours-custom').addEventListener('input', () => {
@@ -6805,6 +6943,7 @@ function update(dt) {
       // 暗影隐身：破隐暗杀——隐身期间的第一发造成 3 倍伤害，打完立即现身
       const assassin = !!p.assassinate;
       const shotDmg = gd.dmg * dmgMul * (assassin ? 3 : 1);
+      acCheckFire(p, gd);     // 射速 / 伤害取证（含 P1 自己：房主也可能开挂）
       for (let i = 0; i < count; i++) {
         const a = baseAngle + (count > 1 ? (i - (count - 1) / 2) * spreadAngle : 0);
         G.bullets.push({
@@ -7157,6 +7296,123 @@ function update(dt) {
   if (User.grenadeCd > 0) User.grenadeCd -= dt;
 
   updateSkillBtn();
+
+  acScan(dt);     // 外挂检测：房主权威端逐帧体检（含自己，防止房主自己开挂）
+}
+
+// ======================= 外挂检测（客户端取证 → 服务端评分） =======================
+// 说明：浏览器端代码用户可改，所以这里做的是「取证 + 上报」，判定留给服务端。
+// 检测项：位移速度 / 射速 / 单发伤害 / 血量越界 / 资源增速 / 快照数据非法。
+// 房主权威下 guest 改不了自己的状态，因此最大的作弊面是房主自己——
+// 所以检测对「所有人（含 P1 自己）」一视同仁地跑，而不是只查别人。
+const AC = {
+  last: {},      // slot -> { x, y, t }
+  fire: {},      // slot -> 上次开火时间戳
+  acc: {},       // slot -> { d: 累计位移, t: 累计时间 }
+  coinAt: 0, coinT: 0,
+  sent: {},      // code@slot -> 上次上报时间（节流）
+  enabled: true,
+};
+const AC_SPEED_MAX = () => CFG.playerSpeed * 1.82 * 1.3;  // 含彩虹狂暴×1.3 + 隐身×1.4，再留 30% 容差
+const AC_DEDUPE_MS = 60_000;                              // 同一账号同一信号 60 秒只上报一次
+
+function acReport(code, slot, msg) {
+  if (!AC.enabled || SPEC.on) return;         // 观战不参与取证（观战端不是玩家）
+  const k = code + '@' + slot;
+  const now = Date.now();
+  if (AC.sent[k] && now - AC.sent[k] < AC_DEDUPE_MS) return;   // 客户端侧节流，避免刷接口
+  AC.sent[k] = now;
+  try {
+    api('/api/cheat/report', {
+      code, slot, room: NET.room || '',
+      detail: { msg: String(msg || '').slice(0, 240), slot },
+    }).catch(() => {});
+  } catch (e) {}
+}
+function acScan(dt) {
+  if (!AC.enabled || G.state !== 'playing' || !G.players || !G.players.length) return;
+  const now = performance.now();
+  for (const p of G.players) {
+    const s = p.id;
+    // --- 位移速度：排除冲刺/重生等合法瞬移，用 0.3s 窗口平均速度判定 ---
+    const L = AC.last[s];
+    if (L && p.dashT <= 0 && !p.dead) {
+      const dd = Math.hypot(p.x - L.x, p.y - L.y);
+      const a = AC.acc[s] || { d: 0, t: 0 };
+      // 用游戏 dt 累计窗口（不是墙钟时间）：单帧卡顿时墙钟差距会很大，
+      // 用 dt 才能真实反映「游戏内位移 / 游戏内时间」这个速度量纲
+      a.d += dd; a.t += dt;
+      AC.acc[s] = a;
+      if (a.t >= 0.3) {
+        const v = a.d / a.t;
+        if (v > AC_SPEED_MAX()) {
+          acReport('speed', s, `平均速度 ${Math.round(v)} px/s（上限 ${Math.round(AC_SPEED_MAX())}）`);
+        }
+        AC.acc[s] = { d: 0, t: 0 };
+      }
+    }
+    AC.last[s] = { x: p.x, y: p.y, t: now };
+
+    // --- 血量越界 ---
+    if (p.hp > p.maxHp + 0.5 || p.hp < -0.5) {
+      acReport('hp', s, `HP ${Math.round(p.hp)} / 上限 ${Math.round(p.maxHp)}`);
+    }
+    // --- 坐标越界 / NaN ---
+    if (!isFinite(p.x) || !isFinite(p.y) || p.x < -50 || p.y < -50) {
+      acReport('tamper', s, `坐标非法 ${p.x},${p.y}`);
+    }
+  }
+  // --- 金币增速：1 秒窗口内暴涨视为异常 ---
+  const cs = Number(G.coins || 0);
+  const prev = AC.coinAt;
+  AC.coinAt = cs;
+  AC.coinT += dt;
+  if (AC.coinT >= 1) {
+    const rate = (cs - prev) / AC.coinT;
+    AC.coinT = 0;
+    AC.coinV0 = cs;
+    if (rate > 4000) acReport('resource', 1, `金币增速 ${Math.round(rate)}/s`);
+  }
+
+  // --- 战绩异常：击杀效率离谱（自动瞄准 / 加速的常见副作用） ---
+  AC.t30 = (AC.t30 || 0) + dt;
+  if (AC.t30 >= 30) {
+    AC.t30 = 0;
+    const mins = Math.max(0.5, (G.time || 0) / 60);
+    const kpm = (G.kills || 0) / mins;
+    if (kpm > 220) acReport('stat', 1, `击杀效率 ${Math.round(kpm)}/分钟（正常上限约 220）`);
+  }
+}
+// guest 端：校验房主发来的快照是否含非法数值（房主改自己血量/金币时会被这里发现）
+function acScanSnapshot(s) {
+  if (!AC.enabled || !s) return;
+  try {
+    for (const sp of (s.players || [])) {
+      if (sp.hp > sp.maxHp + 0.5 || sp.hp < -0.5) {
+        acReport('hp', sp.id, `快照 HP ${sp.hp}/${sp.maxHp} 越界`);
+      }
+      if (!isFinite(sp.x) || !isFinite(sp.y) || sp.x < -50 || sp.y < -50 || sp.x > 5000 || sp.y > 5000) {
+        acReport('tamper', sp.id, `快照坐标非法 ${sp.x},${sp.y}`);
+      }
+    }
+    const cs = Number(s.s || 0);
+    if (cs < 0 || !isFinite(cs)) acReport('resource', 1, `快照金币非法 ${cs}`);
+  } catch (e) {}
+}
+// 开火节奏：统一在子弹生成处判定（射速上限 = 武器 fireRate × 0.5，再留 10% 容差）
+function acCheckFire(p, gunDef) {
+  if (!AC.enabled || !gunDef) return;
+  const now = performance.now();
+  const last = AC.fire[p.id] || 0;
+  AC.fire[p.id] = now;
+  if (!last) return;
+  const gap = (now - last) / 1000;
+  const minGap = gunDef.fireRate * 0.5 * 0.9;
+  if (gap < minGap) {
+    acReport('fire_rate', p.id, `开火间隔 ${gap.toFixed(3)}s（理论最小 ${minGap.toFixed(3)}s）`);
+  }
+  const maxDmg = gunDef.dmg * (1 + 0.6 * 5);   // 升级上限按 5 级估算
+  if (gunDef.dmg > maxDmg + 0.5) acReport('damage', p.id, `单发伤害 ${gunDef.dmg} 超限`);
 }
 
 function updateBoss(dt) {
@@ -9112,7 +9368,7 @@ function onHostDcMessage(slot, raw) {
 }
 function onGuestDcMessage(raw) {
   let m; try { m = JSON.parse(raw); } catch (e) { return; }
-  if (m.t === 'state') applyNetState(m.d);
+  if (m.t === 'state') { acScanSnapshot(m.d); applyNetState(m.d); }
   else if (m.t === 'pong') {
     netPingPending = 0;
     recordRtt(performance.now() - m.d);
@@ -9178,7 +9434,8 @@ function sendState() {
     if (dc.readyState !== 'open') return;
     try { dc.send(JSON.stringify(obj)); sentDc++; } catch (e) {}
   });
-  if (sentDc < NET.peers.size) netSend(obj);
+  // NET.specWatch：有管理员在隐身观战时，即使全员 P2P 也要额外发一份 WS 快照给服务器转发
+  if (sentDc < NET.peers.size || NET.specWatch) netSend(obj);
 }
 function netClose() {
   clearTimeout(NET.createTimer);
@@ -9314,7 +9571,11 @@ function netCreate(max, mode, gm, autoStart) {
     setNetStatus('create', '❌ 连不上服务器：' + wsURL() + '。常见原因：浏览器开了代理/VPN、或页面在受限的预览面板中。请用 Chrome/Edge 直接打开地址重试。', 'err');
     document.getElementById('net-create-btn').style.display = 'inline-block';
   };
-  ws.onopen = () => ws.send(JSON.stringify({ t: 'create', max: max || 0, mode: mode || 'public', gm: gm || 'coop' }));
+  ws.onopen = () => ws.send(JSON.stringify({
+    t: 'create', max: max || 0, mode: mode || 'public', gm: gm || 'coop',
+    tok: localStorage.getItem('bb_token') || '',   // 关联房主账号，便于管理员识别房间成员
+    name: User.name, skin: User.skin,
+  }));
   ws.onmessage = (e) => {
     let m;
     try { m = JSON.parse(e.data); } catch (err) { return; }
@@ -9398,6 +9659,10 @@ function netCreate(max, mode, gm, autoStart) {
         NET.votes.set(m.slot, Object.assign({}, NET.votes.get(m.slot), { gm: m.choice }));
         renderVoteBox();
       }
+    } else if (m.t === 'spec_join') {
+      NET.specWatch = true;   // 有人在观战 → 快照额外发一份到 WS 供服务器转发
+    } else if (m.t === 'spec_leave') {
+      NET.specWatch = false;
     } else if (m.t === 'error') {
       clearTimeout(NET.createTimer);
       setNetStatus('create', m.msg, 'err');
@@ -9461,7 +9726,7 @@ function netJoin(room) {
       }
     } else if (m.t === 'state') {
       // P2P 已直连时忽略 WS 快照（数据走数据通道，避免重复应用）
-      if (!guestDcOpen()) applyNetState(m.d);
+      if (!guestDcOpen()) { acScanSnapshot(m.d); applyNetState(m.d); }
     } else if (m.t === 'pong') {
       // 服务器直接回的 pong：guest 自己测 RTT（不依赖房主浏览器）
       const rtt = performance.now() - m.d;
@@ -9491,6 +9756,115 @@ function netJoin(room) {
       guestRoomGone();
     }
   };
+}
+
+// ---------- 管理员隐身观战（只读：不加入成员表、不发输入、不广播存在） ----------
+const SPEC = { on: false, room: '', ws: null, members: [], lastUi: 0, snapAt: 0, fps: 0 };
+function specStart(room) {
+  if (SPEC.ws) specStop();
+  // 清场：观战端只显示快照内容，绝不能残留上一局/本地单人的世界数据
+  closeLobby();
+  closeLobbyWorld();
+  hide(document.getElementById('home-view'));
+  hide(document.getElementById('start-overlay'));
+  hide(document.getElementById('over-overlay'));
+  hide(document.getElementById('pause-overlay'));
+  document.getElementById('net-panel').style.display = 'none';
+  G.mode = 'net';
+  G.state = 'playing';
+  G.players = [];
+  G.enemies = [];
+  G.bullets = [];
+  G.enemyBullets = [];
+  if (G.ghostBullets) G.ghostBullets.length = 0;
+  G.particles = [];
+  G.popups = [];
+  G.powerups = [];
+  G.vortexes = [];
+  G.zones = [];
+  G.obstacles = [];
+  G.boss = null;
+  SPEC.on = true;
+  SPEC.room = room;
+  document.getElementById('spec-room').textContent = room;
+  document.getElementById('spec-hud').style.display = 'block';
+  document.getElementById('hud').style.display = 'flex';
+  const ws = new WebSocket(wsURL());
+  SPEC.ws = ws;
+  ws.onopen = () => ws.send(JSON.stringify({
+    t: 'spectate', room, tok: localStorage.getItem('bb_token') || '',
+  }));
+  ws.onmessage = (e) => {
+    let m;
+    try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === 'spectate_ok') {
+      SPEC.members = m.members || [];
+      specRender();
+    } else if (m.t === 'state') {
+      SPEC.snapAt = performance.now();
+      applyNetState(m.d);
+    } else if (m.t === 'peer' || m.t === 'error') {
+      specStop(m.t === 'error' ? m.msg : '房主已断开连接');
+    }
+  };
+  ws.onclose = () => { if (SPEC.on) specStop(); };
+  ws.onerror = () => { if (SPEC.on) specStop('连接出错'); };
+  specRender();
+}
+function specStop(msg) {
+  if (SPEC.ws) { try { SPEC.ws.onclose = null; SPEC.ws.close(); } catch (e) {} }
+  SPEC.ws = null;
+  SPEC.on = false;
+  SPEC.room = '';
+  SPEC.members = [];
+  document.getElementById('spec-hud').style.display = 'none';
+  G.mode = 'single';
+  G.state = 'menu';
+  G.players = [];
+  G.enemies = [];
+  G.bullets = [];
+  G.enemyBullets = [];
+  G.particles = [];
+  G.popups = [];
+  G.vortexes = [];
+  G.zones = [];
+  G.obstacles = [];
+  G.boss = null;
+  showMenu();
+  if (msg) alert(msg);
+}
+// 观战面板：只做只读展示，1.5Hz 刷新（每帧刷 DOM 会卡）
+function specRender() {
+  const box = document.getElementById('spec-list');
+  if (!box) return;
+  if (!SPEC.on) { box.innerHTML = ''; return; }
+  const bySlot = new Map();
+  for (const m of (SPEC.members || [])) bySlot.set(m.slot, m);
+  const rows = (G.players || []).map((p) => {
+    const mm = bySlot.get(p.id) || {};
+    const name = p.name || mm.name || ('P' + p.id);
+    const hp = Math.max(0, Math.round(p.hp || 0));
+    const mx = Math.max(1, Math.round(p.maxHp || hp || 1));
+    const pct = Math.round(hp / mx * 100);
+    const col = p.dead ? '#94a3b8' : (pct > 60 ? '#4ade80' : pct > 30 ? '#fbbf24' : '#f87171');
+    const tags = [];
+    if (p.dead) tags.push('阵亡');
+    if (p.invuln > 0) tags.push('无敌');
+    if (p.stealth > 0) tags.push('隐身');
+    if (p.shield > 0) tags.push('护盾');
+    if (p.rainbow > 0) tags.push('狂暴');
+    return `<div style="font-size:11.5px;color:#e8f0f7;line-height:1.5;">
+      <div><b>P${p.id}</b> ${escapeHtml(name)}${mm.account ? ` <span style="color:#8fa6bb;">${escapeHtml(String(mm.account))}</span>` : ''}</div>
+      <div style="color:${col};">HP ${hp}/${mx}（${pct}%）${tags.length ? ' · ' + tags.join('/') : ''}</div>
+      <div style="color:#8fa6bb;">坐标 ${Math.round(p.x)},${Math.round(p.y)}${p.livesLeft ? ' · 命 ×' + p.livesLeft : ''}</div>
+    </div>`;
+  }).join('');
+  box.innerHTML = rows || '<div class="admin-empty">等待房主快照…</div>';
+  const pe = document.getElementById('spec-ping');
+  if (pe) {
+    const age = SPEC.snapAt ? Math.round((performance.now() - SPEC.snapAt) / 100) / 10 : null;
+    pe.textContent = age === null ? '等待快照' : `延迟 ${Math.round(G.netPing || 0)}ms · 快照 ${age}s 前`;
+  }
 }
 
 // guest 房间没了（房主断开 / 服务器断开）：回到菜单等待
@@ -9640,7 +10014,9 @@ function applyNetState(s) {
     }
     G.netSnapAt = nowMs;
   }
-  const prevState = G.state;  G.state = s.st;
+  const prevState = G.state;
+  // 观战端：房主还在准备阶段（st=menu）时也要留在战场视图里，不能跟着跳回主界面
+  G.state = (SPEC.on && s.st === 'menu') ? 'playing' : s.st;
   G.netPing = s.ping || 0;               // host 测得的 RTT（ms），HUD 显示用
   G.mode = 'net';
   G.score = s.s; G.kills = s.k; G.wave = s.w; G.waveTimer = s.wt;
@@ -10268,8 +10644,11 @@ function runFrame(now) {
       fpsEl.style.display = 'none';
     }
   }
-  // guest 不跑游戏逻辑（以房主快照为准），只渲染 + 发输入
-  if (G.state === 'playing' && NET.role !== 'guest') {
+  // guest 不跑游戏逻辑（以房主快照为准），只渲染 + 发输入；
+  // 管理员隐身观战同样不跑逻辑——画面完全由快照驱动，连本地 update 都不能碰，
+  // 否则观战端的世界会和房主分叉（看起来像"看到了平行宇宙"）。
+  const remoteDriven = (NET.role === 'guest') || SPEC.on;
+  if (G.state === 'playing' && !remoteDriven) {
     update(dt);
   }
   // 联机：guest 上报输入 / host 广播状态快照
@@ -10281,6 +10660,13 @@ function runFrame(now) {
       ghostFire(dt);        // 开火本地预测：按下立刻出子弹，不等房主回传
       smoothNetState(dt); // 向最新快照位置平滑滑动，消除跳变
     }
+  } else if (SPEC.on) {
+    if (G.state === 'playing') {
+      stepFx(dt);
+      smoothNetState(dt);
+    }
+    const nowS = performance.now();
+    if (nowS - SPEC.lastUi > 660) { SPEC.lastUi = nowS; specRender(); }
   } else if (NET.role === 'host') {
     netBroadcast();
     netPing();           // RTT 测量（每 2 秒一次）
@@ -11288,6 +11674,10 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
     api, loadOnlineRank, loadDailyShop, renderShop, dailyShop: () => dailyShop,
     // 账号体系调试钩子（自动建号 / 密码 / 切换账号）
     ensureAccount, openAccount, closeAccount, resetUser,
+    // 管理员后台 / 隐身观战调试钩子（任务#168 验证用）
+    SPEC, specStart, specStop, specRender, adminLoadRooms, adminLoadCheaters, setAdminTab,
+    // 外挂检测模块（任务#169 验证用）
+    AC, acScan, acScanSnapshot, acCheckFire,
   };
 }
 
