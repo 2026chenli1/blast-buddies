@@ -13,7 +13,7 @@
 // ---------- 全局状态 ----------
 // 每个 isolate 维护自己的连接表；跨 isolate 用 BroadcastChannel 转发
 let connSeq = 0;
-const conns = new Map(); // connId -> { ws, room, role, slot }
+const conns = new Map(); // connId -> { ws, room, role, slot, spectate }  spectate = 管理员隐身观战的房间（不计入成员）
 const rooms = new Map(); // room -> { host, guests: [{slot, id}], created, cap, mode }
 // cap: 0 = 不限人数；mode: 'public'（房间列表可见）| 'private'（凭房间号加入）
 
@@ -174,9 +174,12 @@ function dispatch(m) {
   if (!m) return;
 
   if (m.type === 'relay') {
-    // 转发给本 isolate 中同房间、非来源的连接
+    // 转发给本 isolate 中同房间、非来源的连接；
+    // 管理员「隐身观战」连接（c.spectate === room）同样收快照，但不进 guests、不广播自己的存在，
+    // 因此房主/其他玩家的人数、玩家列表、聊天里都不会出现观战者。
     for (const [id, c] of conns) {
-      if (id !== m.from && c.room === m.room) send(c.ws, m.payload);
+      if (id === m.from) continue;
+      if (c.room === m.room || c.spectate === m.room) send(c.ws, m.payload);
     }
     return;
   }
@@ -416,7 +419,34 @@ function genRoomCode() {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
-async function createRoom(connId: string, cap: number, mode: string, gm: string) {
+// 登录 token → 玩家内部 key（用于把房间成员对应到账号，供管理员观战识别）
+async function keyOfToken(tok: string): Promise<string> {
+  const t = String(tok || '').trim();
+  if (!t) return '';
+  const s = await kv.get(['session', t]);
+  return (s.value as string) || '';
+}
+
+// 房间成员（含账号）：{ slot, key, name, account, skin }
+async function roomMembers(reg: any): Promise<any[]> {
+  const out: any[] = [];
+  const push = async (slot: number, id: string, name: string, skin: string, keyHint?: string) => {
+    const key = String(keyHint || '');
+    const ur = key ? await kv.get<any>(['user', key]) : null;
+    const p = (ur && ur.value) || {};
+    out.push({
+      slot, key,
+      name: String(name || p.name || '').slice(0, 12),
+      account: p.account || (key.startsWith('g_') ? key.slice(2) : key) || '—',
+      skin: skin || '',
+    });
+  };
+  await push(1, reg.host, (reg.hostName || ''), (reg.hostSkin || ''), reg.hostKey || '');
+  for (const g of (reg.guests || [])) await push(g.slot, g.id, g.name, g.skin, g.key || '');
+  return out;
+}
+
+async function createRoom(connId: string, cap: number, mode: string, gm: string, hostKey = '', hostName = '', hostSkin = '') {
   let room = genRoomCode();
   let tries = 0;
   while ((rooms.has(room) || await roomReg(room)) && tries < 50) {
@@ -424,7 +454,10 @@ async function createRoom(connId: string, cap: number, mode: string, gm: string)
     tries++;
   }
   const now = Date.now();
-  await setRoomReg({ room, host: connId, cap, mode, gm: gm || 'coop', created: now, ts: now, guests: [] });
+  await setRoomReg({
+    room, host: connId, cap, mode, gm: gm || 'coop', created: now, ts: now, guests: [],
+    hostKey: String(hostKey || ''), hostName: String(hostName || '').slice(0, 12), hostSkin: String(hostSkin || ''),
+  });
   rooms.set(room, { host: connId, guests: [], created: now, cap, mode, gm: gm || 'coop' });
   const c = conns.get(connId);
   if (c) {
@@ -437,7 +470,7 @@ async function createRoom(connId: string, cap: number, mode: string, gm: string)
   return room;
 }
 
-async function joinRoom(connId: string, room: string, name: string, skin: string) {
+async function joinRoom(connId: string, room: string, name: string, skin: string, key = '') {
   const reg = await roomReg(room);
   if (!reg) return { ok: false, msg: '房间不存在，请检查房间号' };
   if (Date.now() - reg.ts > KV_ROOM_TTL) {
@@ -452,7 +485,7 @@ async function joinRoom(connId: string, room: string, name: string, skin: string
   const used = new Set(reg.guests.map((g: any) => g.slot));
   let slot = 2;
   while (used.has(slot)) slot++;
-  reg.guests.push({ slot, id: connId, name: name || '', skin: skin || '' });
+  reg.guests.push({ slot, id: connId, name: name || '', skin: skin || '', key: String(key || '') });
   reg.ts = Date.now();
   await setRoomReg(reg);
   // 本 isolate 同步内存镜像（保证消息转发与 host 查询一致）
@@ -462,7 +495,7 @@ async function joinRoom(connId: string, room: string, name: string, skin: string
     rooms.set(room, lr);
   }
   if (!lr.guests.some((g: any) => g.id === connId)) {
-    lr.guests.push({ slot, id: connId, name: name || '', skin: skin || '' });
+    lr.guests.push({ slot, id: connId, name: name || '', skin: skin || '', key: String(key || '') });
   }
   const c = conns.get(connId);
   if (c) {
@@ -593,7 +626,9 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
       if (cap > 99) cap = 99;
       const mode = msg.mode === 'private' ? 'private' : 'public';
       const gm = ['coop', 'stronghold', 'tdm'].includes(msg.gm) ? msg.gm : 'coop';
-      const room = await createRoom(connId, cap, mode, gm);
+      // 记录房主账号：管理员观战时要显示房间里到底是谁
+      const hkey = await keyOfToken(String(msg.tok || ''));
+      const room = await createRoom(connId, cap, mode, gm, hkey, String(msg.name || ''), String(msg.skin || ''));
       send(ws, { t: 'created', room, cap, mode, gm });
       break;
     }
@@ -619,17 +654,55 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
         }
       }
       const room = String(msg.room || '').trim();
+      const gkey = await keyOfToken(String(msg.tok || ''));
       const res = await joinRoom(
         connId,
         room,
         String(msg.name || '').slice(0, 12),
         String(msg.skin || ''),
+        gkey,
       );
       if (!res.ok) {
         send(ws, { t: 'error', msg: res.msg });
         return;
       }
       send(ws, { t: 'joined', room, slot: res.slot, gm: res.gm || 'coop' });
+      break;
+    }
+    case 'spectate': {
+      // 管理员隐身观战：只订阅该房间的快照，不加入 guests、不广播 joined/left。
+      // 校验走登录 token：必须是 role=admin 的账号，普通玩家一律拒绝。
+      if (!c) return;
+      const stok = String(msg.tok || '').trim();
+      let isAdm = false;
+      if (stok) {
+        const ss = await kv.get(['session', stok]);
+        const skey = ss.value as string;
+        if (skey) {
+          const su = await kv.get<any>(['user', skey]);
+          if (su.value && su.value.role === 'admin') isAdm = true;
+        }
+      }
+      if (!isAdm) { send(ws, { t: 'error', msg: '没有权限' }); return; }
+      const sroom = String(msg.room || '').trim();
+      const sreg = await roomReg(sroom);
+      if (!sreg) { send(ws, { t: 'error', msg: '房间不存在' }); return; }
+      c.spectate = sroom;
+      // 让房主知道有人在观战：房主平时只在「还有 guest 走中转」时才发 WS 快照，
+      // 全员 P2P 直连时不发，观战者就收不到画面了。
+      broadcast({ type: 'relay', room: sroom, from: connId, payload: { t: 'spec_join' } });
+      send(ws, {
+        t: 'spectate_ok',
+        room: sroom,
+        gm: sreg.gm || 'coop',
+        cap: sreg.cap || 0,
+        members: await roomMembers(sreg),
+      });
+      break;
+    }
+    case 'spectate_stop': {
+      if (c) c.spectate = null;
+      send(ws, { t: 'spectate_stopped' });
       break;
     }
     case 'list': {
@@ -646,6 +719,7 @@ async function handleWsMessage(ws: WebSocket, connId: string, raw: string) {
           rooms.delete(reg.room);
           continue;
         }
+        // 普通玩家的房间列表：绝不暴露账号，只给房号/人数/模式
         list.push({ room: reg.room, n: reg.guests.length + 1, cap: reg.cap });
       }
       list.sort((a, b) => (a.room < b.room ? -1 : 1));
@@ -837,12 +911,17 @@ function getClientIp(req?: Request, connInfo?: Deno.ServeHandlerInfo): string {
 
 function setupSocket(ws: WebSocket, ip: string) {
   const connId = 'c' + (++connSeq) + '-' + Math.random().toString(36).slice(2, 8);
-  conns.set(connId, { ws, room: null, role: null, slot: null, ip });
+  conns.set(connId, { ws, room: null, role: null, slot: null, spectate: null, ip });
 
   ws.onmessage = (ev: MessageEvent) => {
     handleWsMessage(ws, connId, String(ev.data)).catch((e) => console.error('ws msg err', e));
   };
   ws.onclose = () => {
+    const cc0 = conns.get(connId);
+    if (cc0 && cc0.spectate) {
+      // 观战者走了：告诉房主不必再额外维护一条 WS 快照
+      broadcast({ type: 'relay', room: cc0.spectate, from: connId, payload: { t: 'spec_leave' } });
+    }
     void leaveRoom(connId);
     lobbyPlayers.delete(connId);
     conns.delete(connId);
@@ -1941,6 +2020,146 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     return jsonResp({ ok: true, banned: 0 });
   }
 
+  // ======================= 外挂检测（客户端上报 + 服务端聚合评分） =======================
+  // 判定放服务端：客户端只上报「证据」，不自己下结论，避免被本地篡改后自证清白。
+  // 权重：越不可能在正常游玩中出现的信号，权重越高。
+  const CHEAT_W: Record<string, number> = {
+    speed: 15,       // 位移速度超过理论上限（含增益叠乘）
+    fire_rate: 20,   // 开火间隔短于武器射速上限
+    damage: 20,      // 单发伤害高于武器/升级理论上限
+    hp: 25,          // 血量越界（超过上限 / 负数）
+    resource: 30,    // 金币/经验增速超产出上限
+    tamper: 25,      // 快照数值非法（NaN / 越界）——别人视角看到的异常
+    stat: 25,        // 对局统计异常（击杀效率 / 秒伤离谱）
+  };
+  const CHEAT_DEDUPE_MS = 30_000;   // 同一账号同一信号 30 秒内只记一次
+  const CHEAT_AUTO_SCORE = 60;      // 自动封禁阈值
+  const CHEAT_AUTO_KINDS = 2;       // 且至少命中 2 种不同信号，防单点误判
+  const CHEAT_AUTO_HOURS = 24;      // 自动封禁时长（小时）
+  const CHEAT_MAX_NOTE = 240;
+
+  // POST /api/cheat/report { code, slot, room, detail? } —— 只有房间内的人能上报
+  // 被举报者由「服务端记录的房间成员表 + slot」定位，绝不信客户端传来的 key：
+  // 否则任何人都能伪造 key 把别人刷上黑名单。
+  if (path === '/api/cheat/report' && req.method === 'POST') {
+    const body4 = await readBody(req);
+    const detail: any = body4.detail || {};
+    const code = body4.code;
+    const room = body4.room;
+    const slot = body4.slot;
+    const c = String(code || '').trim();
+    const w = CHEAT_W[c];
+    if (!w) return jsonResp({ ok: false, msg: '未知的检测类型' }, 400);
+    const rroom = String(room || '').trim();
+    const sslot = Math.floor(Number(slot));
+    if (!rroom || !isFinite(sslot)) return jsonResp({ ok: true, ignored: 1 });
+    const rreg = await roomReg(rroom);
+    if (!rreg) return jsonResp({ ok: true, ignored: 1 });
+    // 上报者必须本人就在这间房里（host 或 guest），防止场外人诬告
+    const myKey = String(u.key || auth.phone || '');
+    const inRoom = myKey && (rreg.hostKey === myKey || (rreg.guests || []).some((g: any) => g.key === myKey));
+    if (!inRoom) return jsonResp({ ok: false, msg: '不在该房间内' }, 403);
+    let tkey = '';
+    if (sslot <= 1) tkey = String(rreg.hostKey || '');
+    else {
+      const gg = (rreg.guests || []).find((g: any) => Number(g.slot) === sslot);
+      tkey = String((gg && gg.key) || '');
+    }
+    if (!tkey || tkey === ADMIN_KEY) return jsonResp({ ok: true, ignored: 1 });
+    const ur = await kv.get<any>(['user', tkey]);
+    if (!ur.value) return jsonResp({ ok: true, ignored: 1 });
+    const now = Date.now();
+    const rec: any = (await kv.get<any>(['cheat', tkey])).value || { score: 0, codes: {}, first: now, last: 0, notes: [] };
+    const lastAt = Number(rec.codes[c] || 0);
+    if (lastAt && now - lastAt < CHEAT_DEDUPE_MS) return jsonResp({ ok: true, dedup: 1 });
+    rec.codes[c] = now;
+    rec.score = Math.min(999, Number(rec.score || 0) + w);
+    rec.last = now;
+    rec.notes = Array.isArray(rec.notes) ? rec.notes : [];
+    rec.notes.unshift({
+      t: now, c,
+      by: String(u.key || u.phone || ''),
+      room: String(room || '').slice(0, 12),
+      d: String((detail && detail.msg) || '').slice(0, CHEAT_MAX_NOTE),
+    });
+    rec.notes = rec.notes.slice(0, 20);
+    await kv.set(['cheat', tkey], rec);
+
+    // 自动处罚：分数够高且信号种类够多，才自动限时封禁（只执行一次，误判可后台解封）
+    const kinds = Object.keys(rec.codes).length;
+    let auto = 0;
+    if (Number(rec.score) >= CHEAT_AUTO_SCORE && kinds >= CHEAT_AUTO_KINDS && !banInfo(ur.value).banned) {
+      const p = ur.value as Record<string, any>;
+      p.banned = 1;
+      p.banReason = '系统自动检测：外挂嫌疑';
+      p.banAt = now;
+      p.banUntil = now + CHEAT_AUTO_HOURS * 3600_000;
+      p.banHours = CHEAT_AUTO_HOURS;
+      p.banBy = 'anti-cheat';
+      await kv.set(['user', tkey], p);
+      auto = 1;
+    }
+    return jsonResp({ ok: true, score: rec.score, kinds, auto });
+  }
+
+  // GET /api/admin/cheaters —— 可疑玩家列表（管理员）
+  if (path === '/api/admin/cheaters' && req.method === 'GET') {
+    if (!isAdminUser(u)) return jsonResp({ ok: false, msg: '没有权限' }, 403);
+    const rows: any[] = [];
+    for await (const e of kv.list<any>({ prefix: ['cheat'] })) {
+      const r = e.value as any; if (!r) continue;
+      const key = String(e.key[1]);
+      const ur2 = await kv.get<any>(['user', key]);
+      const p = (ur2.value || {}) as Record<string, any>;
+      if (p.role === 'admin') continue;
+      const b = banInfo(p);
+      rows.push({
+        key, name: p.name || '', account: p.account || (key.startsWith('g_') ? key.slice(2) : key),
+        score: Number(r.score || 0), kinds: Object.keys(r.codes || {}).length,
+        codes: r.codes || {}, first: r.first || 0, last: r.last || 0,
+        notes: (r.notes || []).slice(0, 6), banned: b.banned ? 1 : 0,
+        banUntil: b.until || 0, banLeft: b.leftText || '', banReason: b.reason || '',
+      });
+    }
+    rows.sort((a, b) => b.score - a.score || b.last - a.last);
+    return jsonResp({ ok: true, list: rows, autoScore: CHEAT_AUTO_SCORE, autoKinds: CHEAT_AUTO_KINDS });
+  }
+
+  // POST /api/admin/cheat-clear { key } —— 清除误判记录（管理员）
+  if (path === '/api/admin/cheat-clear' && req.method === 'POST') {
+    if (!isAdminUser(u)) return jsonResp({ ok: false, msg: '没有权限' }, 403);
+    const { key } = await readBody(req);
+    const kk = String(key || '');
+    await kv.delete(['cheat', kk]);
+    return jsonResp({ ok: true });
+  }
+
+  // GET /api/admin/rooms —— 全服房间列表（含私有房，管理员可隐身进入观战）
+  if (path === '/api/admin/rooms' && req.method === 'GET') {
+    if (!isAdminUser(u)) return jsonResp({ ok: false, msg: '没有权限' }, 403);
+    const list: any[] = [];
+    const now = Date.now();
+    for await (const e of kv.list<any>({ prefix: ['room'] })) {
+      const reg = e.value as any; if (!reg) continue;
+      if (now - reg.ts > KV_ROOM_TTL) continue;
+      list.push({
+        room: reg.room, n: (reg.guests || []).length + 1, cap: reg.cap || 0,
+        mode: reg.mode || 'public', gm: reg.gm || 'coop',
+        created: reg.created || 0, age: Math.round((now - (reg.created || now)) / 1000),
+        host: reg.host || '',
+        members: await roomMembers(reg),   // 含账号：管理员观战时要认人
+      });
+    }
+    list.sort((a, b) => b.created - a.created);
+    // spectators：正在隐身观战的管理员连接数（本 isolate 视图，跨 isolate 只显示 0）
+    for (const r of list) {
+      let sp = 0;
+      for (const [, cc] of conns) if (cc.spectate === r.room) sp++;
+      r.spectators = sp;
+    }
+    return jsonResp({ ok: true, list });
+  }
+
   // POST /api/maps/delete { id } —— 从分享池删除地图（管理员，或该地图的发布者本人）
   if (path === '/api/maps/delete' && req.method === 'POST') {
     const { id } = await readBody(req);
@@ -2098,7 +2317,7 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
       return d.price > 0 && !d.box && !d.pass && !d.rank;   // 非卖品（盲盒/通行证/排行奖励）不进每日商店
     });
     const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
-    // 确定性洗牌：按 hash(date + id) 排序。皮肤、枪械各取 2 件，
+    // 确定性洗牌：按 hash(date + id) 排序。皮肤、枪械各取 2 件（池子不够就少取），
     // 免得某天刷出来的全是皮肤（纯按全池排序时实测会出现 4 连皮肤）。
     const byType = (t: 'skin' | 'gun', n: number) =>
       pool.filter((id) => SHOP_ITEMS[id].type === t)
@@ -2128,6 +2347,7 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     const next = new Date(date + 'T00:00:00+08:00').getTime() + 86400000;
     return jsonResp({
       ok: true, date, items: dailyShop(date), bought,
+      level: 1 + Math.floor((u.exp || 0) / 180),   // 给客户端判断「等级够不够」
       refreshIn: Math.max(0, Math.round((next - now) / 1000)),
     });
   }
