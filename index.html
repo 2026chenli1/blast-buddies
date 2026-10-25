@@ -9786,6 +9786,7 @@ function specStart(room) {
   G.boss = null;
   SPEC.on = true;
   SPEC.room = room;
+  document.body.dataset.spec = '1';
   document.getElementById('spec-room').textContent = room;
   document.getElementById('spec-hud').style.display = 'block';
   document.getElementById('hud').style.display = 'flex';
@@ -9817,6 +9818,7 @@ function specStop(msg) {
   SPEC.on = false;
   SPEC.room = '';
   SPEC.members = [];
+  delete document.body.dataset.spec;
   document.getElementById('spec-hud').style.display = 'none';
   G.mode = 'single';
   G.state = 'menu';
