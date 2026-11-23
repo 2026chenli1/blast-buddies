@@ -1578,8 +1578,60 @@ async function sendSmsCode(phone: string, code: string): Promise<{ ok: boolean; 
   return { ok: false, msg: st?.Message || '未知错误' };
 }
 
+// ==================== 课后帮（after-school）独立账户系统 ====================
+// 与游戏账户隔离：用 hk_ 前缀 KV key，账户存云端，跨设备可用。
+const HK_SESSION_TTL = 365 * 24 * 3600 * 1000;
+function hkHash(pwd: string, name: string): Promise<string> {
+  return hashPwd(pwd, 'hk::' + name);
+}
+async function hkAuthed(req: Request): Promise<string | null> {
+  const h = req.headers.get('authorization') || '';
+  const token = h.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  const r = await kv.get(['hk_session', token]);
+  if (!r.value) return null;
+  return r.value as string;
+}
+
 async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInfo): Promise<Response> {
   const path = url.pathname;
+
+  // ---------- 课后帮账户 API ----------
+  if (path === '/api/hk/register' && req.method === 'POST') {
+    const { name, pwd } = await readBody(req);
+    const nm = String(name || '').trim();
+    const pw = String(pwd || '');
+    if (nm.length < 1 || nm.length > 20) return jsonResp({ ok: false, msg: '姓名需 1-20 字' }, 400);
+    if (pw.length < 4) return jsonResp({ ok: false, msg: '密码至少 4 位' }, 400);
+    const ex = await kv.get(['hk_user', nm]);
+    if (ex.value) return jsonResp({ ok: false, msg: '这个名字已被注册，请直接登录' }, 409);
+    await kv.set(['hk_user', nm], { name: nm, pwdHash: await hkHash(pw, nm), created: Date.now() });
+    const token = crypto.randomUUID();
+    await kv.set(['hk_session', token], nm, { expireIn: HK_SESSION_TTL });
+    return jsonResp({ ok: true, token, name: nm });
+  }
+  if (path === '/api/hk/login' && req.method === 'POST') {
+    const { name, pwd } = await readBody(req);
+    const nm = String(name || '').trim();
+    const pw = String(pwd || '');
+    const r = await kv.get<any>(['hk_user', nm]);
+    if (!r.value) return jsonResp({ ok: false, msg: '没有找到这个账户，请先创建' }, 404);
+    if (r.value.pwdHash !== await hkHash(pw, nm)) return jsonResp({ ok: false, msg: '密码错误' }, 401);
+    const token = crypto.randomUUID();
+    await kv.set(['hk_session', token], nm, { expireIn: HK_SESSION_TTL });
+    return jsonResp({ ok: true, token, name: nm });
+  }
+  if (path === '/api/hk/me' && req.method === 'GET') {
+    const nm = await hkAuthed(req);
+    if (!nm) return jsonResp({ ok: false, msg: '未登录' }, 401);
+    return jsonResp({ ok: true, name: nm });
+  }
+  if (path === '/api/hk/logout' && req.method === 'POST') {
+    const h = req.headers.get('authorization') || '';
+    const token = h.replace(/^Bearer\s+/i, '').trim();
+    if (token) await kv.delete(['hk_session', token]);
+    return jsonResp({ ok: true });
+  }
 
   // POST /api/auth/send-code { phone } —— 生成 10 位验证码并（可选）发送短信
   if (path === '/api/auth/send-code' && req.method === 'POST') {
