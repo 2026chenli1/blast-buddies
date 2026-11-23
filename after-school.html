@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>课后帮 · 学习助手</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0d1b2a;
+    --bg2: #14263c;
+    --card: rgba(255,255,255,.06);
+    --border: rgba(255,255,255,.12);
+    --text: #eef4ff;
+    --muted: #9fb3c8;
+    --accent: #ffd166;
+    --accent2: #ffb703;
+    --cyan: #4cc9f0;
+    --green: #2ec4b6;
+    --red: #ff6b6b;
+  }
+  html, body {
+    width: 100%; min-height: 100%;
+    background: radial-gradient(ellipse at 20% 0%, #1b3350 0%, var(--bg) 55%);
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input { font-family: inherit; }
+  button { cursor: pointer; }
+  svg { display: block; }
+
+  /* ============ 登录 / 注册 ============ */
+  #auth-view {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  .auth-card {
+    width: min(420px, 94vw);
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 34px 28px 28px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45);
+    backdrop-filter: blur(6px);
+  }
+  .brand { display: flex; flex-direction: column; align-items: center; margin-bottom: 26px; }
+  .brand-icon {
+    width: 62px; height: 62px;
+    border-radius: 18px;
+    background: linear-gradient(145deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 22px rgba(255,183,3,.35);
+    margin-bottom: 14px;
+  }
+  .brand-title {
+    font-size: 28px; font-weight: 900; letter-spacing: 2px;
+    background: linear-gradient(90deg, #ffd166, #4cc9f0, #2ec4b6);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .brand-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .auth-tabs { display: flex; gap: 8px; margin-bottom: 22px; }
+  .auth-tab {
+    flex: 1; padding: 11px 0;
+    font-size: 15px; font-weight: 800;
+    color: var(--muted);
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: all .15s ease;
+  }
+  .auth-tab.active {
+    background: linear-gradient(180deg, var(--accent), var(--accent2));
+    color: var(--bg);
+    border-color: var(--accent2);
+    box-shadow: 0 4px 16px rgba(255,183,3,.3);
+  }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 7px; font-weight: 600; }
+  .field input {
+    width: 100%; padding: 12px 14px;
+    background: rgba(0,0,0,.28);
+    border: 1px solid rgba(255,255,255,.18);
+    border-radius: 10px;
+    color: var(--text); font-size: 15px;
+    outline: none; transition: border-color .15s ease;
+  }
+  .field input:focus { border-color: var(--accent); }
+  .field input::placeholder { color: #5f7690; }
+  .auth-msg { font-size: 13px; min-height: 18px; margin: 4px 0 10px; line-height: 1.5; }
+  .auth-msg.err { color: var(--red); }
+  .auth-msg.ok { color: var(--green); }
+  .btn-primary {
+    width: 100%; padding: 14px;
+    font-size: 16px; font-weight: 800; letter-spacing: 1px;
+    color: var(--bg);
+    background: linear-gradient(180deg, var(--accent), var(--accent2));
+    border: none; border-radius: 999px;
+    box-shadow: 0 5px 0 #d89b00, 0 10px 22px rgba(255,183,3,.3);
+    transition: transform .08s ease, box-shadow .08s ease;
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #d89b00, 0 14px 28px rgba(255,183,3,.4); }
+  .btn-primary:active { transform: translateY(3px); box-shadow: 0 2px 0 #d89b00; }
+  .auth-hint { text-align: center; font-size: 12px; color: #6c8399; margin-top: 18px; line-height: 1.6; }
+
+  /* ============ 主应用 ============ */
+  #app-view { display: none; min-height: 100vh; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* 侧栏 */
+  .sidebar {
+    width: 240px; flex: none;
+    background: linear-gradient(180deg, #12243a, #0c1928);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 22px 14px;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .side-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 22px; }
+  .side-brand .brand-icon { width: 40px; height: 40px; border-radius: 12px; margin: 0; }
+  .side-brand .brand-icon svg { width: 22px; height: 22px; }
+  .side-brand-name { font-size: 17px; font-weight: 900; letter-spacing: 1px; }
+  .user-chip {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px; margin-bottom: 24px;
+  }
+  .avatar {
+    width: 36px; height: 36px; flex: none;
+    border-radius: 50%;
+    background: linear-gradient(145deg, var(--cyan), var(--green));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 900; color: var(--bg);
+  }
+  .user-name { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .user-label { font-size: 11px; color: var(--muted); }
+
+  .side-title { font-size: 11px; color: #6c8399; padding: 0 10px; margin-bottom: 10px; letter-spacing: 1px; font-weight: 700; }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px;
+    width: 100%; padding: 13px 12px; margin-bottom: 6px;
+    background: transparent; border: 1px solid transparent;
+    border-radius: 12px;
+    color: var(--muted); font-size: 15px; font-weight: 700;
+    text-align: left; transition: all .15s ease;
+  }
+  .nav-item:hover { background: rgba(255,255,255,.06); color: var(--text); }
+  .nav-item.active {
+    background: rgba(255,209,102,.12);
+    border-color: rgba(255,209,102,.4);
+    color: var(--accent);
+  }
+  .nav-item .ico { width: 22px; height: 22px; flex: none; }
+  .nav-spacer { flex: 1; }
+  .side-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+  .logout-btn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 11px 12px;
+    background: rgba(255,107,107,.08);
+    border: 1px solid rgba(255,107,107,.25);
+    border-radius: 12px; color: #ff9b9b;
+    font-size: 14px; font-weight: 700;
+  }
+  .logout-btn:hover { background: rgba(255,107,107,.16); }
+
+  /* 主内容 */
+  .main { flex: 1; min-width: 0; padding: 34px clamp(18px, 4vw, 52px); }
+  .welcome { margin-bottom: 30px; }
+  .welcome h1 { font-size: clamp(24px, 3.5vw, 34px); font-weight: 900; letter-spacing: 1px; }
+  .welcome p { color: var(--muted); font-size: 14px; margin-top: 8px; line-height: 1.6; }
+  .welcome b { color: var(--accent); }
+
+  .subject-header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .subject-badge {
+    width: 52px; height: 52px; flex: none;
+    border-radius: 15px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .subject-header h2 { font-size: 24px; font-weight: 900; }
+  .subject-header p { font-size: 13px; color: var(--muted); margin-top: 3px; }
+
+  .panel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+    transition: transform .15s ease, border-color .15s ease;
+  }
+  .panel:hover { transform: translateY(-3px); border-color: rgba(255,255,255,.24); }
+  .panel-ico {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 14px;
+  }
+  .panel h3 { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
+  .panel p { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .tag {
+    display: inline-block; margin-top: 14px;
+    font-size: 11px; font-weight: 700;
+    padding: 4px 10px; border-radius: 999px;
+    background: rgba(76,201,240,.14); color: var(--cyan);
+  }
+  .tag.soon { background: rgba(159,179,200,.12); color: var(--muted); }
+
+  /* 底部科目快捷入口（首页） */
+  .quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .quick-card {
+    text-align: left; padding: 24px 20px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 18px; color: var(--text);
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  }
+  .quick-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,.3); box-shadow: 0 14px 30px rgba(0,0,0,.3); }
+  .quick-card .panel-ico { margin-bottom: 16px; width: 50px; height: 50px; }
+  .quick-card h3 { font-size: 18px; font-weight: 800; }
+  .quick-card p { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  /* 移动端 */
+  .mobile-top { display: none; }
+  @media (max-width: 720px) {
+    .sidebar {
+      position: fixed; left: 0; top: 0; bottom: 0; z-index: 40;
+      transform: translateX(-100%); transition: transform .22s ease;
+      width: 250px; box-shadow: 8px 0 30px rgba(0,0,0,.5);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .scrim { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 35; }
+    .scrim.show { display: block; }
+    .mobile-top {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px;
+      background: linear-gradient(180deg, #12243a, #0c1928);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 20;
+    }
+    .menu-btn {
+      width: 40px; height: 40px; flex: none;
+      background: rgba(255,255,255,.06); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mobile-top .mt-title { font-size: 16px; font-weight: 900; }
+    .main { padding: 24px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ 登录 / 注册 ============ -->
+<div id="auth-view">
+  <div class="auth-card">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0d1b2a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div class="brand-title">课后帮</div>
+      <div class="brand-sub">你的课后学习小助手</div>
+    </div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" type="button">登录</button>
+      <button class="auth-tab" id="tab-register" type="button">创建账户</button>
+    </div>
+
+    <form id="auth-form" autocomplete="off">
+      <div class="field">
+        <label for="name-input">姓名</label>
+        <input id="name-input" type="text" placeholder="请输入你的姓名" maxlength="20">
+      </div>
+      <div class="field">
+        <label for="pass-input">密码</label>
+        <input id="pass-input" type="password" placeholder="请输入密码" maxlength="40">
+      </div>
+      <div class="field" id="confirm-field" style="display:none;">
+        <label for="confirm-input">确认密码</label>
+        <input id="confirm-input" type="password" placeholder="再输入一次密码" maxlength="40">
+      </div>
+      <div class="auth-msg" id="auth-msg"></div>
+      <button class="btn-primary" id="auth-submit" type="submit">登录</button>
+    </form>
+    <div class="auth-hint" id="auth-hint">还没有账户？点上面的「创建账户」，输入姓名和密码即可。</div>
+  </div>
+</div>
+
+<!-- ============ 主应用 ============ -->
+<div id="app-view">
+  <div class="mobile-top">
+    <button class="menu-btn" id="menu-btn" type="button" aria-label="菜单">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="mt-title">课后帮</div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="side-brand">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d1b2a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <div class="side-brand-name">课后帮</div>
+      </div>
+
+      <div class="user-chip">
+        <div class="avatar" id="avatar">学</div>
+        <div style="min-width:0;">
+          <div class="user-name" id="side-name">同学</div>
+          <div class="user-label">已登录</div>
+        </div>
+      </div>
+
+      <div class="side-title">科目</div>
+      <button class="nav-item" data-subject="home" type="button">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-7h6v7"/></svg>
+        <span>首页</span>
+      </button>
+      <button class="nav-item" data-subject="chinese" type="button">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M9 7h7M9 11h5"/></svg>
+        <span>语文</span>
+      </button>
+      <button class="nav-item" data-subject="math" type="button">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 7h8M8 12h2m4 0h2M8 17h2m4 0h2M10 10l4 6m0-6-4 6"/></svg>
+        <span>数学</span>
+      </button>
+      <button class="nav-item" data-subject="english" type="button">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"/></svg>
+        <span>英语</span>
+      </button>
+
+      <div class="side-foot">
+        <button class="logout-btn" id="logout-btn" type="button">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>
+          <span>退出登录</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main" id="main"></main>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- 账户系统（localStorage，参考 Blast Buddies 本地存储思路） ----------
+  var USERS_KEY = 'houkebang_users_v1';
+  var SESSION_KEY = 'houkebang_session_v1';
+
+  function loadUsers() {
+    try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}'); }
+    catch (e) { return {}; }
+  }
+  function saveUsers(u) { localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
+  function hash(s) {
+    // 简单哈希，仅用于本地演示（非安全加密）
+    var h = 0, i;
+    for (i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return 'h_' + (h >>> 0).toString(36);
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var authView = $('auth-view'), appView = $('app-view');
+  var form = $('auth-form'), msg = $('auth-msg');
+  var nameInput = $('name-input'), passInput = $('pass-input'), confirmInput = $('confirm-input');
+  var confirmField = $('confirm-field'), submitBtn = $('auth-submit');
+  var tabLogin = $('tab-login'), tabRegister = $('tab-register');
+  var authHint = $('auth-hint');
+  var mode = 'login'; // 'login' | 'register'
+
+  function setMode(m) {
+    mode = m;
+    var reg = m === 'register';
+    tabLogin.classList.toggle('active', !reg);
+    tabRegister.classList.toggle('active', reg);
+    confirmField.style.display = reg ? '' : 'none';
+    submitBtn.textContent = reg ? '创建账户' : '登录';
+    authHint.textContent = reg
+      ? '已有账户？点「登录」直接进入。账户保存在本机浏览器。'
+      : '还没有账户？点上面的「创建账户」，输入姓名和密码即可。';
+    msg.textContent = ''; msg.className = 'auth-msg';
+  }
+  tabLogin.addEventListener('click', function () { setMode('login'); });
+  tabRegister.addEventListener('click', function () { setMode('register'); });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = nameInput.value.trim();
+    var pass = passInput.value;
+    var users = loadUsers();
+
+    if (!name) { showMsg('请输入姓名', 'err'); return; }
+    if (!pass) { showMsg('请输入密码', 'err'); return; }
+
+    if (mode === 'register') {
+      if (pass.length < 4) { showMsg('密码至少 4 位', 'err'); return; }
+      if (pass !== confirmInput.value) { showMsg('两次密码不一致', 'err'); return; }
+      if (users[name]) { showMsg('这个名字已被注册，请直接登录', 'err'); return; }
+      users[name] = hash(pass);
+      saveUsers(users);
+      showMsg('账户创建成功，正在进入…', 'ok');
+      setTimeout(function () { enterApp(name); }, 400);
+    } else {
+      if (!users[name]) { showMsg('没有找到这个账户，请先创建', 'err'); return; }
+      if (users[name] !== hash(pass)) { showMsg('密码错误', 'err'); return; }
+      showMsg('登录成功，正在进入…', 'ok');
+      setTimeout(function () { enterApp(name); }, 300);
+    }
+  });
+
+  function showMsg(text, cls) { msg.textContent = text; msg.className = 'auth-msg ' + (cls || ''); }
+
+  // ---------- 进入 / 退出 ----------
+  var currentUser = '';
+  function enterApp(name) {
+    currentUser = name;
+    localStorage.setItem(SESSION_KEY, name);
+    authView.style.display = 'none';
+    appView.style.display = 'block';
+    $('side-name').textContent = name;
+    $('avatar').textContent = name.charAt(0) || '学';
+    passInput.value = ''; confirmInput.value = '';
+    showSubject('home');
+  }
+  function logout() {
+    localStorage.removeItem(SESSION_KEY);
+    currentUser = '';
+    appView.style.display = 'none';
+    authView.style.display = 'flex';
+    setMode('login');
+    nameInput.value = '';
+    closeSidebar();
+  }
+  $('logout-btn').addEventListener('click', logout);
+
+  // ---------- 科目内容 ----------
+  var SUBJECTS = {
+    chinese: {
+      name: '语文', color: '#ff6b9d', bg: 'rgba(255,107,157,.16)', desc: '阅读 · 写作 · 古诗文',
+      panels: [
+        { t: '阅读理解', d: '掌握记叙文、说明文的阅读方法，提升理解与概括能力。', tag: '即将上线', soon: true },
+        { t: '写作训练', d: '从选材到结构，一步步写出有内容的作文。', tag: '即将上线', soon: true },
+        { t: '古诗文', d: '文言实词、名句积累与古诗词鉴赏。', tag: '即将上线', soon: true }
+      ]
+    },
+    math: {
+      name: '数学', color: '#4cc9f0', bg: 'rgba(76,201,240,.16)', desc: '基础 · 练习 · 思维',
+      panels: [
+        { t: '基础知识', d: '梳理课本核心概念与公式，打牢基础。', tag: '即将上线', soon: true },
+        { t: '习题练习', d: '分级题目训练，即时巩固所学内容。', tag: '即将上线', soon: true },
+        { t: '思维拓展', d: '趣味数学与拓展题，锻炼解题思维。', tag: '即将上线', soon: true }
+      ]
+    },
+    english: {
+      name: '英语', color: '#2ec4b6', bg: 'rgba(46,196,182,.16)', desc: '单词 · 语法 · 听说',
+      panels: [
+        { t: '单词积累', d: '按单元背诵核心词汇，配合例句记忆。', tag: '即将上线', soon: true },
+        { t: '语法讲解', d: '时态、句型等语法点系统讲解与练习。', tag: '即将上线', soon: true },
+        { t: '听说训练', d: '听力与口语练习，提升实际运用能力。', tag: '即将上线', soon: true }
+      ]
+    }
+  };
+
+  function showSubject(key) {
+    var main = $('main');
+    // 高亮导航
+    var items = document.querySelectorAll('.nav-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.toggle('active', items[i].getAttribute('data-subject') === key);
+    }
+    closeSidebar();
+
+    if (key === 'home') {
+      main.innerHTML =
+        '<div class="welcome">' +
+          '<h1>你好，<b>' + escapeHtml(currentUser) + '</b></h1>' +
+          '<p>欢迎来到课后帮，选择一个科目开始今天的学习吧。</p>' +
+        '</div>' +
+        '<div class="quick-grid">' +
+          quickCard('chinese') + quickCard('math') + quickCard('english') +
+        '</div>';
+      bindQuickCards();
+      return;
+    }
+
+    var s = SUBJECTS[key];
+    if (!s) return;
+    var panelsHtml = '';
+    s.panels.forEach(function (p) {
+      panelsHtml +=
+        '<div class="panel">' +
+          '<div class="panel-ico" style="background:' + s.bg + '">' +
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>' +
+          '</div>' +
+          '<h3>' + p.t + '</h3><p>' + p.d + '</p>' +
+          '<span class="tag' + (p.soon ? ' soon' : '') + '">' + p.tag + '</span>' +
+        '</div>';
+    });
+    main.innerHTML =
+      '<div class="welcome"><p>当前科目</p></div>' +
+      '<div class="subject-header">' +
+        '<div class="subject-badge" style="background:' + s.bg + '">' +
+          '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>' +
+        '</div>' +
+        '<div><h2>' + s.name + '</h2><p>' + s.desc + '</p></div>' +
+      '</div>' +
+      '<div class="panel-grid">' + panelsHtml + '</div>';
+  }
+
+  function quickCard(key) {
+    var s = SUBJECTS[key];
+    return '<button class="quick-card" data-go="' + key + '" type="button">' +
+      '<div class="panel-ico" style="background:' + s.bg + '">' +
+        '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>' +
+      '</div>' +
+      '<h3>' + s.name + '</h3><p>' + s.desc + '</p>' +
+    '</button>';
+  }
+  function bindQuickCards() {
+    var cards = document.querySelectorAll('[data-go]');
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].addEventListener('click', function () { showSubject(this.getAttribute('data-go')); });
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ---------- 侧栏导航 ----------
+  var navItems = document.querySelectorAll('.nav-item');
+  for (var i = 0; i < navItems.length; i++) {
+    navItems[i].addEventListener('click', function () { showSubject(this.getAttribute('data-subject')); });
+  }
+  var sidebar = $('sidebar'), scrim = $('scrim');
+  function openSidebar() { sidebar.classList.add('open'); scrim.classList.add('show'); }
+  function closeSidebar() { sidebar.classList.remove('open'); scrim.classList.remove('show'); }
+  $('menu-btn').addEventListener('click', openSidebar);
+  scrim.addEventListener('click', closeSidebar);
+
+  // ---------- 会话恢复 ----------
+  var saved = localStorage.getItem(SESSION_KEY);
+  if (saved && loadUsers()[saved]) { enterApp(saved); }
+})();
+</script>
+</body>
+</html>
