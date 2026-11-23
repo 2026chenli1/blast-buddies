@@ -442,32 +442,11 @@
   }
   $('logout-btn').addEventListener('click', logout);
 
-  // ---------- 科目内容 ----------
+  // ---------- 科目（内容留空，只显示科目名） ----------
   var SUBJECTS = {
-    chinese: {
-      name: '语文', color: '#ff6b9d', bg: 'rgba(255,107,157,.16)', desc: '阅读 · 写作 · 古诗文',
-      panels: [
-        { t: '阅读理解', d: '掌握记叙文、说明文的阅读方法，提升理解与概括能力。', tag: '即将上线', soon: true },
-        { t: '写作训练', d: '从选材到结构，一步步写出有内容的作文。', tag: '即将上线', soon: true },
-        { t: '古诗文', d: '文言实词、名句积累与古诗词鉴赏。', tag: '即将上线', soon: true }
-      ]
-    },
-    math: {
-      name: '数学', color: '#4cc9f0', bg: 'rgba(76,201,240,.16)', desc: '基础 · 练习 · 思维',
-      panels: [
-        { t: '基础知识', d: '梳理课本核心概念与公式，打牢基础。', tag: '即将上线', soon: true },
-        { t: '习题练习', d: '分级题目训练，即时巩固所学内容。', tag: '即将上线', soon: true },
-        { t: '思维拓展', d: '趣味数学与拓展题，锻炼解题思维。', tag: '即将上线', soon: true }
-      ]
-    },
-    english: {
-      name: '英语', color: '#2ec4b6', bg: 'rgba(46,196,182,.16)', desc: '单词 · 语法 · 听说',
-      panels: [
-        { t: '单词积累', d: '按单元背诵核心词汇，配合例句记忆。', tag: '即将上线', soon: true },
-        { t: '语法讲解', d: '时态、句型等语法点系统讲解与练习。', tag: '即将上线', soon: true },
-        { t: '听说训练', d: '听力与口语练习，提升实际运用能力。', tag: '即将上线', soon: true }
-      ]
-    }
+    chinese: { name: '语文', color: '#ff6b9d', bg: 'rgba(255,107,157,.16)' },
+    math:    { name: '数学', color: '#4cc9f0', bg: 'rgba(76,201,240,.16)' },
+    english: { name: '英语', color: '#2ec4b6', bg: 'rgba(46,196,182,.16)' }
   };
 
   function showSubject(key) {
@@ -494,26 +473,14 @@
 
     var s = SUBJECTS[key];
     if (!s) return;
-    var panelsHtml = '';
-    s.panels.forEach(function (p) {
-      panelsHtml +=
-        '<div class="panel">' +
-          '<div class="panel-ico" style="background:' + s.bg + '">' +
-            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>' +
-          '</div>' +
-          '<h3>' + p.t + '</h3><p>' + p.d + '</p>' +
-          '<span class="tag' + (p.soon ? ' soon' : '') + '">' + p.tag + '</span>' +
-        '</div>';
-    });
+    // 科目内页留空：只显示科目名，其余为空白
     main.innerHTML =
-      '<div class="welcome"><p>当前科目</p></div>' +
       '<div class="subject-header">' +
         '<div class="subject-badge" style="background:' + s.bg + '">' +
           '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>' +
         '</div>' +
-        '<div><h2>' + s.name + '</h2><p>' + s.desc + '</p></div>' +
-      '</div>' +
-      '<div class="panel-grid">' + panelsHtml + '</div>';
+        '<div><h2>' + s.name + '</h2></div>' +
+      '</div>';
   }
 
   function quickCard(key) {
@@ -522,7 +489,7 @@
       '<div class="panel-ico" style="background:' + s.bg + '">' +
         '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg>' +
       '</div>' +
-      '<h3>' + s.name + '</h3><p>' + s.desc + '</p>' +
+      '<h3>' + s.name + '</h3>' +
     '</button>';
   }
   function bindQuickCards() {
