@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>课后帮 · 学习助手</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
@@ -201,6 +202,48 @@
     text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; line-height: 1.8;
     border: 1px dashed var(--border); border-radius: 14px; margin-top: 20px;
   }
+
+  /* 拍照 / OCR / AI */
+  .capture-zone {
+    border: 2px dashed rgba(255,209,102,.4); border-radius: 16px;
+    padding: 34px 20px; text-align: center; cursor: pointer;
+    background: rgba(255,209,102,.04); transition: all .15s ease;
+  }
+  .capture-zone:hover { background: rgba(255,209,102,.09); border-color: var(--accent); }
+  .capture-zone .cam-ico { margin: 0 auto 14px; width: 56px; height: 56px; border-radius: 16px; background: rgba(255,209,102,.15); display: flex; align-items: center; justify-content: center; }
+  .capture-zone h3 { font-size: 17px; font-weight: 800; margin-bottom: 6px; }
+  .capture-zone p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .capture-zone input[type=file] { display: none; }
+  .preview-img { max-width: 100%; max-height: 260px; border-radius: 12px; display: block; margin: 14px auto; border: 1px solid var(--border); }
+  .progress-box { margin: 14px 0; }
+  .progress-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 8px; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); width: 0%; transition: width .2s ease; border-radius: 999px; }
+  .progress-label { font-size: 13px; color: var(--muted); }
+  .result-box { background: rgba(46,196,182,.08); border: 1px solid rgba(46,196,182,.28); border-radius: 12px; padding: 16px; margin-top: 14px; }
+  .result-box .lbl { font-size: 12px; font-weight: 800; color: #7ee0c0; margin-bottom: 6px; letter-spacing: .5px; }
+  .result-box .val { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .ocr-edit { width: 100%; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.18); border-radius: 10px; color: var(--text); font-size: 14px; padding: 10px 12px; outline: none; resize: vertical; }
+  .ocr-edit:focus { border-color: var(--accent); }
+  .q-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); flex: none; cursor: pointer; }
+
+  /* AI 问答对话 */
+  .chat-wrap { max-width: 760px; }
+  .chat-select-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .chat-select-row select { flex: 1; min-width: 200px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.18); border-radius: 10px; color: var(--text); font-size: 14px; padding: 11px 12px; outline: none; }
+  .chat-msgs { display: flex; flex-direction: column; gap: 14px; margin: 18px 0; }
+  .msg { max-width: 88%; padding: 13px 16px; border-radius: 14px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .msg.me { align-self: flex-end; background: linear-gradient(145deg, #ffd166, #ffb703); color: var(--bg); border-bottom-right-radius: 4px; font-weight: 600; }
+  .msg.ai { align-self: flex-start; background: rgba(76,201,240,.1); border: 1px solid rgba(76,201,240,.28); border-bottom-left-radius: 4px; }
+  .msg.sys { align-self: center; background: rgba(255,255,255,.05); border: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .chat-input-row { display: flex; gap: 10px; align-items: flex-end; }
+  .chat-input-row textarea { flex: 1; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; color: var(--text); font-size: 14px; padding: 12px; outline: none; resize: vertical; min-height: 48px; }
+  .chat-input-row textarea:focus { border-color: var(--accent); }
+  .quick-ask { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .quick-ask button { font-size: 12px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid var(--border); color: var(--muted); }
+  .quick-ask button:hover { color: var(--accent); border-color: rgba(255,209,102,.4); }
+  .thinking { color: var(--muted); font-size: 13px; }
+  .thinking::after { content: ''; animation: dots 1.2s steps(4,end) infinite; }
+  @keyframes dots { 0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'} }
 
   /* 问答 */
   .quiz-card { max-width: 720px; }
@@ -453,8 +496,8 @@
         '<p>整理错题、反复问答，再用效果图看看自己的掌握情况。</p>' +
       '</div>' +
       '<div class="quick-grid">' +
-        quickCard('organize', '#ffd166', 'rgba(255,209,102,.14)', 'M4 4h16v16H4z|M8 9h8M8 13h8M8 17h5', '错题整理', '录入并管理你的错题') +
-        quickCard('quiz', '#4cc9f0', 'rgba(76,201,240,.14)', 'M12 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z|M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2-2.4 3.8|M12 17h.01', '错题问答', '随机抽题，检验掌握程度') +
+        quickCard('organize', '#ffd166', 'rgba(255,209,102,.14)', 'M4 4h16v16H4z|M8 9h8M8 13h8M8 17h5', '错题整理', '拍照识题，AI 自动给答案') +
+        quickCard('quiz', '#4cc9f0', 'rgba(76,201,240,.14)', 'M12 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z|M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2-2.4 3.8|M12 17h.01', '错题问答', '选一道题，直接问 AI') +
         quickCard('chart', '#2ec4b6', 'rgba(46,196,182,.14)', 'M12 2 2 20h20L12 2Z|M12 2v9M2 20l10-9 10 9', '学习效果图', '三角形雷达图看三科掌握') +
       '</div>';
     bindQuick();
@@ -474,49 +517,160 @@
     }
   }
 
-  // ---------- 错题整理 ----------
+  // ---------- AI 调用（免 Key，前端直连 Pollinations） ----------
+  function aiAsk(prompt) {
+    var url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt);
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error('AI 服务暂时不可用 (' + r.status + ')');
+      return r.text();
+    }).then(function (t) {
+      return t.replace(/\n{3,}/g, '\n\n').trim();
+    });
+  }
+
+  // ---------- 错题整理（拍照 → OCR 识题 → AI 给答案） ----------
+  var ocrBusy = false;
   function renderOrganize(main) {
     var opts = '';
     for (var k in SUBJECTS) { opts += '<option value="' + k + '">' + SUBJECTS[k].name + '</option>'; }
     main.innerHTML =
-      '<div class="welcome"><h1>错题整理</h1><p>把做错的题记下来，方便随时复习。</p></div>' +
+      '<div class="welcome"><h1>错题整理</h1><p>拍下错题，AI 自动识别题目并给出答案，一起存到本地。</p></div>' +
       '<div class="card">' +
-        '<div class="section-title">添加错题</div>' +
-        '<div class="section-sub">选择科目，写下题目和正确答案。</div>' +
-        '<div class="form-grid">' +
-          '<div class="form-row"><label>科目</label><select id="q-subject">' + opts + '</select></div>' +
-          '<div class="form-row"><label>掌握状态</label><select id="q-mastered"><option value="0">未掌握</option><option value="1">已掌握</option></select></div>' +
+        '<div class="section-title">拍照添加错题</div>' +
+        '<div class="section-sub">拍照或从相册选图 → 自动识别题目 → AI 生成答案。</div>' +
+        '<div class="capture-zone" id="capture-zone">' +
+          '<div class="cam-ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffd166" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg></div>' +
+          '<h3>点这里拍照 / 上传图片</h3>' +
+          '<p>把错题拍清楚，AI 会识别文字并解答<br>图片、题目、答案都会保存在本机</p>' +
+          '<input type="file" id="q-file" accept="image/*" capture="environment">' +
         '</div>' +
-        '<div class="form-row"><label>题目</label><textarea id="q-text" rows="3" placeholder="例如：解方程 2x + 3 = 11"></textarea></div>' +
-        '<div class="form-row"><label>正确答案 / 解析</label><textarea id="q-answer" rows="2" placeholder="例如：x = 4"></textarea></div>' +
-        '<button class="btn gold" id="q-add" type="button">添加错题</button>' +
-        '<div class="inline-msg" id="q-msg"></div>' +
+        '<div id="ocr-stage" style="display:none;">' +
+          '<div class="progress-box"><div class="progress-label" id="ocr-label">准备中…</div><div class="progress-bar"><div class="progress-fill" id="ocr-fill"></div></div></div>' +
+          '<img id="ocr-preview" class="preview-img" alt="题目图片">' +
+          '<div class="form-row" style="margin-top:14px;"><label>识别到的题目（可修改）</label><textarea id="q-text" class="ocr-edit" rows="3" placeholder="识别结果会显示在这里"></textarea></div>' +
+          '<div class="form-grid">' +
+            '<div class="form-row"><label>科目</label><select id="q-subject">' + opts + '</select></div>' +
+            '<div class="form-row"><label>掌握状态</label><select id="q-mastered"><option value="0">未掌握</option><option value="1">已掌握</option></select></div>' +
+          '</div>' +
+          '<button class="btn gold" id="q-add" type="button" style="display:none;">AI 解答并保存</button>' +
+          '<div class="inline-msg" id="q-msg"></div>' +
+        '</div>' +
       '</div>' +
       '<div id="q-list-wrap"></div>';
-    $('q-add').addEventListener('click', function () {
-      var text = $('q-text').value.trim(), answer = $('q-answer').value.trim();
-      if (!text) { qmsg('请填写题目', 'err'); return; }
-      var arr = getQ();
-      arr.unshift({
-        id: 'q' + Date.now() + Math.floor(Math.random() * 1000),
-        subject: $('q-subject').value,
-        text: text, answer: answer,
-        mastered: $('q-mastered').value === '1',
-        tries: 0, correct: 0
-      });
-      saveQ(arr);
-      $('q-text').value = ''; $('q-answer').value = '';
-      qmsg('已添加', 'ok');
-      renderQList();
+
+    $('capture-zone').addEventListener('click', function () { $('q-file').click(); });
+    $('q-file').addEventListener('change', function (e) {
+      var f = e.target.files[0];
+      if (f) handleImage(f);
     });
     renderQList();
   }
+
+  // 处理图片：压缩 → 预览 → OCR → 显示编辑框
+  function handleImage(file) {
+    if (ocrBusy) return;
+    ocrBusy = true;
+    var stage = $('ocr-stage'); stage.style.display = 'block';
+    setProgress('读取图片…', 5);
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      var img = new Image();
+      img.onload = function () {
+        // 压缩到最长边 1200，控制本地存储体积
+        var maxSide = 1200, scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        var dataUrl = c.toDataURL('image/jpeg', 0.7);
+        $('ocr-preview').src = dataUrl;
+        window.__curImage__ = dataUrl;
+        runOCR(dataUrl);
+      };
+      img.onerror = function () { ocrBusy = false; setProgress('图片读取失败', 0); };
+      img.src = ev.target.result;
+    };
+    reader.onerror = function () { ocrBusy = false; setProgress('图片读取失败', 0); };
+    reader.readAsDataURL(file);
+  }
+
+  function setProgress(label, pct) {
+    var l = $('ocr-label'), f = $('ocr-fill');
+    if (l) l.textContent = label;
+    if (f) f.style.width = pct + '%';
+  }
+
+  function runOCR(dataUrl) {
+    if (typeof Tesseract === 'undefined') {
+      // OCR 库没加载（离线等），让用户手输题目
+      ocrBusy = false;
+      setProgress('OCR 库未加载，请手动输入题目', 100);
+      $('q-text').value = '';
+      $('q-add').style.display = 'inline-block';
+      return;
+    }
+    setProgress('正在识别题目文字…（首次需下载中文包，稍等）', 15);
+    Tesseract.recognize(dataUrl, 'chi_sim+eng', {
+      logger: function (m) {
+        if (m.status === 'recognizing text') setProgress('正在识别题目… ' + Math.round(m.progress * 100) + '%', 15 + Math.round(m.progress * 60));
+      }
+    }).then(function (res) {
+      var text = (res.data.text || '').replace(/\n{2,}/g, '\n').trim();
+      $('q-text').value = text;
+      ocrBusy = false;
+      setProgress('识别完成，可修改题目后点「AI 解答并保存」', 100);
+      $('q-add').style.display = 'inline-block';
+      $('q-add').onclick = function () { saveWithAI(text); };
+    }).catch(function (err) {
+      ocrBusy = false;
+      setProgress('识别失败，请手动输入题目', 100);
+      $('q-add').style.display = 'inline-block';
+      $('q-add').onclick = function () { saveWithAI($('q-text').value.trim()); };
+    });
+  }
+
+  // AI 生成答案并保存（图片+题目+答案一起存本地）
+  function saveWithAI(fallbackText) {
+    var text = ($('q-text').value || '').trim() || fallbackText;
+    if (!text) { qmsg('请填写或识别题目', 'err'); return; }
+    var btn = $('q-add'); btn.disabled = true; btn.textContent = 'AI 正在解答…';
+    qmsg('AI 正在生成答案…', '');
+    aiAsk('请解答这道题，直接给出答案和简要步骤，用中文回答。题目：' + text + '\n要求：简洁，不要复述题目。')
+      .then(function (answer) {
+        commitQuestion(text, answer);
+      })
+      .catch(function (err) {
+        // AI 失败也允许保存（答案为空，之后可问 AI）
+        commitQuestion(text, '（AI 暂时不可用，可到「错题问答」再问一次）');
+      });
+  }
+
+  function commitQuestion(text, answer) {
+    var arr = getQ();
+    arr.unshift({
+      id: 'q' + Date.now() + Math.floor(Math.random() * 1000),
+      subject: $('q-subject').value,
+      text: text, answer: answer,
+      image: window.__curImage__ || '',
+      chats: [],
+      mastered: $('q-mastered').value === '1',
+      tries: 0, correct: 0
+    });
+    saveQ(arr);
+    // 重置表单
+    $('q-text').value = ''; $('ocr-preview').src = '';
+    $('ocr-stage').style.display = 'none';
+    $('q-add').style.display = 'none'; $('q-add').disabled = false; $('q-add').textContent = 'AI 解答并保存';
+    window.__curImage__ = '';
+    setProgress('', 0);
+    renderQList();
+  }
+
   function qmsg(t, c) { var el = $('q-msg'); if (el) { el.textContent = t; el.className = 'inline-msg ' + (c || ''); } }
   function renderQList() {
     var wrap = $('q-list-wrap'); if (!wrap) return;
     var arr = getQ();
     if (!arr.length) {
-      wrap.innerHTML = '<div class="empty">还没有错题。<br>在上面添加几道，就能开始问答和生成效果图了。</div>';
+      wrap.innerHTML = '<div class="empty">还没有错题。<br>在上面拍照添加一道，就能开始问答和生成效果图了。</div>';
       return;
     }
     var html = '<div class="section-title" style="margin-top:26px;">错题列表 <span style="color:var(--muted);font-size:13px;font-weight:600;">共 ' + arr.length + ' 道</span></div><div class="q-list">';
@@ -524,16 +678,18 @@
       var s = SUBJECTS[q.subject] || SUBJECTS.chinese;
       html += '<div class="q-item' + (q.mastered ? ' mastered' : '') + '">' +
         '<div class="q-top">' +
+          (q.image ? '<img class="q-thumb" src="' + q.image + '" data-act="zoom" data-id="' + q.id + '" alt="题目">' : '') +
           '<span class="subj-tag ' + s.cls + '">' + s.name + '</span>' +
           (q.mastered ? '<span class="master-tag">已掌握</span>' : '') +
           '<div class="q-actions">' +
+            '<button class="btn sm" data-act="ask" data-id="' + q.id + '" type="button">问 AI</button>' +
             '<button class="btn sm ' + (q.mastered ? '' : 'green') + '" data-act="toggle" data-id="' + q.id + '" type="button">' + (q.mastered ? '取消掌握' : '标记掌握') + '</button>' +
             '<button class="btn sm danger" data-act="del" data-id="' + q.id + '" type="button">删除</button>' +
           '</div>' +
         '</div>' +
         '<div class="q-text">' + escapeHtml(q.text) + '</div>' +
-        (q.answer ? '<div class="q-ans"><b>答案：</b>' + escapeHtml(q.answer) + '</div>' : '') +
-        (q.tries ? '<div class="q-ans">答过 ' + q.tries + ' 次 · 答对 ' + q.correct + ' 次</div>' : '') +
+        (q.answer ? '<div class="q-ans"><b>AI 答案：</b>' + fmtAI(escapeHtml(q.answer)) + '</div>' : '') +
+        ((q.chats && q.chats.length) ? '<div class="q-ans">已追问 ' + q.chats.length + ' 次</div>' : '') +
       '</div>';
     });
     html += '</div>';
@@ -542,6 +698,12 @@
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener('click', function () {
         var id = this.getAttribute('data-id'), act = this.getAttribute('data-act'), arr = getQ();
+        if (act === 'ask') { openChatWith(id); return; }
+        if (act === 'zoom') {
+          var im = null; for (var z = 0; z < arr.length; z++) { if (arr[z].id === id) { im = arr[z].image; break; } }
+          if (im) { var w = window.open(); if (w) w.document.write('<title>题目图片</title><body style="margin:0;background:#0d1b2a;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="' + im + '" style="max-width:100%"></body>'); }
+          return;
+        }
         if (act === 'del') { arr = arr.filter(function (x) { return x.id !== id; }); }
         else { for (var j = 0; j < arr.length; j++) { if (arr[j].id === id) { arr[j].mastered = !arr[j].mastered; break; } } }
         saveQ(arr); renderQList();
@@ -549,68 +711,106 @@
     }
   }
 
-  // ---------- 错题问答 ----------
-  var quizQueue = [], quizPos = 0, quizShowAns = false, quizCorrect = 0;
+  // ---------- 错题问答（问 AI） ----------
+  var activeChatId = ''; // 当前对话关联的错题 id，空=自由提问
   function renderQuiz(main) {
     var all = getQ();
-    var pending = all.filter(function (q) { return !q.mastered; });
-    if (!all.length) {
-      main.innerHTML = '<div class="welcome"><h1>错题问答</h1></div>' +
-        '<div class="empty">还没有错题可答。<br>先去「错题整理」添加几道吧。<br><br><button class="btn gold" id="go-org" type="button">去添加错题</button></div>';
-      $('go-org').addEventListener('click', function () { showView('organize'); });
-      return;
-    }
-    if (!pending.length) pending = all.slice(); // 全部掌握时允许再练
-    if (!quizQueue.length || quizQueue[0] !== currentUser) {
-      // 用用户名标记队列归属，切换用户时重建
-      quizQueue = shuffle(pending.map(function (q) { return q.id; }));
-      quizQueue.unshift(currentUser);
-      quizPos = 0; quizCorrect = 0; quizShowAns = false;
-    }
-    drawQuiz(main);
-  }
-  function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
-  function drawQuiz(main) {
-    var ids = quizQueue.slice(1);
-    if (quizPos >= ids.length) {
-      main.innerHTML = '<div class="welcome"><h1>错题问答</h1></div>' +
-        '<div class="card quiz-card"><div class="section-title">本轮完成</div>' +
-        '<p style="color:var(--muted);line-height:1.8;margin:14px 0;">共答 ' + ids.length + ' 题，答对 <b style="color:var(--green);">' + quizCorrect + '</b> 题。</p>' +
-        '<div class="quiz-btns"><button class="btn gold" id="quiz-restart" type="button">再来一轮</button><button class="btn" id="quiz-chart" type="button">看看效果图</button></div></div>';
-      $('quiz-restart').addEventListener('click', function () { quizQueue = []; showView('quiz'); });
-      $('quiz-chart').addEventListener('click', function () { showView('chart'); });
-      return;
-    }
-    var arr = getQ(), q = null;
-    for (var i = 0; i < arr.length; i++) { if (arr[i].id === ids[quizPos]) { q = arr[i]; break; } }
-    if (!q) { quizPos++; drawQuiz(main); return; }
-    var s = SUBJECTS[q.subject] || SUBJECTS.chinese;
-    main.innerHTML = '<div class="welcome"><h1>错题问答</h1><p>先自己想答案，再看正确答案。</p></div>' +
-      '<div class="card quiz-card">' +
-        '<div class="quiz-meta"><span class="subj-tag ' + s.cls + '">' + s.name + '</span><span>第 ' + (quizPos + 1) + ' / ' + ids.length + ' 题</span></div>' +
-        '<div class="quiz-q">' + escapeHtml(q.text) + '</div>' +
-        (quizShowAns ? '<div class="quiz-answer"><b>正确答案：</b>' + (q.answer ? escapeHtml(q.answer) : '（未填写）') + '</div>' : '') +
-        '<div class="quiz-btns">' +
-          (quizShowAns
-            ? '<button class="btn green" id="qa-got" type="button">答对了 / 已掌握</button><button class="btn" id="qa-miss" type="button">还没掌握</button>'
-            : '<button class="btn gold" id="qa-reveal" type="button">显示答案</button>') +
+    var opts = '<option value="">— 自由提问（不关联错题）—</option>';
+    all.forEach(function (q) {
+      var label = q.text.length > 30 ? q.text.slice(0, 30) + '…' : q.text;
+      opts += '<option value="' + q.id + '"' + (q.id === activeChatId ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+    });
+    main.innerHTML =
+      '<div class="welcome"><h1>错题问答</h1><p>选一道错题，把不懂的地方直接问 AI；也可以自由提问。</p></div>' +
+      '<div class="card chat-wrap">' +
+        '<div class="chat-select-row"><label style="font-size:13px;color:var(--muted);font-weight:600;">针对题目：</label><select id="chat-q">' + opts + '</select></div>' +
+        '<div class="chat-msgs" id="chat-msgs"></div>' +
+        '<div class="chat-input-row">' +
+          '<textarea id="chat-input" rows="2" placeholder="输入你的问题，例如：这一步为什么这样算？"></textarea>' +
+          '<button class="btn gold" id="chat-send" type="button" style="height:48px;">发送</button>' +
+        '</div>' +
+        '<div class="quick-ask">' +
+          '<button type="button" data-q="请讲解这道题的解法">讲解解法</button>' +
+          '<button type="button" data-q="这道题容易错在哪里？">易错点</button>' +
+          '<button type="button" data-q="请给我一道类似的练习题">出类似题</button>' +
         '</div>' +
       '</div>';
-    if (!quizShowAns) {
-      $('qa-reveal').addEventListener('click', function () { quizShowAns = true; drawQuiz(main); });
-    } else {
-      $('qa-got').addEventListener('click', function () { record(q.id, true, true); quizCorrect++; next(main); });
-      $('qa-miss').addEventListener('click', function () { record(q.id, false, false); next(main); });
+
+    var sel = $('chat-q');
+    sel.addEventListener('change', function () { activeChatId = sel.value; loadChat(); });
+    $('chat-send').addEventListener('click', sendChat);
+    $('chat-input').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+    });
+    var quickBtns = document.querySelectorAll('.quick-ask button');
+    for (var i = 0; i < quickBtns.length; i++) {
+      quickBtns[i].addEventListener('click', function () { $('chat-input').value = this.getAttribute('data-q'); sendChat(); });
     }
+    loadChat();
   }
-  function next(main) { quizPos++; quizShowAns = false; drawQuiz(main); }
-  function record(id, correct, mastered) {
+
+  function getChat() {
+    if (!activeChatId) return window.__freeChat__ || (window.__freeChat__ = []);
     var arr = getQ();
-    for (var i = 0; i < arr.length; i++) {
-      if (arr[i].id === id) { arr[i].tries = (arr[i].tries || 0) + 1; if (correct) arr[i].correct = (arr[i].correct || 0) + 1; if (mastered) arr[i].mastered = true; break; }
-    }
-    saveQ(arr);
+    for (var i = 0; i < arr.length; i++) { if (arr[i].id === activeChatId) { if (!arr[i].chats) arr[i].chats = []; return arr[i].chats; } }
+    return [];
   }
+  // 从指定的 arr 里取 chats（保证与 saveQ 用同一份引用）
+  function chatsIn(arr) {
+    if (!activeChatId) return window.__freeChat__ || (window.__freeChat__ = []);
+    for (var i = 0; i < arr.length; i++) { if (arr[i].id === activeChatId) { if (!arr[i].chats) arr[i].chats = []; return arr[i].chats; } }
+    return [];
+  }
+  function loadChat() {
+    var box = $('chat-msgs'); if (!box) return;
+    var chats = getChat();
+    if (!chats.length) {
+      box.innerHTML = '<div class="msg sys">选好题目后，在下面输入问题，AI 会结合这道题为你解答。</div>';
+      return;
+    }
+    var html = '';
+    chats.forEach(function (c) {
+      html += '<div class="msg me">' + escapeHtml(c.q) + '</div>';
+      html += '<div class="msg ai">' + fmtAI(escapeHtml(c.a)) + '</div>';
+    });
+    box.innerHTML = html;
+    box.scrollTop = box.scrollHeight;
+  }
+  function sendChat() {
+    var input = $('chat-input'), text = (input.value || '').trim();
+    if (!text) { input.focus(); return; }
+    var arr = getQ(), ctx = '';
+    if (activeChatId) {
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i].id === activeChatId) {
+          ctx = '题目：' + arr[i].text + (arr[i].answer ? '\n已知答案：' + arr[i].answer : '') + '\n';
+          break;
+        }
+      }
+    }
+    var chats = chatsIn(arr);
+    chats.push({ q: text, a: '' });
+    input.value = '';
+    loadChat();
+    var thinking = document.createElement('div');
+    thinking.className = 'msg ai thinking'; thinking.textContent = 'AI 正在思考';
+    $('chat-msgs').appendChild(thinking);
+    $('chat-msgs').scrollTop = $('chat-msgs').scrollHeight;
+    var sendBtn = $('chat-send'); sendBtn.disabled = true;
+    var prompt = ctx + '学生问：' + text + '\n请用中文简洁友好地解答，像老师讲课一样。';
+    aiAsk(prompt).then(function (ans) {
+      chats[chats.length - 1].a = ans;
+      if (activeChatId) saveQ(arr);
+      sendBtn.disabled = false;
+      loadChat();
+    }).catch(function (err) {
+      chats[chats.length - 1].a = '抱歉，AI 暂时不可用，请稍后再试。';
+      if (activeChatId) saveQ(arr);
+      sendBtn.disabled = false;
+      loadChat();
+    });
+  }
+  function openChatWith(id) { activeChatId = id; showView('quiz'); }
 
   // ---------- 学习效果图（三角形雷达图） ----------
   function computeStats() {
@@ -700,6 +900,22 @@
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+  // 把 AI 返回的 LaTeX 标记转成易读文本
+  function fmtAI(s) {
+    s = String(s);
+    s = s.replace(/\\\[|\\\]|\$\$/g, '');           // 去掉公式定界符
+    s = s.replace(/\\\(|\\\)/g, '');                 // 去掉行内定界符
+    s = s.replace(/\\Rightarrow|\\to/g, '→');        // 推导箭头
+    s = s.replace(/\\times/g, '×').replace(/\\div/g, '÷');
+    s = s.replace(/\\dfrac\{([^{}]+)\}\{([^{}]+)\}/g, '$1/$2'); // 分数
+    s = s.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '$1/$2');
+    s = s.replace(/\\sqrt\{([^{}]+)\}/g, '√($1)');
+    s = s.replace(/\\pm/g, '±').replace(/\\cdot/g, '·');
+    s = s.replace(/\\left|\\right|\\;|\\,|\\!/g, ''); // 排版命令
+    s = s.replace(/\\([a-zA-Z]+)/g, '$1');           // 剩余 \命令 → 命令名
+    s = s.replace(/\{|\}/g, '');                      // 残留花括号
+    return s;
   }
 
   // ---------- 侧栏导航 ----------
