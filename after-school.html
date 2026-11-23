@@ -392,14 +392,19 @@
 (function () {
   'use strict';
 
-  // ---------- 账户系统（localStorage） ----------
-  var USERS_KEY = 'houkebang_users_v1';
-  var SESSION_KEY = 'houkebang_session_v1';
-  var Q_KEY = 'houkebang_wrongq_v1'; // { 用户名: [错题] }
+  // ---------- 账户系统（云端 API，跨设备） ----------
+  var TOKEN_KEY = 'houkebang_token_v1';
+  var Q_KEY = 'houkebang_wrongq_v1'; // { 用户名: [错题] }（错题仍存本地）
+  var API = ''; // 同源：网页和 API 都在 blast-buddies deno.net
 
-  function loadUsers() { try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}'); } catch (e) { return {}; } }
-  function saveUsers(u) { localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
-  function hash(s) { var h = 0, i; for (i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; } return 'h_' + (h >>> 0).toString(36); }
+  function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+  function setToken(t) { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); }
+  function api(path, method, body, token) {
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    return fetch(API + path, { method: method || 'GET', headers: headers, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json(); });
+  }
   function loadAllQ() { try { return JSON.parse(localStorage.getItem(Q_KEY) || '{}'); } catch (e) { return {}; } }
   function getQ() { var a = loadAllQ(); return a[currentUser] || []; }
   function saveQ(arr) { var a = loadAllQ(); a[currentUser] = arr; localStorage.setItem(Q_KEY, JSON.stringify(a)); }
@@ -421,7 +426,7 @@
     confirmField.style.display = reg ? '' : 'none';
     submitBtn.textContent = reg ? '创建账户' : '登录';
     authHint.textContent = reg
-      ? '已有账户？点「登录」直接进入。账户保存在本机浏览器。'
+      ? '已有账户？点「登录」直接进入。账户保存在云端，任意设备可登录。'
       : '还没有账户？点上面的「创建账户」，输入姓名和密码即可。';
     msg.textContent = ''; msg.className = 'auth-msg';
   }
@@ -430,28 +435,33 @@
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    var name = nameInput.value.trim(), pass = passInput.value, users = loadUsers();
+    var name = nameInput.value.trim(), pass = passInput.value;
     if (!name) { showMsg('请输入姓名', 'err'); return; }
     if (!pass) { showMsg('请输入密码', 'err'); return; }
     if (mode === 'register') {
       if (pass.length < 4) { showMsg('密码至少 4 位', 'err'); return; }
       if (pass !== confirmInput.value) { showMsg('两次密码不一致', 'err'); return; }
-      if (users[name]) { showMsg('这个名字已被注册，请直接登录', 'err'); return; }
-      users[name] = hash(pass); saveUsers(users);
-      showMsg('账户创建成功，正在进入…', 'ok');
-      setTimeout(function () { enterApp(name); }, 350);
-    } else {
-      if (!users[name]) { showMsg('没有找到这个账户，请先创建', 'err'); return; }
-      if (users[name] !== hash(pass)) { showMsg('密码错误', 'err'); return; }
-      showMsg('登录成功，正在进入…', 'ok');
-      setTimeout(function () { enterApp(name); }, 250);
     }
+    submitBtn.disabled = true;
+    showMsg(mode === 'register' ? '正在创建账户…' : '正在登录…', '');
+    var path = mode === 'register' ? '/api/hk/register' : '/api/hk/login';
+    api(path, 'POST', { name: name, pwd: pass })
+      .then(function (r) {
+        submitBtn.disabled = false;
+        if (!r.ok) { showMsg(r.msg || '操作失败', 'err'); return; }
+        setToken(r.token);
+        showMsg(mode === 'register' ? '账户创建成功，正在进入…' : '登录成功，正在进入…', 'ok');
+        setTimeout(function () { enterApp(r.name); }, 250);
+      })
+      .catch(function () {
+        submitBtn.disabled = false;
+        showMsg('连接服务器失败，请检查网络后重试', 'err');
+      });
   });
   function showMsg(text, cls) { msg.textContent = text; msg.className = 'auth-msg ' + (cls || ''); }
 
   function enterApp(name) {
     currentUser = name;
-    localStorage.setItem(SESSION_KEY, name);
     authView.style.display = 'none';
     appView.style.display = 'block';
     $('side-name').textContent = name;
@@ -460,7 +470,9 @@
     showView('home');
   }
   function logout() {
-    localStorage.removeItem(SESSION_KEY);
+    var t = getToken();
+    if (t) api('/api/hk/logout', 'POST', {}, t).catch(function () {});
+    setToken('');
     currentUser = '';
     appView.style.display = 'none';
     authView.style.display = 'flex';
@@ -929,9 +941,14 @@
   $('menu-btn').addEventListener('click', openSidebar);
   scrim.addEventListener('click', closeSidebar);
 
-  // ---------- 会话恢复 ----------
-  var saved = localStorage.getItem(SESSION_KEY);
-  if (saved && loadUsers()[saved]) { enterApp(saved); }
+  // ---------- 会话恢复（向云端验证 token） ----------
+  var savedToken = getToken();
+  if (savedToken) {
+    api('/api/hk/me', 'GET', null, savedToken).then(function (r) {
+      if (r.ok && r.name) enterApp(r.name);
+      else setToken('');
+    }).catch(function () { /* 离线时保持登录页，token 保留下次再试 */ });
+  }
 })();
 </script>
 </body>
