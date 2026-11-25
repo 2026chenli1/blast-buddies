@@ -245,6 +245,76 @@
   .thinking::after { content: ''; animation: dots 1.2s steps(4,end) infinite; }
   @keyframes dots { 0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'} }
 
+  /* 弹窗（复习提醒 / 首次设置 / 加入错题集确认） */
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; background: rgba(4,10,18,.72); backdrop-filter: blur(4px);
+  }
+  .modal-mask.hidden { display: none; }
+  .modal-box {
+    width: min(440px, 94vw); max-height: 86vh; overflow-y: auto;
+    background: linear-gradient(180deg, #16283f, #0e1c2d);
+    border: 1px solid rgba(255,255,255,.16); border-radius: 18px;
+    padding: 24px; box-shadow: 0 24px 70px rgba(0,0,0,.6);
+  }
+  .modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .modal-head .mi { width: 38px; height: 38px; flex: none; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: rgba(255,209,102,.15); }
+  .modal-title { font-size: 19px; font-weight: 900; }
+  .modal-desc { font-size: 13px; color: var(--muted); line-height: 1.7; margin: 8px 0 18px; }
+  .modal-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  .modal-btns .btn { flex: 1; min-width: 110px; }
+  .freq-opts { display: flex; flex-direction: column; gap: 9px; }
+  .freq-opt {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    padding: 12px 14px; text-align: left;
+    background: rgba(255,255,255,.05); border: 1px solid var(--border);
+    border-radius: 12px; color: var(--text); font-size: 14px; font-weight: 700;
+    transition: all .15s ease;
+  }
+  .freq-opt:hover { background: rgba(255,255,255,.1); }
+  .freq-opt.active { background: rgba(255,209,102,.13); border-color: rgba(255,209,102,.5); color: var(--accent); }
+  .freq-opt .radio { width: 17px; height: 17px; flex: none; border-radius: 50%; border: 2px solid var(--muted); display: flex; align-items: center; justify-content: center; }
+  .freq-opt.active .radio { border-color: var(--accent); }
+  .freq-opt.active .radio::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .freq-opt small { display: block; color: var(--muted); font-size: 11px; font-weight: 500; margin-top: 2px; }
+  .review-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
+  .review-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 10px;
+  }
+  .review-row .rt { flex: 1; font-size: 13px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .review-row .rd { font-size: 11px; color: var(--accent); flex: none; }
+  .subject-picker { display: flex; gap: 8px; margin-top: 6px; }
+  .subject-picker button {
+    flex: 1; padding: 10px 0; font-size: 14px; font-weight: 800;
+    background: rgba(255,255,255,.05); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--muted);
+  }
+  .subject-picker button.active { color: var(--accent); border-color: rgba(255,209,102,.5); background: rgba(255,209,102,.13); }
+
+  /* 首页复习提示卡 */
+  .review-banner {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+    padding: 16px 18px; border-radius: 14px;
+    background: linear-gradient(100deg, rgba(255,209,102,.14), rgba(255,209,102,.05));
+    border: 1px solid rgba(255,209,102,.32);
+  }
+  .review-banner .rb-ico { width: 42px; height: 42px; flex: none; border-radius: 11px; background: rgba(255,209,102,.16); display: flex; align-items: center; justify-content: center; }
+  .review-banner .rb-txt { flex: 1; }
+  .review-banner .rb-txt b { font-size: 15px; color: var(--accent); }
+  .review-banner .rb-txt p { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* 错题科目筛选 */
+  .filter-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 22px 0 4px; }
+  .filter-tab {
+    padding: 8px 16px; font-size: 13px; font-weight: 800;
+    background: rgba(255,255,255,.05); border: 1px solid var(--border);
+    border-radius: 999px; color: var(--muted); transition: all .15s ease;
+  }
+  .filter-tab:hover { color: var(--text); }
+  .filter-tab.active { background: rgba(255,209,102,.14); border-color: rgba(255,209,102,.45); color: var(--accent); }
+
   /* 问答 */
   .quiz-card { max-width: 720px; }
   .quiz-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; font-size: 13px; color: var(--muted); }
@@ -409,6 +479,72 @@
   function getQ() { var a = loadAllQ(); return a[currentUser] || []; }
   function saveQ(arr) { var a = loadAllQ(); a[currentUser] = arr; localStorage.setItem(Q_KEY, JSON.stringify(a)); }
 
+  // 学习效果图生成频率（首次登录设置，按用户存本地）
+  var FREQ_KEY = 'houkebang_freq_v1'; // { 用户名: 'daily'|'3days'|'weekly'|'monthly' }
+  var FREQ_OPTS = [
+    { v: 'daily',   label: '每天',   days: 1,  hint: '每天生成一次学习效果图' },
+    { v: '3days',   label: '每 3 天', days: 3,  hint: '每 3 天生成一次' },
+    { v: 'weekly',  label: '每周',   days: 7,  hint: '每周生成一次' },
+    { v: 'monthly', label: '每月',   days: 30, hint: '每月生成一次' }
+  ];
+  function loadFreq() { try { return JSON.parse(localStorage.getItem(FREQ_KEY) || '{}'); } catch (e) { return {}; } }
+  function getFreq() { return loadFreq()[currentUser] || ''; }
+  function setFreq(v) { var a = loadFreq(); a[currentUser] = v; localStorage.setItem(FREQ_KEY, JSON.stringify(a)); }
+  function freqDays() { var f = getFreq(); for (var i = 0; i < FREQ_OPTS.length; i++) if (FREQ_OPTS[i].v === f) return FREQ_OPTS[i].days; return 1; }
+
+  // 记忆曲线（艾宾浩斯）：间隔天数
+  var MEMORY_STEPS = [1, 2, 4, 7, 15, 30];
+  var DAY = 24 * 3600 * 1000;
+  // 给老错题补 created 字段
+  function normalizeQ(arr) {
+    var changed = false;
+    arr.forEach(function (q) {
+      if (!q.created) { q.created = Date.now(); changed = true; }
+      if (!q.reviews) { q.reviews = []; changed = true; }
+    });
+    return changed;
+  }
+  // 一道错题是否到了复习节点；返回 {due:bool, step:int, days:int}
+  function reviewStatus(q) {
+    var steps = q.reviewStep || 0; // 已完成的复习阶段数
+    if (steps >= MEMORY_STEPS.length) return { due: false, step: steps, days: 0 };
+    var last = q.reviews && q.reviews.length ? q.reviews[q.reviews.length - 1] : (q.created || Date.now());
+    var need = MEMORY_STEPS[steps] * DAY;
+    return { due: Date.now() - last >= need, step: steps, days: MEMORY_STEPS[steps] };
+  }
+  // 待复习的错题（结合用户设定的生成频率作为最小提醒间隔）
+  function dueReviews() {
+    var arr = getQ();
+    return arr.filter(function (q) { return reviewStatus(q).due; });
+  }
+  function markReviewed(id) {
+    var arr = getQ();
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].id === id) {
+        if (!arr[i].reviews) arr[i].reviews = [];
+        arr[i].reviews.push(Date.now());
+        arr[i].reviewStep = (arr[i].reviewStep || 0) + 1;
+        break;
+      }
+    }
+    saveQ(arr);
+  }
+
+  // ---------- 通用弹窗 ----------
+  function closeModal() { var m = $('hk-modal'); if (m) m.remove(); }
+  function showModal(html) {
+    closeModal();
+    var mask = document.createElement('div');
+    mask.className = 'modal-mask'; mask.id = 'hk-modal';
+    mask.innerHTML = '<div class="modal-box">' + html + '</div>';
+    mask.addEventListener('click', function (e) { if (e.target === mask) closeModal(); });
+    document.body.appendChild(mask);
+    return mask;
+  }
+  function modalIcon(path, color) {
+    return '<div class="mi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="' + (color || '#ffd166') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + path + '</svg></div>';
+  }
+
   var $ = function (id) { return document.getElementById(id); };
   var authView = $('auth-view'), appView = $('app-view');
   var form = $('auth-form'), msg = $('auth-msg');
@@ -467,7 +603,58 @@
     $('side-name').textContent = name;
     $('avatar').textContent = name.charAt(0) || '学';
     passInput.value = ''; confirmInput.value = '';
+    // 老数据补字段
+    var q = getQ(); if (normalizeQ(q)) saveQ(q);
     showView('home');
+    // 首次登录：先问效果图频率；否则检查复习提醒
+    if (!getFreq()) setTimeout(askFreq, 400);
+    else setTimeout(maybeReviewReminder, 500);
+  }
+
+  // 首次登录：问生成学习效果图频率
+  function askFreq() {
+    var opts = FREQ_OPTS.map(function (o) {
+      return '<button class="freq-opt" type="button" data-freq="' + o.v + '">' +
+        '<span class="radio"></span><span>' + o.label + '<small>' + o.hint + '</small></span></button>';
+    }).join('');
+    var m = showModal(
+      modalIcon('<path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3"/>') +
+      '<div class="modal-title">设置学习效果图频率</div>' +
+      '<div class="modal-desc">首次登录，请选择多久生成一次学习效果图（随时可在首页修改）。</div>' +
+      '<div class="freq-opts">' + opts + '</div>'
+    );
+    var btns = m.querySelectorAll('[data-freq]');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function () {
+        var v = this.getAttribute('data-freq');
+        setFreq(v); closeModal();
+        maybeReviewReminder();
+        renderHome($('main'));
+      });
+    }
+  }
+
+  // 记忆曲线复习提醒弹窗
+  function maybeReviewReminder() {
+    var due = dueReviews();
+    if (!due.length) return;
+    var rows = due.slice(0, 8).map(function (q) {
+      var s = SUBJECTS[q.subject] || SUBJECTS.chinese;
+      var st = reviewStatus(q);
+      return '<div class="review-row"><span class="subj-tag ' + s.cls + '">' + s.name + '</span>' +
+        '<span class="rt">' + escapeHtml(q.text) + '</span>' +
+        '<span class="rd">第' + (st.step + 1) + '次复习</span></div>';
+    }).join('');
+    var m = showModal(
+      modalIcon('<path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/>', '#4cc9f0') +
+      '<div class="modal-title">该复习啦</div>' +
+      '<div class="modal-desc">根据艾宾浩斯记忆曲线，有 <b style="color:var(--accent)">' + due.length + '</b> 道错题到了复习时间。趁热打铁巩固一下吧。</div>' +
+      '<div class="review-list">' + rows + '</div>' +
+      (due.length > 8 ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;">还有 ' + (due.length - 8) + ' 道，去错题本查看全部</div>' : '') +
+      '<div class="modal-btns"><button class="btn gold" id="rm-go" type="button">去复习</button><button class="btn" id="rm-later" type="button">稍后再说</button></div>'
+    );
+    $('rm-go').addEventListener('click', function () { closeModal(); showView('quiz'); });
+    $('rm-later').addEventListener('click', closeModal);
   }
   function logout() {
     var t = getToken();
@@ -502,17 +689,36 @@
   }
 
   function renderHome(main) {
+    var due = dueReviews();
+    var banner = '';
+    if (due.length) {
+      banner = '<div class="review-banner">' +
+        '<div class="rb-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffd166" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg></div>' +
+        '<div class="rb-txt"><b>记忆曲线提醒</b><p>有 ' + due.length + ' 道错题到了复习时间，按 1/2/4/7/15/30 天间隔巩固记得更牢。</p></div>' +
+        '<button class="btn gold sm" id="home-review" type="button">去复习</button>' +
+      '</div>';
+    }
+    var f = getFreq(), fl = '未设置';
+    for (var i = 0; i < FREQ_OPTS.length; i++) if (FREQ_OPTS[i].v === f) fl = FREQ_OPTS[i].label;
     main.innerHTML =
       '<div class="welcome">' +
         '<h1>你好，<b>' + escapeHtml(currentUser) + '</b></h1>' +
         '<p>整理错题、反复问答，再用效果图看看自己的掌握情况。</p>' +
       '</div>' +
+      banner +
       '<div class="quick-grid">' +
         quickCard('organize', '#ffd166', 'rgba(255,209,102,.14)', 'M4 4h16v16H4z|M8 9h8M8 13h8M8 17h5', '错题整理', '拍照识题，AI 自动给答案') +
         quickCard('quiz', '#4cc9f0', 'rgba(76,201,240,.14)', 'M12 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z|M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2-2.4 3.8|M12 17h.01', '错题问答', '选一道题，直接问 AI') +
         quickCard('chart', '#2ec4b6', 'rgba(46,196,182,.14)', 'M12 2 2 20h20L12 2Z|M12 2v9M2 20l10-9 10 9', '学习效果图', '三角形雷达图看三科掌握') +
+      '</div>' +
+      '<div class="card" style="margin-top:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">' +
+        '<div style="flex:1;min-width:180px;"><div style="font-size:14px;font-weight:800;">效果图生成频率：<span style="color:var(--accent)">' + fl + '</span></div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-top:4px;">按设定周期提醒你查看学习效果图</div></div>' +
+        '<button class="btn" id="change-freq" type="button">修改频率</button>' +
       '</div>';
     bindQuick();
+    var rb = $('home-review'); if (rb) rb.addEventListener('click', function () { maybeReviewReminder(); });
+    $('change-freq').addEventListener('click', askFreq);
   }
 
   function quickCard(view, color, bg, paths, title, desc) {
@@ -664,6 +870,7 @@
       text: text, answer: answer,
       image: window.__curImage__ || '',
       chats: [],
+      created: Date.now(), reviews: [], reviewStep: 0,
       mastered: $('q-mastered').value === '1',
       tries: 0, correct: 0
     });
@@ -678,14 +885,24 @@
   }
 
   function qmsg(t, c) { var el = $('q-msg'); if (el) { el.textContent = t; el.className = 'inline-msg ' + (c || ''); } }
+  var qFilter = 'all';
   function renderQList() {
     var wrap = $('q-list-wrap'); if (!wrap) return;
-    var arr = getQ();
-    if (!arr.length) {
+    var all = getQ();
+    if (!all.length) {
       wrap.innerHTML = '<div class="empty">还没有错题。<br>在上面拍照添加一道，就能开始问答和生成效果图了。</div>';
       return;
     }
-    var html = '<div class="section-title" style="margin-top:26px;">错题列表 <span style="color:var(--muted);font-size:13px;font-weight:600;">共 ' + arr.length + ' 道</span></div><div class="q-list">';
+    // 科目筛选 tab
+    var tabs = [ {k:'all',n:'全部'} ].concat(['chinese','math','english'].map(function(k){return {k:k,n:SUBJECTS[k].name};}));
+    var tabsHtml = '<div class="filter-tabs">' + tabs.map(function(t){
+      var cnt = t.k === 'all' ? all.length : all.filter(function(q){return (SUBJECTS[q.subject]?q.subject:'chinese')===t.k;}).length;
+      return '<button class="filter-tab' + (qFilter===t.k?' active':'') + '" data-filter="' + t.k + '" type="button">' + t.n + ' ' + cnt + '</button>';
+    }).join('') + '</div>';
+    var arr = qFilter === 'all' ? all : all.filter(function(q){ return (SUBJECTS[q.subject]?q.subject:'chinese')===qFilter; });
+    var html = '<div class="section-title" style="margin-top:26px;">错题列表 <span style="color:var(--muted);font-size:13px;font-weight:600;">共 ' + all.length + ' 道</span></div>' + tabsHtml;
+    if (!arr.length) html += '<div class="empty">这个科目还没有错题。</div>';
+    else html += '<div class="q-list">';
     arr.forEach(function (q) {
       var s = SUBJECTS[q.subject] || SUBJECTS.chinese;
       html += '<div class="q-item' + (q.mastered ? ' mastered' : '') + '">' +
@@ -695,17 +912,24 @@
           (q.mastered ? '<span class="master-tag">已掌握</span>' : '') +
           '<div class="q-actions">' +
             '<button class="btn sm" data-act="ask" data-id="' + q.id + '" type="button">问 AI</button>' +
+            '<button class="btn sm green" data-act="reviewed" data-id="' + q.id + '" type="button">已复习</button>' +
             '<button class="btn sm ' + (q.mastered ? '' : 'green') + '" data-act="toggle" data-id="' + q.id + '" type="button">' + (q.mastered ? '取消掌握' : '标记掌握') + '</button>' +
             '<button class="btn sm danger" data-act="del" data-id="' + q.id + '" type="button">删除</button>' +
           '</div>' +
         '</div>' +
         '<div class="q-text">' + escapeHtml(q.text) + '</div>' +
         (q.answer ? '<div class="q-ans"><b>AI 答案：</b>' + fmtAI(escapeHtml(q.answer)) + '</div>' : '') +
+        '<div class="q-ans">记忆曲线：已复习 ' + (q.reviews ? q.reviews.length : 0) + ' 次' + (reviewStatus(q).due ? ' · <span style="color:var(--accent)">待复习</span>' : '') + '</div>' +
         ((q.chats && q.chats.length) ? '<div class="q-ans">已追问 ' + q.chats.length + ' 次</div>' : '') +
       '</div>';
     });
-    html += '</div>';
+    if (arr.length) html += '</div>';
     wrap.innerHTML = html;
+    // 筛选 tab
+    var tabs = wrap.querySelectorAll('[data-filter]');
+    for (var t = 0; t < tabs.length; t++) {
+      tabs[t].addEventListener('click', function () { qFilter = this.getAttribute('data-filter'); renderQList(); });
+    }
     var btns = wrap.querySelectorAll('[data-act]');
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener('click', function () {
@@ -716,6 +940,7 @@
           if (im) { var w = window.open(); if (w) w.document.write('<title>题目图片</title><body style="margin:0;background:#0d1b2a;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="' + im + '" style="max-width:100%"></body>'); }
           return;
         }
+        if (act === 'reviewed') { markReviewed(id); renderQList(); return; }
         if (act === 'del') { arr = arr.filter(function (x) { return x.id !== id; }); }
         else { for (var j = 0; j < arr.length; j++) { if (arr[j].id === id) { arr[j].mastered = !arr[j].mastered; break; } } }
         saveQ(arr); renderQList();
@@ -735,7 +960,8 @@
     main.innerHTML =
       '<div class="welcome"><h1>错题问答</h1><p>选一道错题，把不懂的地方直接问 AI；也可以自由提问。</p></div>' +
       '<div class="card chat-wrap">' +
-        '<div class="chat-select-row"><label style="font-size:13px;color:var(--muted);font-weight:600;">针对题目：</label><select id="chat-q">' + opts + '</select></div>' +
+        '<div class="chat-select-row"><label style="font-size:13px;color:var(--muted);font-weight:600;">针对题目：</label><select id="chat-q">' + opts + '</select>' +
+          '<button class="btn sm green" id="chat-reviewed" type="button" style="display:' + (activeChatId ? 'inline-block' : 'none') + ';">标记已复习</button></div>' +
         '<div class="chat-msgs" id="chat-msgs"></div>' +
         '<div class="chat-input-row">' +
           '<textarea id="chat-input" rows="2" placeholder="输入你的问题，例如：这一步为什么这样算？"></textarea>' +
@@ -749,7 +975,19 @@
       '</div>';
 
     var sel = $('chat-q');
-    sel.addEventListener('change', function () { activeChatId = sel.value; loadChat(); });
+    sel.addEventListener('change', function () {
+      activeChatId = sel.value;
+      $('chat-reviewed').style.display = activeChatId ? 'inline-block' : 'none';
+      loadChat();
+    });
+    $('chat-reviewed').addEventListener('click', function () {
+      if (!activeChatId) return;
+      markReviewed(activeChatId);
+      var st = null, a = getQ();
+      for (var i = 0; i < a.length; i++) if (a[i].id === activeChatId) { st = reviewStatus(a[i]); break; }
+      this.textContent = '已复习 ✓ 下次 ' + (st ? st.days : 1) + ' 天后';
+      var self = this; setTimeout(function () { self.textContent = '标记已复习'; }, 2500);
+    });
     $('chat-send').addEventListener('click', sendChat);
     $('chat-input').addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
@@ -815,14 +1053,64 @@
       if (activeChatId) saveQ(arr);
       sendBtn.disabled = false;
       loadChat();
+      // 问答结束，询问是否加入错题集
+      var subj = '';
+      if (activeChatId) { for (var i = 0; i < arr.length; i++) if (arr[i].id === activeChatId) { subj = arr[i].subject; break; } }
+      askAddToBook(text, ans, subj || 'chinese');
     }).catch(function (err) {
       chats[chats.length - 1].a = '抱歉，AI 暂时不可用，请稍后再试。';
       if (activeChatId) saveQ(arr);
       sendBtn.disabled = false;
       loadChat();
+      // 即使 AI 失败，也允许把问题加入错题集（答案留空）
+      var subj2 = '';
+      if (activeChatId) { for (var k = 0; k < arr.length; k++) if (arr[k].id === activeChatId) { subj2 = arr[k].subject; break; } }
+      askAddToBook(text, '', subj2 || 'chinese');
     });
   }
   function openChatWith(id) { activeChatId = id; showView('quiz'); }
+
+  // 问答后：询问是否加入错题集（可选科目）
+  function askAddToBook(question, answer, defaultSubject) {
+    var pick = defaultSubject || 'chinese';
+    var subjBtns = ['chinese', 'math', 'english'].map(function (k) {
+      return '<button type="button" data-pick="' + k + '" class="' + (k === pick ? 'active' : '') + '">' + SUBJECTS[k].name + '</button>';
+    }).join('');
+    var m = showModal(
+      modalIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>', '#2ec4b6') +
+      '<div class="modal-title">加入错题集？</div>' +
+      '<div class="modal-desc">刚才的问题要不要收进错题本，方便以后按记忆曲线复习？</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">选择科目</div>' +
+      '<div class="subject-picker">' + subjBtns + '</div>' +
+      '<div class="modal-btns"><button class="btn gold" id="addb-yes" type="button">加入错题集</button><button class="btn" id="addb-no" type="button">不用了</button></div>'
+    );
+    var picks = m.querySelectorAll('[data-pick]');
+    for (var i = 0; i < picks.length; i++) {
+      picks[i].addEventListener('click', function () {
+        pick = this.getAttribute('data-pick');
+        for (var j = 0; j < picks.length; j++) picks[j].classList.remove('active');
+        this.classList.add('active');
+      });
+    }
+    $('addb-no').addEventListener('click', closeModal);
+    $('addb-yes').addEventListener('click', function () {
+      var arr = getQ();
+      arr.unshift({
+        id: 'q' + Date.now() + Math.floor(Math.random() * 1000),
+        subject: pick,
+        text: question, answer: answer, image: '', chats: [],
+        created: Date.now(), reviews: [], reviewStep: 0,
+        mastered: false, tries: 0, correct: 0
+      });
+      saveQ(arr); closeModal();
+      qFilter = pick;
+      // 给出轻提示
+      var tip = document.createElement('div');
+      tip.className = 'inline-msg ok';
+      tip.textContent = '已加入「' + SUBJECTS[pick].name + '」错题集';
+      var msgs = $('chat-msgs'); if (msgs) { msgs.appendChild(tip); msgs.scrollTop = msgs.scrollHeight; }
+    });
+  }
 
   // ---------- 学习效果图（三角形雷达图） ----------
   function computeStats() {
