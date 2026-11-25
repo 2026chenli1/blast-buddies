@@ -134,6 +134,23 @@
   .welcome h1 { font-size: clamp(24px, 3.5vw, 34px); font-weight: 900; letter-spacing: 1px; }
   .welcome p { color: var(--muted); font-size: 14px; margin-top: 8px; line-height: 1.6; }
   .welcome b { color: var(--accent); }
+  /* AI 学习智能体卡 */
+  .agent-card {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 20px 22px; margin-bottom: 24px;
+    background: linear-gradient(110deg, rgba(76,201,240,.13), rgba(46,196,182,.06));
+    border: 1px solid rgba(76,201,240,.3); border-radius: 18px;
+  }
+  .agent-avatar {
+    width: 56px; height: 56px; flex: none; border-radius: 16px;
+    background: linear-gradient(145deg, #4cc9f0, #2ec4b6);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 18px rgba(76,201,240,.3);
+  }
+  .agent-info { flex: 1; min-width: 200px; }
+  .agent-info .an { font-size: 17px; font-weight: 900; display: flex; align-items: center; gap: 8px; }
+  .agent-info .online { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #2ec4b6; box-shadow: 0 0 0 3px rgba(46,196,182,.2); }
+  .agent-info .ad { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
 
   /* 首页快捷入口 */
   .quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
@@ -718,7 +735,15 @@
     main.innerHTML =
       '<div class="welcome">' +
         '<h1>你好，<b>' + escapeHtml(currentUser) + '</b></h1>' +
-        '<p>整理错题、反复问答，再用效果图看看自己的掌握情况。</p>' +
+        '<p>金小助是你的 AI 学习伙伴，随时可以问我任何学习问题。</p>' +
+      '</div>' +
+      '<div class="agent-card">' +
+        '<div class="agent-avatar"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#0d1b2a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01M9 17h6"/><path d="M2 12v3M22 12v3"/></svg></div>' +
+        '<div class="agent-info">' +
+          '<div class="an">金小助 AI 学习助手 <span class="online"></span><span style="font-size:11px;color:#7ee0c0;font-weight:700;">在线</span></div>' +
+          '<div class="ad">我记得你的学习情况：' + escapeHtml(learningProfile()) + ' 有不懂的，直接问我。</div>' +
+        '</div>' +
+        '<button class="btn gold" id="agent-chat" type="button">开始对话</button>' +
       '</div>' +
       banner +
       '<div class="quick-grid">' +
@@ -734,6 +759,7 @@
     bindQuick();
     var rb = $('home-review'); if (rb) rb.addEventListener('click', function () { maybeReviewReminder(); });
     $('change-freq').addEventListener('click', askFreq);
+    $('agent-chat').addEventListener('click', function () { activeChatId = ''; showView('quiz'); });
   }
 
   function quickCard(view, color, bg, paths, title, desc) {
@@ -759,6 +785,44 @@
     }).then(function (t) {
       return t.replace(/\n{3,}/g, '\n\n').trim();
     });
+  }
+
+  // ---------- AI 学习智能体：人设 + 学情 + 多轮记忆 ----------
+  var AGENT_NAME = '金小助';
+  var AGENT_PERSONA =
+    '你是「' + AGENT_NAME + '」，一位耐心、专业的中小学学习助手。' +
+    '你的教学风格：引导式启发，不直接给答案就完事，而是先提示思路、拆解步骤、鼓励思考；' +
+    '回答简洁友好、用中文、像身边的老师。遇到不确定的题会诚实说明。';
+
+  // 生成学生当前学情（从本地错题库统计），让 AI 认识这个学生
+  function learningProfile() {
+    var arr = getQ(), parts = [];
+    if (!arr.length) return '该学生还没有记录错题。';
+    for (var k in SUBJECTS) {
+      var list = arr.filter(function (q) { return (SUBJECTS[q.subject] ? q.subject : 'chinese') === k; });
+      if (!list.length) continue;
+      var mastered = list.filter(function (q) { return q.mastered; }).length;
+      var due = list.filter(function (q) { return reviewStatus(q).due; }).length;
+      parts.push(SUBJECTS[k].name + '：错题 ' + list.length + ' 道，已掌握 ' + mastered + ' 道，待复习 ' + due + ' 道');
+    }
+    return parts.join('；') + '。';
+  }
+
+  // 构造带上下文的智能体 prompt：人设 + 学情 + 当前题目 + 历史对话 + 本次问题
+  function buildAgentPrompt(question, history, subjectText) {
+    var s = AGENT_PERSONA + '\n\n';
+    s += '【学生学习情况】' + learningProfile() + '\n';
+    if (subjectText) s += '【当前讨论的题目】' + subjectText + '\n';
+    if (history && history.length) {
+      s += '【之前的对话（请记住并延续）】\n';
+      history.slice(-6).forEach(function (h) {
+        s += '学生：' + h.q + '\n' + AGENT_NAME + '：' + (h.a || '（未回答）') + '\n';
+      });
+      s += '\n';
+    }
+    s += '【学生现在问】' + question + '\n';
+    s += '请以' + AGENT_NAME + '的身份回答，结合上面的学情与对话历史，保持连贯，不要重复自我介绍。';
+    return s;
   }
 
   // ---------- 错题整理（拍照 → OCR 识题 → AI 给答案） ----------
@@ -1082,7 +1146,7 @@
       opts += '<option value="' + q.id + '"' + (q.id === activeChatId ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
     });
     main.innerHTML =
-      '<div class="welcome"><h1>错题问答</h1><p>选一道错题，先看 AI 答案，再把不懂的地方继续问 AI；也可以自由提问。</p></div>' +
+      '<div class="welcome"><h1>金小助 AI 学习助手</h1><p>我会记住我们聊过的内容，也了解你的错题情况。选一道题看答案后追问，或直接问我任何学习问题。</p></div>' +
       '<div class="card chat-wrap">' +
         '<div class="chat-select-row"><label style="font-size:13px;color:var(--muted);font-weight:600;">针对题目：</label><select id="chat-q">' + opts + '</select>' +
           '<button class="btn sm green" id="chat-reviewed" type="button" style="display:' + (activeChatId ? 'inline-block' : 'none') + ';">标记已复习</button></div>' +
@@ -1136,9 +1200,10 @@
     return [];
   }
   // 保存对话：关联错题存错题库，自由问答存按账户隔离的自由库
-  function persistChat(arr) {
+  // 必须传入当前正在编辑的 chats 引用，否则 getFreeChat() 重新解析会导致丢失
+  function persistChat(arr, chats) {
     if (activeChatId) saveQ(arr);
-    else saveFreeChat(getFreeChat());
+    else saveFreeChat(chats);
   }
   function loadChat() {
     var box = $('chat-msgs'); if (!box) return;
@@ -1159,7 +1224,7 @@
     }
     var chats = getChat();
     if (!chats.length) {
-      html += '<div class="msg sys">' + (activeChatId ? '有不懂的地方？在下面针对这道题继续问 AI。' : '输入问题，AI 会为你解答。') + '</div>';
+      html += '<div class="msg sys">' + (activeChatId ? '这道题的答案在上方，有不懂的地方就继续问我，我会结合刚才的内容回答。' : '你好，我是金小助。想问什么学习问题都可以告诉我，我会一直记得我们聊过的内容。') + '</div>';
       box.innerHTML = html; return;
     }
     chats.forEach(function (c) {
@@ -1183,7 +1248,7 @@
     }
     var chats = chatsIn(arr);
     chats.push({ q: text, a: '' });
-    persistChat(arr); // 立即保存（按当前账户隔离）
+    persistChat(arr, chats); // 立即保存（按当前账户隔离）
     input.value = '';
     loadChat();
     var thinking = document.createElement('div');
@@ -1191,10 +1256,13 @@
     $('chat-msgs').appendChild(thinking);
     $('chat-msgs').scrollTop = $('chat-msgs').scrollHeight;
     var sendBtn = $('chat-send'); sendBtn.disabled = true;
-    var prompt = ctx + '学生问：' + text + '\n请用中文简洁友好地解答，像老师讲课一样。';
+    // 多轮记忆：把本次问题之前的历史传给智能体
+    var history = chats.slice(0, -1);
+    var subjectText = activeChatId ? ctx.replace(/^题目：/, '').replace(/\n$/, '') : '';
+    var prompt = buildAgentPrompt(text, history, subjectText);
     aiAsk(prompt).then(function (ans) {
       chats[chats.length - 1].a = ans;
-      persistChat(arr);
+      persistChat(arr, chats);
       sendBtn.disabled = false;
       loadChat();
       // 问答结束，询问是否加入错题集
@@ -1203,7 +1271,7 @@
       askAddToBook(text, ans, subj || 'chinese');
     }).catch(function (err) {
       chats[chats.length - 1].a = '抱歉，AI 暂时不可用，请稍后再试。';
-      persistChat(arr);
+      persistChat(arr, chats);
       sendBtn.disabled = false;
       loadChat();
       // 即使 AI 失败，也允许把问题加入错题集（答案留空）
