@@ -215,6 +215,14 @@
   .capture-zone p { font-size: 13px; color: var(--muted); line-height: 1.6; }
   .capture-zone input[type=file] { display: none; }
   .preview-img { max-width: 100%; max-height: 260px; border-radius: 12px; display: block; margin: 14px auto; border: 1px solid var(--border); }
+  /* 拍照裁剪 */
+  .crop-wrap { position: relative; display: inline-block; max-width: 100%; margin: 14px auto; border-radius: 12px; overflow: hidden; line-height: 0; touch-action: none; border: 1px solid var(--border); }
+  .crop-wrap img { display: block; max-width: 100%; max-height: 320px; }
+  .crop-mask { position: absolute; inset: 0; background: rgba(6,14,24,.55); pointer-events: none; }
+  .crop-box { position: absolute; border: 2px dashed var(--accent); background: rgba(255,209,102,.08); box-shadow: 0 0 0 9999px rgba(6,14,24,.5); pointer-events: none; }
+  .crop-handle { position: absolute; width: 16px; height: 16px; background: var(--accent); border: 2px solid var(--bg); border-radius: 50%; pointer-events: none; transform: translate(-50%,-50%); }
+  .crop-hint { text-align: center; font-size: 12px; color: var(--muted); margin: 6px 0 12px; line-height: 1.6; }
+  .crop-actions { display: flex; gap: 10px; justify-content: center; margin-bottom: 12px; flex-wrap: wrap; }
   .progress-box { margin: 14px 0; }
   .progress-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 8px; }
   .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); width: 0%; transition: width .2s ease; border-radius: 999px; }
@@ -762,12 +770,24 @@
       '<div class="welcome"><h1>错题整理</h1><p>拍下错题，AI 自动识别题目并给出答案，一起存到本地。</p></div>' +
       '<div class="card">' +
         '<div class="section-title">拍照添加错题</div>' +
-        '<div class="section-sub">拍照或从相册选图 → 自动识别题目 → AI 生成答案。</div>' +
+        '<div class="section-sub">拍照或从相册选图 → 框选题目区域 → AI 识别并解答。</div>' +
         '<div class="capture-zone" id="capture-zone">' +
           '<div class="cam-ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffd166" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg></div>' +
           '<h3>点这里拍照 / 上传图片</h3>' +
-          '<p>把错题拍清楚，AI 会识别文字并解答<br>图片、题目、答案都会保存在本机</p>' +
+          '<p>拍下错题后，可以框选只把题目那块发给 AI<br>图片、题目、答案都会保存在本机</p>' +
           '<input type="file" id="q-file" accept="image/*" capture="environment">' +
+        '</div>' +
+        '<div id="crop-stage" style="display:none;">' +
+          '<div class="crop-wrap" id="crop-wrap">' +
+            '<img id="crop-img" alt="预览">' +
+            '<div class="crop-box" id="crop-box"><div class="crop-handle" style="left:0;top:0"></div><div class="crop-handle" style="left:100%;top:0"></div><div class="crop-handle" style="left:0;top:100%"></div><div class="crop-handle" style="left:100%;top:100%"></div></div>' +
+          '</div>' +
+          '<div class="crop-hint">拖动/拉伸框选你想识别的题目区域，其余部分不会发给 AI</div>' +
+          '<div class="crop-actions">' +
+            '<button class="btn gold" id="crop-go" type="button">识别这块</button>' +
+            '<button class="btn" id="crop-all" type="button">用整张图</button>' +
+            '<button class="btn" id="crop-reset" type="button">重选图片</button>' +
+          '</div>' +
         '</div>' +
         '<div id="ocr-stage" style="display:none;">' +
           '<div class="progress-box"><div class="progress-label" id="ocr-label">准备中…</div><div class="progress-bar"><div class="progress-fill" id="ocr-fill"></div></div></div>' +
@@ -791,12 +811,9 @@
     renderQList();
   }
 
-  // 处理图片：压缩 → 预览 → OCR → 显示编辑框
+  // 处理图片：压缩 → 裁剪框（用户选题目区域）→ OCR
   function handleImage(file) {
     if (ocrBusy) return;
-    ocrBusy = true;
-    var stage = $('ocr-stage'); stage.style.display = 'block';
-    setProgress('读取图片…', 5);
     var reader = new FileReader();
     reader.onload = function (ev) {
       var img = new Image();
@@ -806,16 +823,99 @@
         var c = document.createElement('canvas');
         c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        var dataUrl = c.toDataURL('image/jpeg', 0.7);
-        $('ocr-preview').src = dataUrl;
-        window.__curImage__ = dataUrl;
-        runOCR(dataUrl);
+        window.__fullImage__ = c.toDataURL('image/jpeg', 0.75);
+        // 进入裁剪阶段
+        $('capture-zone').style.display = 'none';
+        $('crop-stage').style.display = 'block';
+        $('ocr-stage').style.display = 'none';
+        $('crop-img').src = window.__fullImage__;
+        initCrop();
       };
-      img.onerror = function () { ocrBusy = false; setProgress('图片读取失败', 0); };
+      img.onerror = function () { setProgress('图片读取失败', 0); };
       img.src = ev.target.result;
     };
-    reader.onerror = function () { ocrBusy = false; setProgress('图片读取失败', 0); };
+    reader.onerror = function () { setProgress('图片读取失败', 0); };
     reader.readAsDataURL(file);
+  }
+
+  // 裁剪框：拖拽移动 + 四角拉伸，用比例存储（相对图片）
+  var cropRect = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+  function initCrop() {
+    cropRect = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+    drawCrop();
+    var wrap = $('crop-wrap');
+    var dragging = null, start = null;
+    function pt(e) {
+      var r = wrap.getBoundingClientRect();
+      var cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+      var cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+      return { x: Math.max(0, Math.min(1, cx / r.width)), y: Math.max(0, Math.min(1, cy / r.height)) };
+    }
+    function down(e) {
+      var p = pt(e);
+      // 判断是否点在某个角（就近）
+      var corners = [ [cropRect.x,cropRect.y], [cropRect.x+cropRect.w,cropRect.y], [cropRect.x,cropRect.y+cropRect.h], [cropRect.x+cropRect.w,cropRect.y+cropRect.h] ];
+      var best = -1, bd = 0.06;
+      for (var i=0;i<4;i++){ var d=Math.hypot(p.x-corners[i][0],p.y-corners[i][1]); if(d<bd){bd=d;best=i;} }
+      if (best >= 0) dragging = 'c'+best;
+      else if (p.x>=cropRect.x && p.x<=cropRect.x+cropRect.w && p.y>=cropRect.y && p.y<=cropRect.y+cropRect.h) dragging='move';
+      else { dragging='new'; }
+      start = p;
+      e.preventDefault();
+    }
+    function move(e) {
+      if (!dragging || !start) return;
+      var p = pt(e), dx = p.x-start.x, dy = p.y-start.y;
+      if (dragging === 'move') {
+        cropRect.x = Math.max(0, Math.min(1-cropRect.w, cropRect.x+dx));
+        cropRect.y = Math.max(0, Math.min(1-cropRect.h, cropRect.y+dy));
+      } else if (dragging === 'new') {
+        cropRect = { x: Math.min(start.x,p.x), y: Math.min(start.y,p.y), w: Math.abs(dx), h: Math.abs(dy) };
+      } else {
+        var i = parseInt(dragging.charAt(1),10);
+        var x0=cropRect.x, y0=cropRect.y, x1=cropRect.x+cropRect.w, y1=cropRect.y+cropRect.h;
+        if (i===0){x0=Math.min(p.x,x1-0.05);y0=Math.min(p.y,y1-0.05);}
+        if (i===1){x1=Math.max(p.x,x0+0.05);y0=Math.min(p.y,y1-0.05);}
+        if (i===2){x0=Math.min(p.x,x1-0.05);y1=Math.max(p.y,y0+0.05);}
+        if (i===3){x1=Math.max(p.x,x0+0.05);y1=Math.max(p.y,y0+0.05);}
+        cropRect = { x:Math.max(0,x0), y:Math.max(0,y0), w:Math.min(1,x1)-Math.max(0,x0), h:Math.min(1,y1)-Math.max(0,y0) };
+      }
+      start = p; drawCrop(); e.preventDefault();
+    }
+    function up() { dragging=null; start=null; }
+    wrap.onmousedown=down; wrap.onmousemove=move; window.onmouseup=up;
+    wrap.ontouchstart=down; wrap.ontouchmove=move; window.ontouchend=up;
+    // 按钮
+    $('crop-go').onclick = function () { doCrop(false); };
+    $('crop-all').onclick = function () { doCrop(true); };
+    $('crop-reset').onclick = function () {
+      $('crop-stage').style.display='none'; $('capture-zone').style.display='flex';
+      $('q-file').value='';
+    };
+  }
+  function drawCrop() {
+    var b = $('crop-box'); if (!b) return;
+    b.style.left = (cropRect.x*100)+'%'; b.style.top = (cropRect.y*100)+'%';
+    b.style.width = (cropRect.w*100)+'%'; b.style.height = (cropRect.h*100)+'%';
+  }
+  function doCrop(useAll) {
+    var img = $('crop-img');
+    var c = document.createElement('canvas');
+    if (useAll) {
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img,0,0);
+    } else {
+      var sx = Math.max(0,cropRect.x)*img.naturalWidth, sy=Math.max(0,cropRect.y)*img.naturalHeight;
+      var sw = Math.max(20,cropRect.w)*img.naturalWidth, sh=Math.max(20,cropRect.h)*img.naturalHeight;
+      c.width = Math.round(sw); c.height = Math.round(sh);
+      c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    }
+    var dataUrl = c.toDataURL('image/jpeg', 0.75);
+    window.__curImage__ = dataUrl;
+    $('crop-stage').style.display='none';
+    $('ocr-stage').style.display='block';
+    $('ocr-preview').src = dataUrl;
+    runOCR(dataUrl);
   }
 
   function setProgress(label, pct) {
@@ -839,12 +939,29 @@
         if (m.status === 'recognizing text') setProgress('正在识别题目… ' + Math.round(m.progress * 100) + '%', 15 + Math.round(m.progress * 60));
       }
     }).then(function (res) {
-      var text = (res.data.text || '').replace(/\n{2,}/g, '\n').trim();
-      $('q-text').value = text;
-      ocrBusy = false;
-      setProgress('识别完成，可修改题目后点「AI 解答并保存」', 100);
-      $('q-add').style.display = 'inline-block';
-      $('q-add').onclick = function () { saveWithAI(text); };
+      var raw = (res.data.text || '').replace(/\n{2,}/g, '\n').trim();
+      $('q-text').value = raw;
+      // AI 纠错：根据科目纠正 OCR 误识别（如数学里的 ×→x、0→O 等），避免数学题被当成语文题
+      var subjKey = $('q-subject').value;
+      var subjName = SUBJECTS[subjKey] ? SUBJECTS[subjKey].name : '通用';
+      setProgress('AI 正在校正识别结果（' + subjName + '）…', 80);
+      aiAsk('这是从一张' + subjName + '题目照片里 OCR 识别出的文字：\n【' + raw + '】\n' +
+        'OCR 常把字符认错（如数学里的 × 其实是变量 x、0/O 混淆、公式符号错乱）。' +
+        '请只做识别纠错，还原题目原本的文字，不要解题、不要加解释、不要复述这段话，只输出纠正后的题目文字。')
+        .then(function (fixed) {
+          var clean = (fixed || '').trim();
+          if (clean && !/free limit|wait|rate|429/i.test(clean) && clean.length < 500) $('q-text').value = clean;
+          ocrBusy = false;
+          setProgress('识别完成（AI 已校正），可修改后点「AI 解答并保存」', 100);
+          $('q-add').style.display = 'inline-block';
+          $('q-add').onclick = function () { saveWithAI($('q-text').value.trim()); };
+        })
+        .catch(function () {
+          ocrBusy = false;
+          setProgress('识别完成，可修改题目后点「AI 解答并保存」', 100);
+          $('q-add').style.display = 'inline-block';
+          $('q-add').onclick = function () { saveWithAI($('q-text').value.trim()); };
+        });
     }).catch(function (err) {
       ocrBusy = false;
       setProgress('识别失败，请手动输入题目', 100);
@@ -965,7 +1082,7 @@
       opts += '<option value="' + q.id + '"' + (q.id === activeChatId ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
     });
     main.innerHTML =
-      '<div class="welcome"><h1>错题问答</h1><p>选一道错题，把不懂的地方直接问 AI；也可以自由提问。</p></div>' +
+      '<div class="welcome"><h1>错题问答</h1><p>选一道错题，先看 AI 答案，再把不懂的地方继续问 AI；也可以自由提问。</p></div>' +
       '<div class="card chat-wrap">' +
         '<div class="chat-select-row"><label style="font-size:13px;color:var(--muted);font-weight:600;">针对题目：</label><select id="chat-q">' + opts + '</select>' +
           '<button class="btn sm green" id="chat-reviewed" type="button" style="display:' + (activeChatId ? 'inline-block' : 'none') + ';">标记已复习</button></div>' +
@@ -1025,12 +1142,26 @@
   }
   function loadChat() {
     var box = $('chat-msgs'); if (!box) return;
+    var html = '';
+    // 需求：错题问答先给答案再问——选中错题时先展示题目与 AI 答案
+    if (activeChatId) {
+      var arr0 = getQ(), q0 = null;
+      for (var i = 0; i < arr0.length; i++) if (arr0[i].id === activeChatId) { q0 = arr0[i]; break; }
+      if (q0) {
+        html += '<div class="quiz-answer" style="align-self:stretch;margin:0 0 18px;">' +
+          '<div style="font-size:12px;font-weight:800;color:var(--accent);margin-bottom:8px;letter-spacing:.5px;">本题 AI 答案</div>' +
+          '<div style="font-size:15px;font-weight:700;line-height:1.6;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(q0.text) + '</div>' +
+          '<div style="border-top:1px solid rgba(46,196,182,.3);margin-top:12px;padding-top:12px;line-height:1.7;white-space:pre-wrap;word-break:break-word;">' +
+            (q0.answer ? fmtAI(escapeHtml(q0.answer)) : '<span style="color:var(--muted)">（还没有答案，可在下面问 AI）</span>') +
+          '</div>' +
+        '</div>';
+      }
+    }
     var chats = getChat();
     if (!chats.length) {
-      box.innerHTML = '<div class="msg sys">选好题目后，在下面输入问题，AI 会结合这道题为你解答。</div>';
-      return;
+      html += '<div class="msg sys">' + (activeChatId ? '有不懂的地方？在下面针对这道题继续问 AI。' : '输入问题，AI 会为你解答。') + '</div>';
+      box.innerHTML = html; return;
     }
-    var html = '';
     chats.forEach(function (c) {
       html += '<div class="msg me">' + escapeHtml(c.q) + '</div>';
       html += '<div class="msg ai">' + fmtAI(escapeHtml(c.a)) + '</div>';
