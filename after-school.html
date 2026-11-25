@@ -465,6 +465,7 @@
   // ---------- 账户系统（云端 API，跨设备） ----------
   var TOKEN_KEY = 'houkebang_token_v1';
   var Q_KEY = 'houkebang_wrongq_v1'; // { 用户名: [错题] }（错题仍存本地）
+  var FREE_KEY = 'houkebang_freechat_v1'; // { 用户名: [对话消息] }（自由问答按账户隔离）
   var API = ''; // 同源：网页和 API 都在 blast-buddies deno.net
 
   function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
@@ -478,6 +479,10 @@
   function loadAllQ() { try { return JSON.parse(localStorage.getItem(Q_KEY) || '{}'); } catch (e) { return {}; } }
   function getQ() { var a = loadAllQ(); return a[currentUser] || []; }
   function saveQ(arr) { var a = loadAllQ(); a[currentUser] = arr; localStorage.setItem(Q_KEY, JSON.stringify(a)); }
+  // 自由问答：按账户隔离 + 持久化
+  function loadAllFree() { try { return JSON.parse(localStorage.getItem(FREE_KEY) || '{}'); } catch (e) { return {}; } }
+  function getFreeChat() { var a = loadAllFree(); return a[currentUser] || []; }
+  function saveFreeChat(arr) { var a = loadAllFree(); a[currentUser] = arr; localStorage.setItem(FREE_KEY, JSON.stringify(a)); }
 
   // 学习效果图生成频率（首次登录设置，按用户存本地）
   var FREQ_KEY = 'houkebang_freq_v1'; // { 用户名: 'daily'|'3days'|'weekly'|'monthly' }
@@ -598,6 +603,7 @@
 
   function enterApp(name) {
     currentUser = name;
+    activeChatId = ''; // 切换账户：重置对话关联，防止串号
     authView.style.display = 'none';
     appView.style.display = 'block';
     $('side-name').textContent = name;
@@ -661,6 +667,7 @@
     if (t) api('/api/hk/logout', 'POST', {}, t).catch(function () {});
     setToken('');
     currentUser = '';
+    activeChatId = '';
     appView.style.display = 'none';
     authView.style.display = 'flex';
     setMode('login'); nameInput.value = ''; closeSidebar();
@@ -1000,16 +1007,21 @@
   }
 
   function getChat() {
-    if (!activeChatId) return window.__freeChat__ || (window.__freeChat__ = []);
+    if (!activeChatId) return getFreeChat();
     var arr = getQ();
     for (var i = 0; i < arr.length; i++) { if (arr[i].id === activeChatId) { if (!arr[i].chats) arr[i].chats = []; return arr[i].chats; } }
     return [];
   }
   // 从指定的 arr 里取 chats（保证与 saveQ 用同一份引用）
   function chatsIn(arr) {
-    if (!activeChatId) return window.__freeChat__ || (window.__freeChat__ = []);
+    if (!activeChatId) return getFreeChat();
     for (var i = 0; i < arr.length; i++) { if (arr[i].id === activeChatId) { if (!arr[i].chats) arr[i].chats = []; return arr[i].chats; } }
     return [];
+  }
+  // 保存对话：关联错题存错题库，自由问答存按账户隔离的自由库
+  function persistChat(arr) {
+    if (activeChatId) saveQ(arr);
+    else saveFreeChat(getFreeChat());
   }
   function loadChat() {
     var box = $('chat-msgs'); if (!box) return;
@@ -1040,6 +1052,7 @@
     }
     var chats = chatsIn(arr);
     chats.push({ q: text, a: '' });
+    persistChat(arr); // 立即保存（按当前账户隔离）
     input.value = '';
     loadChat();
     var thinking = document.createElement('div');
@@ -1050,7 +1063,7 @@
     var prompt = ctx + '学生问：' + text + '\n请用中文简洁友好地解答，像老师讲课一样。';
     aiAsk(prompt).then(function (ans) {
       chats[chats.length - 1].a = ans;
-      if (activeChatId) saveQ(arr);
+      persistChat(arr);
       sendBtn.disabled = false;
       loadChat();
       // 问答结束，询问是否加入错题集
@@ -1059,7 +1072,7 @@
       askAddToBook(text, ans, subj || 'chinese');
     }).catch(function (err) {
       chats[chats.length - 1].a = '抱歉，AI 暂时不可用，请稍后再试。';
-      if (activeChatId) saveQ(arr);
+      persistChat(arr);
       sendBtn.disabled = false;
       loadChat();
       // 即使 AI 失败，也允许把问题加入错题集（答案留空）
