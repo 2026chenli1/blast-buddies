@@ -916,15 +916,13 @@
   // 三科统一规则：语文、英语也必须给出答案，不能只顾数学
   var ANSWER_RULE = '\n无论语文、数学还是英语，都必须给出这一题的答案（语文默写/字词/阅读写标准答案，英语单词/翻译/选择写答案，数学写步骤和结果），绝对不能留空或写「略」。';
 
-  // ---------- AI 调用：优先走后端智谱（已配 Key、不限流），失败回退免 Key 接口 ----------
+  // ---------- AI 调用：先试后端智谱（已配 Key、不限流），失败才回退免 Key 接口 ----------
+  // 不依赖 visionReady 异步标志，避免刚进页面时检测未完成而误走限流通道
   function aiAsk(prompt) {
-    if (visionReady) {
-      return api('/api/hk/ai/chat', 'POST', { prompt: prompt }, getToken()).then(function (r) {
-        if (!r.ok) throw new Error(r.msg || 'AI 服务返回失败');
-        return String(r.text).replace(/\n{3,}/g, '\n\n').trim();
-      }).catch(function () { return freeAI(prompt); });
-    }
-    return freeAI(prompt);
+    return api('/api/hk/ai/chat', 'POST', { prompt: prompt }, getToken()).then(function (r) {
+      if (!r.ok) throw new Error(r.msg || 'AI 服务返回失败');
+      return String(r.text).replace(/\n{3,}/g, '\n\n').trim();
+    }).catch(function () { return freeAI(prompt); });
   }
   function freeAI(prompt) {
     var url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt);
@@ -1197,7 +1195,8 @@
       $('crop-stage').style.display='none';
       $('ocr-stage').style.display='block';
       $('ocr-preview').src = dataUrl;
-      if (visionReady) runVision(dataUrl); else runOCR(dataUrl);
+      // 总是先试视觉 AI（能看懂数学公式）；失败时 runVision 内部自动回退 OCR
+      runVision(dataUrl);
     };
     source.onerror = function () { setProgress('图片加载失败，请重选', 0); };
     source.src = window.__fullImage__ || $('crop-img').src;
@@ -1417,7 +1416,11 @@
                     'oral':'oral','column':'column','solve':'solve','choice':'choice','blank':'blank','dictation':'dictation','translate':'translate','word':'word','reading':'reading' };
   function parsePaperJSON(r) {
     var arr = [];
-    try { var m = r.match(/\[[\s\S]*\]/); arr = JSON.parse(m ? m[0] : r); } catch (e) { arr = []; }
+    try {
+      var c = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
+      var m = c.match(/\[[\s\S]*\]/);
+      arr = JSON.parse(m ? m[0] : c);
+    } catch (e) { arr = []; }
     return (Array.isArray(arr) ? arr : []).map(function (x, i) {
       var no = String(x.n || x.no || x.num || (i+1) || '').trim();
       no = no.replace(/^第\s*/, '').replace(/题$/, '').replace(/[.、．]$/, '').trim();
@@ -1441,21 +1444,25 @@
       chain = chain.then(function (acc) {
         $('paper-label').textContent = 'AI 正在看第 ' + (idx+1) + '/' + paperShots.length + ' 张…';
         $('paper-fill').style.width = Math.round((idx+1)/paperShots.length*80) + '%';
-        if (visionReady) {
-          return aiVision(shot.src, prompt).then(function (r) { return acc.concat(parsePaperJSON(r)); })
-            .catch(function () { return acc; });
+        // 先试视觉 AI；失败自动退回 OCR + 文本 AI
+        function ocrFallback() {
+          return new Promise(function (resolve) {
+            if (typeof Tesseract === 'undefined') { resolve(acc); return; }
+            Tesseract.recognize(shot.src, 'chi_sim+eng').then(function (res) {
+              var txt = res.data.text || '';
+              if (!txt.trim()) { resolve(acc); return; }
+              aiAsk(PAPER_PROMPT_TEXT + txt.slice(0,5000))
+                .then(function (r) { resolve(acc.concat(parsePaperJSON(r))); })
+                .catch(function () { resolve(acc); });
+            }).catch(function () { resolve(acc); });
+          });
         }
-        // 无视觉 AI 时退回 OCR + 文本 AI
-        return new Promise(function (resolve) {
-          if (typeof Tesseract === 'undefined') { resolve(acc); return; }
-          Tesseract.recognize(shot.src, 'chi_sim+eng').then(function (res) {
-            var txt = res.data.text || '';
-            if (!txt.trim()) { resolve(acc); return; }
-            aiAsk(PAPER_PROMPT_TEXT + txt.slice(0,5000))
-              .then(function (r) { resolve(acc.concat(parsePaperJSON(r))); })
-              .catch(function () { resolve(acc); });
-          }).catch(function () { resolve(acc); });
-        });
+        return aiVision(shot.src, prompt)
+          .then(function (r) {
+            var got = parsePaperJSON(r);
+            return got.length ? acc.concat(got) : ocrFallback();
+          })
+          .catch(ocrFallback);
       });
     });
     chain.then(function (items) {
@@ -1522,10 +1529,6 @@
     '不要输出 JSON 以外的任何文字。';
   var scanItems = [];
   function scanWrongPapers(files, box) {
-    if (!visionReady) {
-      showModal('<h3 style="margin-top:0">需要视觉 AI</h3><p style="color:var(--muted);line-height:1.7">拍照挑错题需要 AI 能看懂批改标记。当前视觉 AI 未启用，请先配置好密钥。</p><div class="modal-btns"><button class="btn gold" id="sm-ok" type="button">知道了</button></div>');
-      $('sm-ok').onclick = closeModal; return;
-    }
     showModal('<h3 style="margin-top:0">AI 正在挑错题…</h3><p style="color:var(--muted)">正在看 ' + files.length + ' 张图，找打叉/画圈/半对的题目</p>');
     var chain = Promise.resolve([]);
     files.forEach(function (f) {
@@ -1559,7 +1562,11 @@
   }
   function parseScanJSON(r) {
     var arr = [];
-    try { var m = r.match(/\[[\s\S]*\]/); arr = JSON.parse(m ? m[0] : r); } catch (e) { arr = []; }
+    try {
+      var c = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
+      var m = c.match(/\[[\s\S]*\]/);
+      arr = JSON.parse(m ? m[0] : c);
+    } catch (e) { arr = []; }
     var qmap = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','其他':'other' };
     return (Array.isArray(arr) ? arr : []).map(function (x, i) {
       var no = String(x.n || (i+1)).replace(/^第\s*/,'').replace(/题$/,'').trim() || String(i+1);
@@ -1752,9 +1759,10 @@
       '【判卷标准】' + qt.rule + '\n' +
       '只输出 JSON，格式：{"ok":true或false,"comment":"一句话点评/指出错在哪","right":"正确答案"}。不要输出 JSON 以外的文字。';
     return aiAsk(prompt).then(function (r) {
-      var m = r.match(/\{[\s\S]*?\}/);
-      if (!m) throw new Error('批改返回格式异常');
-      var j = JSON.parse(m[0]);
+      var clean = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
+      var st = clean.indexOf('{'), en = clean.lastIndexOf('}');
+      if (st < 0 || en < st) throw new Error('批改返回格式异常');
+      var j = JSON.parse(clean.slice(st, en+1));
       return { ok: !!j.ok, comment: String(j.comment||'').trim(), right: String(j.right||'').trim() };
     });
   }
