@@ -1118,36 +1118,44 @@
     b.style.width = (cropRect.w*100)+'%'; b.style.height = (cropRect.h*100)+'%';
   }
   function doCrop(useAll) {
-    var img = $('crop-img');
-    var c = document.createElement('canvas');
-    if (useAll) {
-      c.width = img.naturalWidth; c.height = img.naturalHeight;
-      c.getContext('2d').drawImage(img,0,0);
-    } else {
-      var sx = Math.max(0,cropRect.x)*img.naturalWidth, sy=Math.max(0,cropRect.y)*img.naturalHeight;
-      var sw = Math.max(20,cropRect.w)*img.naturalWidth, sh=Math.max(20,cropRect.h)*img.naturalHeight;
-      c.width = Math.round(sw); c.height = Math.round(sh);
-      c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
-    }
-    // 修复小图问题：框选区域太小时放大到最短边≥700px，并留白边，避免 OCR 把内容缩在角落认不出
-    var MIN_SIDE = 700, PAD = 40;
-    if (Math.min(c.width, c.height) < MIN_SIDE) {
-      var scale = MIN_SIDE / Math.min(c.width, c.height);
-      var nw = Math.round(c.width * scale), nh = Math.round(c.height * scale);
-      var big = document.createElement('canvas');
-      big.width = nw + PAD*2; big.height = nh + PAD*2;
-      var bx = big.getContext('2d');
-      bx.fillStyle = '#fff'; bx.fillRect(0,0,big.width,big.height);
-      bx.drawImage(c, PAD, PAD, nw, nh);
-      c = big;
-    }
-    var dataUrl = c.toDataURL('image/jpeg', 0.85);
-    window.__curImage__ = dataUrl;
-    $('crop-stage').style.display='none';
-    $('ocr-stage').style.display='block';
-    $('ocr-preview').src = dataUrl;
-    if (visionReady) runVision(dataUrl);
-    else runOCR(dataUrl);
+    // 用新 Image 确保已加载，避免 naturalWidth=0 画出黑图
+    var source = new Image();
+    source.onload = function () {
+      var W = source.naturalWidth, H = source.naturalHeight;
+      if (!W || !H) { setProgress('图片未就绪，请重试', 0); return; }
+      var c = document.createElement('canvas');
+      if (useAll) {
+        c.width = W; c.height = H;
+        c.getContext('2d').drawImage(source, 0, 0, W, H);
+      } else {
+        var x = Math.max(0, Math.min(0.95, cropRect.x)) * W;
+        var y = Math.max(0, Math.min(0.95, cropRect.y)) * H;
+        var w = Math.max(0.03, Math.min(1 - cropRect.x, cropRect.w)) * W;
+        var h = Math.max(0.03, Math.min(1 - cropRect.y, cropRect.h)) * H;
+        c.width = Math.round(w); c.height = Math.round(h);
+        c.getContext('2d').drawImage(source, x, y, w, h, 0, 0, c.width, c.height);
+      }
+      // 框选太小则放大到最短边≥800px + 白边，保证 AI 看得清
+      var MIN_SIDE = 800, PAD = 30;
+      if (Math.min(c.width, c.height) < MIN_SIDE) {
+        var scale = MIN_SIDE / Math.min(c.width, c.height);
+        var nw = Math.round(c.width * scale), nh = Math.round(c.height * scale);
+        var big = document.createElement('canvas');
+        big.width = nw + PAD*2; big.height = nh + PAD*2;
+        var bx = big.getContext('2d');
+        bx.fillStyle = '#fff'; bx.fillRect(0,0,big.width,big.height);
+        bx.drawImage(c, 0, 0, c.width, c.height, PAD, PAD, nw, nh);
+        c = big;
+      }
+      var dataUrl = c.toDataURL('image/jpeg', 0.9);
+      window.__curImage__ = dataUrl;
+      $('crop-stage').style.display='none';
+      $('ocr-stage').style.display='block';
+      $('ocr-preview').src = dataUrl;
+      if (visionReady) runVision(dataUrl); else runOCR(dataUrl);
+    };
+    source.onerror = function () { setProgress('图片加载失败，请重选', 0); };
+    source.src = window.__fullImage__ || $('crop-img').src;
   }
 
   function setProgress(label, pct) {
