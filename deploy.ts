@@ -1644,26 +1644,57 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     if (!key) return jsonResp({ ok: false, msg: '视觉 AI 尚未配置密钥', configured: false }, 503);
     const { image, prompt } = await readBody(req);
     if (!image || !prompt) return jsonResp({ ok: false, msg: '缺少图片或问题' }, 400);
-    const model = Deno.env.get('HK_AI_MODEL') || 'glm-4v-flash';
-    try {
-      const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: [
-            { type: 'text', text: String(prompt) },
-            { type: 'image_url', image_url: { url: String(image) } }
-          ]}]
-        })
-      });
-      const data = await resp.json();
-      const text = data?.choices?.[0]?.message?.content;
-      if (!text) return jsonResp({ ok: false, msg: 'AI 未返回结果', raw: JSON.stringify(data).slice(0, 300) }, 502);
-      return jsonResp({ ok: true, text: String(text) });
-    } catch (e) {
-      return jsonResp({ ok: false, msg: 'AI 调用失败: ' + (e as Error).message }, 502);
+    const models = [Deno.env.get('HK_AI_MODEL') || 'glm-4v-flash', 'glm-4.1v-thinking-flash', 'glm-4v-flash'];
+    let lastErr = '';
+    for (const model of models) {
+      try {
+        const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: [
+              { type: 'text', text: String(prompt) },
+              { type: 'image_url', image_url: { url: String(image) } }
+            ]}]
+          })
+        });
+        const data = await resp.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (text) return jsonResp({ ok: true, text: String(text), model });
+        lastErr = JSON.stringify(data).slice(0, 200);
+      } catch (e) { lastErr = (e as Error).message; }
     }
+    return jsonResp({ ok: false, msg: 'AI 调用失败: ' + lastErr }, 502);
+  }
+
+  // ---------- 金小助文本 AI 代理（同一个 Key，解除免费接口限流） ----------
+  // POST /api/hk/ai/chat { prompt } 或 { messages: [...] }
+  if (path === '/api/hk/ai/chat' && req.method === 'POST') {
+    const key = Deno.env.get('HK_AI_KEY') || '';
+    if (!key) return jsonResp({ ok: false, msg: 'AI 尚未配置密钥', configured: false }, 503);
+    const body = await readBody(req);
+    const messages = Array.isArray(body.messages) && body.messages.length
+      ? body.messages
+      : [{ role: 'user', content: String(body.prompt || '') }];
+    if (!messages[0] || !messages[0].content) return jsonResp({ ok: false, msg: '缺少问题' }, 400);
+    // 免费文本模型，首选拥挤时自动换备用
+    const models = [Deno.env.get('HK_AI_TEXT_MODEL') || 'glm-4-flash', 'glm-4-flash-250414', 'glm-4.5-flash'];
+    let lastErr = '';
+    for (const model of models) {
+      try {
+        const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+          body: JSON.stringify({ model, messages })
+        });
+        const data = await resp.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (text) return jsonResp({ ok: true, text: String(text), model });
+        lastErr = JSON.stringify(data).slice(0, 200);
+      } catch (e) { lastErr = (e as Error).message; }
+    }
+    return jsonResp({ ok: false, msg: 'AI 调用失败: ' + lastErr }, 502);
   }
 
   // POST /api/auth/send-code { phone } —— 生成 10 位验证码并（可选）发送短信
