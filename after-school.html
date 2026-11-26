@@ -1397,23 +1397,31 @@
   }
   // 试卷拆题要求：按题号逐题写「第几题 → 题目要求 → 答案」，三科都必须给答案
   var PAPER_PROMPT_IMG =
-    '请仔细看这张试卷/学习单图片，把里面每一道题都识别出来，按试卷上的题号顺序逐题整理。\n' +
-    '每一题都要写清楚三件事：①第几题（题号）②题目要求（题干）③这一题的答案。\n' +
-    '重要：语文、数学、英语三科的题目都必须给出答案，不能只给数学题答案、不能把答案留空或写「略」。\n' +
-    '  · 语文：默写、字词、拼音、阅读等要写出标准答案或参考答案。\n' +
-    '  · 英语：单词、选择、翻译、完形等要写出答案。\n' +
+    '请仔细看这张试卷/学习单图片，按试卷上的题号顺序逐题整理。\n' +
+    '【最重要：只看错题】如果这张卷子已经被批改过（有老师画的圈、打勾、打叉、半勾、波浪线、横线、红笔订正、扣分、分数、等级评语等痕迹），' +
+    '就只输出【被标记做错】的题，做对且没有标记的题一律不要输出。语文尤其注意：圈出来的错别字、画波浪线的句子、旁边写的订正字、' +
+    '打半勾的阅读题、习作旁的批注或扣分，都算被标记做错。若整张卷子没有批改痕迹，则输出所有题。\n' +
+    '每一题写清楚：①题号 ②题目要求（只写题干，不要混入答案）③这一题的标准答案 ④题型 ⑤是否被判错 w。\n' +
+    '【标准答案要求】语文、数学、英语三科都必须给出答案，不能留空或写「略」。\n' +
+    '  · 语文：默写、填空、字词写准确答案；阅读按要点写出一段完整参考答案；习作/作文给出写作要点或范文。\n' +
+    '  · 英语：单词、选择、翻译、完形写出答案。\n' +
     '  · 数学：写出简要步骤和结果。\n' +
-    '只输出 JSON 数组，一题一个对象，格式：\n' +
-    '[{"n":"1","t":"题目要求（只写题干，不要混入答案）","s":"语文|数学|英语","q":"题型","a":"这一题的答案"}]\n' +
-    '题型 q 从这些里选一个：口算/列式/解答/选择/填空/默写/翻译/字词/阅读/其他。' +
-    '数学不只是解答题，还有口算、列式、竖式；语文有默写、字词、阅读；英语有选择、翻译、填空等，都要如实判断。\n' +
-    'n 是试卷上的题号；若看不清题号就按顺序用 1、2、3。不要输出 JSON 以外的任何文字。';
+    '【题型按原题型判断】填空题就写「填空」，习作题就写「习作」，不要把所有语文题都当成一种。\n' +
+    '只输出 JSON 数组：[{"n":"1","t":"题目要求","s":"语文|数学|英语","q":"题型","a":"标准答案","w":true或false}]\n' +
+    'w 表示这题是否被老师判错/标记（有批改痕迹时才需要准确判断；无批改痕迹时全部填 false）。\n' +
+    '题型 q 从这些里选：口算/列式/解答/选择/填空/默写/翻译/字词/阅读/习作/其他。' +
+    'w 必须是布尔值 true/false，不要用字符串。不要输出 JSON 以外的任何文字。';
   var PAPER_PROMPT_TEXT =
-    '下面是试卷/学习单 OCR 出的文字，请按题号顺序把每一道题都拆出来，逐题写清「第几题、题目要求、答案」。\n' +
-    '语文、数学、英语三科都必须给出答案，不能留空或只给数学答案。\n' +
-    '只输出 JSON 数组 [{"n":"题号","t":"题目要求","s":"语文|数学|英语","q":"题型","a":"答案"}]，不要多余文字。\n文字：\n';
-  var QTYPE_MAP = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','其他':'other',
-                    'oral':'oral','column':'column','solve':'solve','choice':'choice','blank':'blank','dictation':'dictation','translate':'translate','word':'word','reading':'reading' };
+    '下面是试卷/学习单 OCR 出的文字，请按题号顺序逐题整理。\n' +
+    '若文字里能看出批改结果（✗、圈、订正、扣分、半勾等），只保留做错的题；否则保留所有题。\n' +
+    '语文、数学、英语三科都要给出标准答案，语文阅读按要点写参考答案、习作给写作要点或范文。\n' +
+    '题型按原题型判断：填空题写「填空」，习作题写「习作」。\n' +
+    '只输出 JSON 数组 [{"n":"题号","t":"题目要求","s":"语文|数学|英语","q":"题型","a":"标准答案","w":true或false}]，不要多余文字。\n文字：\n';
+  var QTYPE_MAP = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','习作':'composition','作文':'composition','写话':'composition','小练笔':'composition','其他':'other',
+                    'oral':'oral','column':'column','solve':'solve','choice':'choice','blank':'blank','dictation':'dictation','translate':'translate','word':'word','reading':'reading','composition':'composition' };
+  function isWrongFlag(v) {
+    return v === true || v === 1 || v === 'true' || v === 'True' || v === '错' || v === '✗' || v === '×';
+  }
   function parsePaperJSON(r) {
     var arr = [];
     try {
@@ -1421,7 +1429,7 @@
       var m = c.match(/\[[\s\S]*\]/);
       arr = JSON.parse(m ? m[0] : c);
     } catch (e) { arr = []; }
-    return (Array.isArray(arr) ? arr : []).map(function (x, i) {
+    var items = (Array.isArray(arr) ? arr : []).map(function (x, i) {
       var no = String(x.n || x.no || x.num || (i+1) || '').trim();
       no = no.replace(/^第\s*/, '').replace(/题$/, '').replace(/[.、．]$/, '').trim();
       return {
@@ -1430,14 +1438,22 @@
         s: x.s==='数学'?'math':(x.s==='英语'?'english':'chinese'),
         q: QTYPE_MAP[String(x.q||'').trim()] || 'other',
         a: String(x.a||'').trim(),
+        wrong: isWrongFlag(x.w),
         picked: true
       };
     }).filter(function (x) { return x.t.length > 2; });
+    // 只要 AI 明确标出了错题（说明卷子被批改过），就只保留做错的题
+    var hasGraded = items.some(function (x) { return x.wrong; });
+    var out = hasGraded ? items.filter(function (x) { return x.wrong; }) : items;
+    out.graded = hasGraded;
+    return out;
   }
+  var paperGraded = false; // 本次试卷是否被批改过（只收错题）
   function processPaper() {
     if (!paperShots.length) { $('paper-msg').textContent = '请先上传图片'; return; }
     $('paper-progress').style.display = 'block'; $('paper-fill').style.width = '10%';
     $('paper-run').disabled = true;
+    paperGraded = false;
     var prompt = PAPER_PROMPT_IMG;
     var chain = Promise.resolve([]);
     paperShots.forEach(function (shot, idx) {
@@ -1452,7 +1468,11 @@
               var txt = res.data.text || '';
               if (!txt.trim()) { resolve(acc); return; }
               aiAsk(PAPER_PROMPT_TEXT + txt.slice(0,5000))
-                .then(function (r) { resolve(acc.concat(parsePaperJSON(r))); })
+                .then(function (r) {
+                  var got = parsePaperJSON(r);
+                  if (got.graded) paperGraded = true;
+                  resolve(acc.concat(got));
+                })
                 .catch(function () { resolve(acc); });
             }).catch(function () { resolve(acc); });
           });
@@ -1460,6 +1480,7 @@
         return aiVision(shot.src, prompt)
           .then(function (r) {
             var got = parsePaperJSON(r);
+            if (got.graded) paperGraded = true;
             return got.length ? acc.concat(got) : ocrFallback();
           })
           .catch(ocrFallback);
@@ -1469,7 +1490,9 @@
       paperItems = items;
       $('paper-progress').style.display = 'none';
       $('paper-run').disabled = false;
-      $('paper-msg').textContent = '识别到 ' + paperItems.length + ' 道题，勾选后加入';
+      $('paper-msg').textContent = paperGraded
+        ? '已按批改标记挑出 ' + paperItems.length + ' 道错题（做对的没收录），AI 已给出标准答案'
+        : '识别到 ' + paperItems.length + ' 道题，勾选后加入';
       $('paper-msg').className = 'inline-msg ok';
       drawPaperResult();
     }).catch(function () {
@@ -1480,8 +1503,10 @@
   function drawPaperResult() {
     var box = $('paper-result'); if (!box) return;
     if (!paperItems.length) { box.innerHTML = ''; return; }
-    var html = '<div class="card"><div class="section-title">识别出的题目</div>' +
-      '<div class="section-sub">按题号整理：第几题 → 题目要求 → 答案。三科都会给出答案，默认全选。</div>';
+    var html = '<div class="card"><div class="section-title">' + (paperGraded ? '挑出的错题' : '识别出的题目') + '</div>' +
+      '<div class="section-sub">' + (paperGraded
+        ? '按圈、勾、叉、订正等批改痕迹只保留做错的题；按题号列出题目要求与 AI 生成的标准答案，默认全选。'
+        : '按题号整理：第几题 → 题目要求 → 标准答案。三科都会给出答案，默认全选。') + '</div>';
     paperItems.forEach(function (it, i) {
       var sb = SUBJECTS[it.s] || SUBJECTS.chinese;
       html += '<div class="pq-item' + (it.picked?'':' off') + '" data-pq="' + i + '">' +
@@ -1519,17 +1544,18 @@
 
   // ---------- 拍照挑错题：AI 从批改过的卷子里找出打叉/画圈/半对/标错的题 ----------
   var SCAN_PROMPT =
-    '这是一张已经批改过的试卷/作业照片。请找出所有【做错或被老师标记】的题目：' +
-    '包括打叉(✗)、画圈、半对(√上加一笔/半勾)、划线标出、写了订正、被红笔批注、扣分、写了错误答案的题。\n' +
-    '做对且没有标记的题不要收录。\n' +
-    '对每一道被标记的题目，整理出：①题号 ②题目要求(题干原文) ③科目(语文/数学/英语) ' +
-    '④题型(口算/列式/解答/选择/填空/默写/翻译/字词/阅读/其他，选最接近的一个) ⑤正确答案(你来解答，必须给出) ' +
-    '⑥学生原来错在哪(一句话，没有就留空)。\n' +
-    '只输出 JSON 数组：[{"n":"题号","t":"题目要求","s":"语文|数学|英语","q":"题型","a":"正确答案","why":"错因"}]\n' +
-    '不要输出 JSON 以外的任何文字。';
+    '这是一张已经批改过的试卷/作业照片。**只找出做错或被老师标记的题目**，做对且没有标记的题一律不要收录。\n' +
+    '批改标记包括：打叉(✗/×)、画圈、半对(√上加一笔/半勾)、划线或波浪线标出、写了订正、红笔批注、扣分、等级评语、写了错误答案。\n' +
+    '【语文卷特别注意】老师常这样标错：圈出错别字、在错字旁写订正字、用波浪线划出病句、阅读题打半勾或扣分、' +
+    '习作/作文旁的批注与扣分、填空处画圈或打叉。这些都要算作做错的题；只打勾且无任何标记的语文题不要收录。\n' +
+    '对每一道错题整理出：①题号 ②题目要求(题干原文，不要混入答案) ③科目 ④题型 ⑤一段完整规范的标准答案 ⑥错因。\n' +
+    '【题型必须按原题型判断】填空题写「填空」，习作/作文/写话题写「习作」，阅读题写「阅读」，默写写「默写」，字词题写「字词」，' +
+    '不要把所有语文题都归成一种。标准答案：语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案。\n' +
+    '只输出 JSON 数组：[{"n":"题号","t":"题目要求","s":"语文|数学|英语","q":"题型","a":"标准答案","why":"错因"}]\n' +
+    '题型 q 从：口算/列式/解答/选择/填空/默写/翻译/字词/阅读/习作/其他 中选。不要输出 JSON 以外的任何文字。';
   var scanItems = [];
   function scanWrongPapers(files, box) {
-    showModal('<h3 style="margin-top:0">AI 正在挑错题…</h3><p style="color:var(--muted)">正在看 ' + files.length + ' 张图，找打叉/画圈/半对的题目</p>');
+    showModal('<h3 style="margin-top:0">AI 正在挑错题…</h3><p style="color:var(--muted)">正在看 ' + files.length + ' 张图，按打叉、画圈、勾/半勾、订正、红笔批注等批改痕迹找做错的题（语文的圈出错字、波浪线、习作批注也算）</p>');
     var chain = Promise.resolve([]);
     files.forEach(function (f) {
       chain = chain.then(function (acc) {
@@ -1567,7 +1593,7 @@
       var m = c.match(/\[[\s\S]*\]/);
       arr = JSON.parse(m ? m[0] : c);
     } catch (e) { arr = []; }
-    var qmap = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','其他':'other' };
+    var qmap = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','习作':'composition','作文':'composition','写话':'composition','小练笔':'composition','其他':'other' };
     return (Array.isArray(arr) ? arr : []).map(function (x, i) {
       var no = String(x.n || (i+1)).replace(/^第\s*/,'').replace(/题$/,'').trim() || String(i+1);
       return {
@@ -1584,7 +1610,7 @@
       $('sm-ok').onclick = closeModal; return;
     }
     var html = '<div class="card" id="scan-card"><div class="section-title">AI 找到 ' + scanItems.length + ' 道错题</div>' +
-      '<div class="section-sub">都是被打叉/画圈/半对的题，勾选后加入错题本。题型和正确答案已一起整理好。</div>';
+      '<div class="section-sub">只保留了做错的题（做对的没收录）。按原题型标好：填空题就是填空、习作题就是习作，并附 AI 生成的标准答案与错因。</div>';
     scanItems.forEach(function (it, i) {
       var sb = SUBJECTS[it.s];
       html += '<div class="pq-item' + (it.picked?'':' off') + '" data-sc="' + i + '">' +
@@ -1727,13 +1753,29 @@
     column:  { name: '列式',   hint: '写出算式和结果，例如：3×4=12', rule: '检查算式/列式是否正确以及最终结果' },
     solve:   { name: '解答',   hint: '写出解题步骤和答案', rule: '检查关键步骤与最终答案，步骤合理即可' },
     choice:  { name: '选择',   hint: '写出选项或答案，例如：B', rule: '只看选项字母或对应内容是否一致' },
-    blank:   { name: '填空',   hint: '写出要填的内容', rule: '看所填内容是否与标准答案一致，意思相同即可' },
-    dictation:{ name: '默写',  hint: '默写/写出原文', rule: '字词必须准确，错别字算错' },
+    blank:   { name: '填空',   hint: '把空里该填的内容写出来', rule: '填空按空逐一核对；意思相同、同义表达算对，错别字导致词义改变算错', blankable: true },
+    dictation:{ name: '默写',  hint: '把空里的原文默写出来', rule: '默写必须字词准确，错别字算错；按原文逐字核对', blankable: true },
     translate:{ name: '翻译',  hint: '写出翻译结果', rule: '意思正确即可，允许不同表达' },
-    word:    { name: '字词',   hint: '写出字词/拼音/解释', rule: '按题目要求判断字词、拼音、解释是否正确' },
-    reading: { name: '阅读',   hint: '写出你的答案', rule: '按要点给分，意思答到即可' },
+    word:    { name: '字词',   hint: '写出字词/拼音/解释', rule: '按题目要求判断字词、拼音、解释是否正确，同义解释算对' },
+    reading: { name: '阅读',   hint: '按题目要求写出你的答案', rule: '按要点给分，意思答到、要点齐全即可，不抠字眼', rows: 6 },
+    composition:{ name: '习作', hint: '按题目要求写一段或一篇（可多行）', rule: '按是否切题、内容完整、语句通顺、达到字数与格式要求评判；不要求与范文一字不差', rows: 10 },
     other:   { name: '其他',   hint: '写出你的答案', rule: '按题目要求判断是否答对' }
   };
+  // 按原题型呈现：填空题把答案挖成空，习作/阅读保留完整题目要求
+  function questionForTest(q) {
+    var t = String(q.text || '');
+    var type = qtypeOf(q);
+    var a = String(q.answer || '').trim();
+    if (!QTYPES[type].blankable || !a || a.length < 2 || a.length > 30) return t;
+    // 先分离「第 N 题：」前缀，避免把题号里的数字误当成答案挖掉
+    var m = t.match(/^(第\s*\d+\s*题[：:、.]?\s*)([\s\S]*)$/);
+    var pre = m ? m[1] : '', body = m ? m[2] : t;
+    // 题干里已经出现答案（如整句默写），挖掉变成真正的填空题
+    if (body.indexOf(a) >= 0) return pre + body.split(a).join('______');
+    // 题干已有空格/括号占位则保持原样
+    if (/_{2,}|＿{2,}|（\s*）|\(\s*\)/.test(body)) return t;
+    return t;
+  }
   function qtypeOf(q) { return QTYPES[q.qtype] ? q.qtype : guessQType(q); }
   // 老数据没题型：根据题目文字和科目猜一个
   function guessQType(q) {
@@ -1743,27 +1785,44 @@
     if (/选择|选出|单项选择|[ABCD]\s*[.、]/.test(t)) return 'choice';
     if (/默写|补全|下一句|上句/.test(t)) return 'dictation';
     if (/翻译|translate|英译汉|汉译英/i.test(t)) return 'translate';
+    if (/习作|作文|写话|写一篇|写一段|小练笔/.test(t)) return 'composition';
+    if (/阅读|读短文|回答问题/.test(t)) return 'reading';
     if (s === 'english') return 'blank';
-    if (s === 'chinese') return /填空|填一填/.test(t) ? 'blank' : 'word';
+    if (s === 'chinese') return /填空|填一填|补充完整/.test(t) ? 'blank' : 'word';
     return 'solve';
   }
-  // AI 批改：按题型判断学生答案对错
+  // AI 批改：严格评判 + 语义等价算对 + 每次都给出标准答案
   function gradeAnswer(q, studentAns) {
     var qt = QTYPES[qtypeOf(q)];
-    var prompt = '你是一位严格的判卷老师。请判断学生这道题答得对不对。\n' +
-      '【科目】' + (SUBJECTS[q.subject]||SUBJECTS.chinese).name + '\n' +
+    var subj = (SUBJECTS[q.subject]||SUBJECTS.chinese).name;
+    var prompt = '你是一位严格的判卷老师，请判断学生这道题答得对不对。\n' +
+      '【科目】' + subj + '\n' +
       '【题型】' + qt.name + '\n' +
       '【题目要求】' + q.text + '\n' +
-      '【标准答案】' + (q.answer || '（题目未给出标准答案，请你自行解答后判断）') + '\n' +
+      '【标准答案】' + (q.answer || '（题目未给出，请你先自行写出一段标准答案再判断）') + '\n' +
       '【学生作答】' + studentAns + '\n' +
-      '【判卷标准】' + qt.rule + '\n' +
-      '只输出 JSON，格式：{"ok":true或false,"comment":"一句话点评/指出错在哪","right":"正确答案"}。不要输出 JSON 以外的文字。';
+      '【本题判卷标准】' + qt.rule + '\n' +
+      '【通用规则，必须遵守】\n' +
+      '1. 严格：不能因为学生写了字就判对。答非所问、漏掉关键要点、错别字改变词义、计算错误、与题意无关，一律判错。\n' +
+      '2. 语义等价：语文、英语的主观题，学生的表述和标准答案不一样，但意思相同、关键词或要点答到了，就算对；不要抠字眼。\n' +
+      '3. 默写、字词、古诗类：错别字算错；翻译、阅读、习作类：意思对、要点到即可。\n' +
+      '4. 习作题按是否切题、内容完整、语句通顺、达到字数与格式要求来判，并在 right 里给出写作要点或范文。\n' +
+      '5. 无论判对还是判错，right 都必须给出一段完整、规范的标准答案（语文阅读按要点列出，习作给要点或范文），不能留空。\n' +
+      '只输出 JSON：{"ok":true或false,"comment":"一句话点评，说清对错原因","right":"标准答案"}。\n' +
+      'ok 必须是布尔值 true 或 false，绝对不要用字符串 "true"/"false"。不要输出 JSON 以外的任何文字。';
     return aiAsk(prompt).then(function (r) {
       var clean = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
       var st = clean.indexOf('{'), en = clean.lastIndexOf('}');
       if (st < 0 || en < st) throw new Error('批改返回格式异常');
       var j = JSON.parse(clean.slice(st, en+1));
-      return { ok: !!j.ok, comment: String(j.comment||'').trim(), right: String(j.right||'').trim() };
+      // 严格布尔：AI 偶尔返回字符串 "false"，用 !! 会把 "false" 误判为答对
+      var v = j.ok;
+      var ok = (v === true || v === 1 || v === 'true' || v === 'True' || v === '对' || v === '正确');
+      return {
+        ok: ok,
+        comment: String(j.comment||'').trim(),
+        right: String(j.right||'').trim() || String(q.answer||'').trim()
+      };
     });
   }
 
@@ -1805,10 +1864,10 @@
     box.innerHTML = '<div class="card test-card">' +
       '<div class="test-progress"><span>第 ' + (testPos+1) + ' / ' + testTotal + ' 题</span><div class="bar"><i style="width:' + Math.round(testPos/testTotal*100) + '%"></i></div>' +
         '<span class="subj-tag ' + s.cls + '">' + s.name + '</span><span class="qtype-tag">' + qt.name + '</span></div>' +
-      '<div style="font-size:12px;color:var(--muted);">把答案写出来，AI 会帮你批改（不是点一下就算过）。</div>' +
-      '<div class="test-q">' + escapeHtml(q.text) + '</div>' +
+      '<div style="font-size:12px;color:var(--muted);">按原题型作答，答案先不给你；写完提交，AI 严格批改并给出标准答案。</div>' +
+      '<div class="test-q">' + escapeHtml(questionForTest(q)) + '</div>' +
       (q.image ? '<img class="preview-img" src="' + q.image + '" alt="题目">' : '') +
-      '<textarea id="t-answer" class="answer-input" rows="3" placeholder="' + qt.hint + '"></textarea>' +
+      '<textarea id="t-answer" class="answer-input" rows="' + (qt.rows || 3) + '" placeholder="' + qt.hint + '"></textarea>' +
       '<div id="t-grade"></div>' +
       '<div class="grade-row"><button class="btn gold" id="t-submit" type="button" style="flex:1;padding:14px;">提交答案，让 AI 批改</button></div>' +
       '<div style="font-size:11px;color:var(--muted);margin-top:14px;">记忆曲线：第 ' + (st.step+1) + ' 轮 · ' + (st.days||'已完成') + ' 天间隔</div>' +
@@ -1825,7 +1884,7 @@
         $('t-grade').innerHTML = '<div class="grade-result ' + (g.ok?'ok':'no') + '">' +
           '<div class="gh">' + (g.ok ? '答对了 ✓' : '答错了 ✗') + '</div>' +
           (g.comment ? '<div>' + escapeHtml(g.comment) + '</div>' : '') +
-          (!g.ok && g.right ? '<div style="margin-top:8px;color:#7ee0c0;">正确答案：' + escapeHtml(g.right) + '</div>' : '') +
+          (g.right ? '<div style="margin-top:8px;color:#7ee0c0;white-space:pre-wrap;">标准答案：' + fmtAI(escapeHtml(g.right)) + '</div>' : '') +
         '</div>' +
         '<button class="btn gold" id="t-next" type="button" style="width:100%;padding:14px;margin-top:14px;">下一题</button>';
         $('t-answer').disabled = true;
@@ -1909,16 +1968,17 @@
       if (q0) showQuestion(q0, '');
     }
   }
-  // 在对话框上方显示当前错题（题目 + 已有答案），不发任何请求
+  // 在对话框上方只显示当前错题的题目，不提前给答案（答案由学生自己想、AI 批改后再给）
   function showQuestion(q, label) {
     var sp = $('chat-spotlight'); if (!sp) return;
     $('sp-title').textContent = '当前错题' + (label ? ' · ' + label : '');
     var sb = SUBJECTS[q.subject] || SUBJECTS.chinese;
+    var qt = QTYPES[qtypeOf(q)] || QTYPES.other;
     $('sp-body').innerHTML =
-      '<div style="font-size:11px;color:' + sb.color + ';font-weight:800;margin-bottom:6px;">' + sb.name + '</div>' +
-      '<div style="font-size:14px;font-weight:700;line-height:1.6;white-space:pre-wrap;">' + escapeHtml(q.text) + '</div>' +
-      (q.answer ? '<div style="border-top:1px dashed rgba(255,209,102,.35);margin-top:10px;padding-top:10px;color:#7ee0c0;font-size:13px;line-height:1.6;white-space:pre-wrap;">答案：' + fmtAI(escapeHtml(q.answer)) + '</div>' : '') +
-      (q.image ? '<img src="' + q.image + '" style="max-width:100%;max-height:120px;border-radius:8px;margin-top:10px;" alt="题目图片">' : '');
+      '<div style="font-size:11px;color:' + sb.color + ';font-weight:800;margin-bottom:6px;">' + sb.name + ' · ' + qt.name + '</div>' +
+      '<div style="font-size:14px;font-weight:700;line-height:1.6;white-space:pre-wrap;">' + escapeHtml(questionForTest(q)) + '</div>' +
+      (q.image ? '<img src="' + q.image + '" style="max-width:100%;max-height:120px;border-radius:8px;margin-top:10px;" alt="题目图片">' : '') +
+      '<div style="font-size:11px;color:var(--muted);margin-top:8px;">答案不在这里显示，自己想或写下来，AI 批改后会给出标准答案。</div>';
     sp.style.display = 'block';
   }
   function showSpotlight(title, body) {
