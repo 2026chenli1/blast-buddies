@@ -390,6 +390,17 @@
   .paper-shot .ps-del:hover { background: rgba(255,107,107,.4); }
   .paper-lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(4,10,18,.92); display: flex; align-items: center; justify-content: center; padding: 20px; }
   .paper-lightbox img { max-width: 94vw; max-height: 90vh; border-radius: 12px; }
+  /* 试卷识别结果：第几题 → 题目要求 → 答案 */
+  .pq-item { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; background: rgba(255,255,255,.03); }
+  .pq-item.off { opacity: .5; }
+  .pq-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .pq-head input { width: 17px; height: 17px; accent-color: var(--accent); }
+  .pq-no { font-size: 15px; font-weight: 900; color: var(--accent); }
+  .pq-line { display: flex; gap: 12px; margin-top: 8px; align-items: flex-start; }
+  .pq-lbl { flex: none; width: 62px; font-size: 11px; font-weight: 800; color: var(--muted); background: rgba(255,255,255,.06); border-radius: 6px; padding: 3px 6px; text-align: center; margin-top: 2px; }
+  .pq-lbl.ans { color: #7ee0c0; background: rgba(46,196,182,.12); }
+  .pq-val { flex: 1; font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .pq-val.ans { color: #a8ecd8; font-size: 13px; }
 
   /* 问答 */
   .quiz-card { max-width: 720px; }
@@ -889,6 +900,9 @@
     }
   }
 
+  // 三科统一规则：语文、英语也必须给出答案，不能只顾数学
+  var ANSWER_RULE = '\n无论语文、数学还是英语，都必须给出这一题的答案（语文默写/字词/阅读写标准答案，英语单词/翻译/选择写答案，数学写步骤和结果），绝对不能留空或写「略」。';
+
   // ---------- AI 调用（免 Key，前端直连 Pollinations） ----------
   function aiAsk(prompt) {
     var url = 'https://text.pollinations.ai/' + encodeURIComponent(prompt);
@@ -1017,7 +1031,7 @@
       if (!text) { $('m-msg').textContent = '请输入题目'; $('m-msg').className = 'inline-msg err'; return; }
       var btn = this; btn.disabled = true; btn.textContent = 'AI 正在识别科目并解答…';
       $('m-msg').textContent = '';
-      aiAsk('判断下面这道题属于语文/数学/英语中的哪一科，并解答它。\n题目：' + text +
+      aiAsk('判断下面这道题属于语文/数学/英语中的哪一科，并解答它。\n题目：' + text + ANSWER_RULE +
         '\n请严格按这个格式输出两行（不要多余内容）：\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
         .then(function (r) {
           var subj = 'chinese', ans = r;
@@ -1177,7 +1191,8 @@
   // 视觉 AI 直接读图（能看懂数学公式，比 OCR 准）
   function runVision(dataUrl) {
     setProgress('AI 正在看图识别题目…（数学公式也能看懂）', 25);
-    aiVision(dataUrl, '请识别这张图片里的题目，判断科目，并给出答案。严格按三行输出，不要多余内容：\n题目：题目文字\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
+    aiVision(dataUrl, '请识别这张图片里的题目，判断科目，并给出答案。' + ANSWER_RULE +
+      '\n严格按三行输出，不要多余内容：\n题目：题目文字\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
       .then(function (r) {
         var clean = '（图片题目）', subj = 'chinese', ans = '（AI 未给出答案）';
         var qm = r.match(/题目[：:]\s*([\s\S]*?)\n/); if (qm && qm[1].trim()) clean = qm[1].trim();
@@ -1211,8 +1226,8 @@
       setProgress('AI 正在纠错、判科目并解答…', 75);
       // 一次调用完成：纠错 + 判科目 + 解答（省限流、全自动，不用你确认）
       aiAsk('这是一张题目照片，OCR 识别出的原始文字如下（可能有错字，如数学 × 其实是变量 x、0/O 混淆）：\n【' + raw + '】\n' +
-        '请纠正识别错误还原题目，判断科目，并给出答案。严格按三行输出（不要多余内容）：\n' +
-        '题目：纠正后的题目文字\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
+        '请纠正识别错误还原题目，判断科目，并给出答案。' + ANSWER_RULE +
+        '\n严格按三行输出（不要多余内容）：\n题目：纠正后的题目文字\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
         .then(function (r) {
           var clean = raw, subj = 'chinese', ans = '（AI 暂时无法解答，可稍后在问答里再问）';
           var qm = r.match(/题目[：:]\s*([\s\S]*?)\n/); if (qm && qm[1].trim()) clean = qm[1].trim();
@@ -1252,7 +1267,7 @@
   function commitQuestion(text, answer) {
     var image = window.__curImage__ || '';
     setProgress('AI 正在判断科目并生成答案…', 90);
-    aiAsk('判断下面这道题属于语文/数学/英语中的哪一科，并解答它。\n题目：' + text +
+    aiAsk('判断下面这道题属于语文/数学/英语中的哪一科，并解答它。\n题目：' + text + ANSWER_RULE +
       '\n请严格按两行输出（不要多余内容）：\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
       .then(function (r) {
         var subj = 'chinese', ans = r;
@@ -1357,19 +1372,42 @@
       drawPaperShots();
     });
   }
+  // 试卷拆题要求：按题号逐题写「第几题 → 题目要求 → 答案」，三科都必须给答案
+  var PAPER_PROMPT_IMG =
+    '请仔细看这张试卷/学习单图片，把里面每一道题都识别出来，按试卷上的题号顺序逐题整理。\n' +
+    '每一题都要写清楚三件事：①第几题（题号）②题目要求（题干）③这一题的答案。\n' +
+    '重要：语文、数学、英语三科的题目都必须给出答案，不能只给数学题答案、不能把答案留空或写「略」。\n' +
+    '  · 语文：默写、字词、拼音、阅读等要写出标准答案或参考答案。\n' +
+    '  · 英语：单词、选择、翻译、完形等要写出答案。\n' +
+    '  · 数学：写出简要步骤和结果。\n' +
+    '只输出 JSON 数组，一题一个对象，格式：\n' +
+    '[{"n":"1","t":"题目要求（只写题干，不要混入答案）","s":"语文|数学|英语","a":"这一题的答案"}]\n' +
+    'n 是试卷上的题号；若看不清题号就按顺序用 1、2、3。不要输出 JSON 以外的任何文字。';
+  var PAPER_PROMPT_TEXT =
+    '下面是试卷/学习单 OCR 出的文字，请按题号顺序把每一道题都拆出来，逐题写清「第几题、题目要求、答案」。\n' +
+    '语文、数学、英语三科都必须给出答案，不能留空或只给数学答案。\n' +
+    '只输出 JSON 数组 [{"n":"题号","t":"题目要求","s":"语文|数学|英语","a":"答案"}]，不要多余文字。\n文字：\n';
   function parsePaperJSON(r) {
     var arr = [];
     try { var m = r.match(/\[[\s\S]*\]/); arr = JSON.parse(m ? m[0] : r); } catch (e) { arr = []; }
-    return (Array.isArray(arr) ? arr : []).map(function (x) {
-      return { t: String(x.t||'').trim(), s: x.s==='数学'?'math':(x.s==='英语'?'english':'chinese'), a: String(x.a||'').trim(), picked: true };
+    return (Array.isArray(arr) ? arr : []).map(function (x, i) {
+      var no = String(x.n || x.no || x.num || (i+1) || '').trim();
+      // 归一题号：去掉「第」「题」等字样
+      no = no.replace(/^第\s*/, '').replace(/题$/, '').replace(/[.、．]$/, '').trim();
+      return {
+        n: no || String(i+1),
+        t: String(x.t||'').trim(),
+        s: x.s==='数学'?'math':(x.s==='英语'?'english':'chinese'),
+        a: String(x.a||'').trim(),
+        picked: true
+      };
     }).filter(function (x) { return x.t.length > 2; });
   }
   function processPaper() {
     if (!paperShots.length) { $('paper-msg').textContent = '请先上传图片'; return; }
     $('paper-progress').style.display = 'block'; $('paper-fill').style.width = '10%';
     $('paper-run').disabled = true;
-    var prompt = '请识别这张试卷/学习单图片里的每一道题，判断科目并给出答案。\n' +
-      '只输出 JSON 数组，格式：[{"t":"题目文字","s":"语文|数学|英语","a":"答案"}]\n不要输出任何多余文字。';
+    var prompt = PAPER_PROMPT_IMG;
     var chain = Promise.resolve([]);
     paperShots.forEach(function (shot, idx) {
       chain = chain.then(function (acc) {
@@ -1385,8 +1423,7 @@
           Tesseract.recognize(shot.src, 'chi_sim+eng').then(function (res) {
             var txt = res.data.text || '';
             if (!txt.trim()) { resolve(acc); return; }
-            aiAsk('把下面的试卷文字拆成每道题：\n' + txt.slice(0,5000) +
-              '\n只输出 JSON 数组 [{"t":"题目","s":"语文|数学|英语","a":"答案"}]，不要多余文字。')
+            aiAsk(PAPER_PROMPT_TEXT + txt.slice(0,5000))
               .then(function (r) { resolve(acc.concat(parsePaperJSON(r))); })
               .catch(function () { resolve(acc); });
           }).catch(function () { resolve(acc); });
@@ -1409,21 +1446,35 @@
     var box = $('paper-result'); if (!box) return;
     if (!paperItems.length) { box.innerHTML = ''; return; }
     var html = '<div class="card"><div class="section-title">识别出的题目</div>' +
-      '<div class="section-sub">默认全选，取消不想加入的，然后批量添加。</div>';
+      '<div class="section-sub">按题号整理：第几题 → 题目要求 → 答案。三科都会给出答案，默认全选。</div>';
     paperItems.forEach(function (it, i) {
-      html += '<label class="review-row" style="align-items:flex-start;cursor:pointer;">' +
-        '<input type="checkbox" data-pi="' + i + '"' + (it.picked?' checked':'') + ' style="margin-top:3px;">' +
-        '<span style="flex:1;"><span class="subj-tag ' + SUBJECTS[it.s].cls + '">' + SUBJECTS[it.s].name + '</span> ' +
-        '<span style="font-size:13px;line-height:1.6;">' + escapeHtml(it.t) + '</span>' +
-        (it.a ? '<br><span style="font-size:12px;color:#7ee0c0;">答：' + fmtAI(escapeHtml(it.a)) + '</span>' : '') + '</span></label>';
+      var sb = SUBJECTS[it.s] || SUBJECTS.chinese;
+      html += '<div class="pq-item' + (it.picked?'':' off') + '" data-pq="' + i + '">' +
+        '<div class="pq-head">' +
+          '<input type="checkbox" data-pi="' + i + '"' + (it.picked?' checked':'') + ' aria-label="选择第'+escapeHtml(it.n)+'题">' +
+          '<span class="pq-no">第 ' + escapeHtml(it.n) + ' 题</span>' +
+          '<span class="subj-tag ' + sb.cls + '">' + sb.name + '</span>' +
+        '</div>' +
+        '<div class="pq-line"><span class="pq-lbl">题目要求</span><div class="pq-val">' + fmtAI(escapeHtml(it.t)) + '</div></div>' +
+        '<div class="pq-line"><span class="pq-lbl ans">答案</span><div class="pq-val ans">' +
+          (it.a ? fmtAI(escapeHtml(it.a)) : '<span style="color:var(--muted)">AI 未给出答案，可勾选后到「AI 问答」再问</span>') +
+        '</div></div>' +
+      '</div>';
     });
     html += '<div class="modal-btns"><button class="btn gold" id="paper-add" type="button">加入错题本</button></div></div>';
     box.innerHTML = html;
     var cbs = box.querySelectorAll('[data-pi]');
-    for (var i=0;i<cbs.length;i++) cbs[i].addEventListener('change', function () { paperItems[parseInt(this.getAttribute('data-pi'),10)].picked = this.checked; });
+    for (var i=0;i<cbs.length;i++) cbs[i].addEventListener('change', function () {
+      var idx = parseInt(this.getAttribute('data-pi'),10);
+      paperItems[idx].picked = this.checked;
+      var item = box.querySelector('[data-pq="' + idx + '"]');
+      if (item) item.classList.toggle('off', !this.checked);
+    });
     $('paper-add').addEventListener('click', function () {
       var n = 0;
-      paperItems.forEach(function (it) { if (it.picked) { addQuestionSilent(it.t, it.a, it.s, ''); n++; } });
+      paperItems.forEach(function (it) {
+        if (it.picked) { addQuestionSilent('第 ' + it.n + ' 题：' + it.t, it.a, it.s, ''); n++; }
+      });
       paperItems = []; drawPaperResult();
       this.textContent = '已加入 ' + n + ' 道';
       var self = this; setTimeout(function () { self.textContent = '加入错题本'; }, 2500);
