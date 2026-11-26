@@ -255,17 +255,26 @@
   .chat-wrap { max-width: 760px; }
   .chat-select-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
   .chat-select-row select { flex: 1; min-width: 200px; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.18); border-radius: 10px; color: var(--text); font-size: 14px; padding: 11px 12px; outline: none; }
-  .chat-msgs { display: flex; flex-direction: column; gap: 14px; margin: 18px 0; }
+  /* 聊天：固定高度的消息区 + 固定在下方的输入区（滚动消息时输入框不动） */
+  .chat-shell { display: flex; flex-direction: column; height: min(58vh, 560px); min-height: 360px; }
+  .chat-msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px 4px; margin: 0; scroll-behavior: smooth; }
   .msg { max-width: 88%; padding: 13px 16px; border-radius: 14px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
   .msg.me { align-self: flex-end; background: linear-gradient(145deg, #ffd166, #ffb703); color: var(--bg); border-bottom-right-radius: 4px; font-weight: 600; }
   .msg.ai { align-self: flex-start; background: rgba(76,201,240,.1); border: 1px solid rgba(76,201,240,.28); border-bottom-left-radius: 4px; }
   .msg.sys { align-self: center; background: rgba(255,255,255,.05); border: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .chat-dock { flex: none; border-top: 1px solid var(--border); padding-top: 14px; background: var(--card); }
   .chat-input-row { display: flex; gap: 10px; align-items: flex-end; }
-  .chat-input-row textarea { flex: 1; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; color: var(--text); font-size: 14px; padding: 12px; outline: none; resize: vertical; min-height: 48px; }
+  .chat-input-row textarea { flex: 1; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; color: var(--text); font-size: 14px; padding: 12px; outline: none; resize: none; min-height: 48px; max-height: 120px; }
   .chat-input-row textarea:focus { border-color: var(--accent); }
   .quick-ask { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-  .quick-ask button { font-size: 12px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid var(--border); color: var(--muted); }
+  .quick-ask button { font-size: 12px; padding: 7px 13px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid var(--border); color: var(--muted); transition: all .12s ease; }
   .quick-ask button:hover { color: var(--accent); border-color: rgba(255,209,102,.4); }
+  .quick-ask button.active { color: var(--bg); background: linear-gradient(145deg, #ffd166, #ffb703); border-color: var(--accent2); font-weight: 800; }
+  /* 固定在对话上方的讲解卡 */
+  .chat-spotlight { flex: none; margin: 0 0 12px; border: 1px solid rgba(255,209,102,.35); background: rgba(255,209,102,.07); border-radius: 12px; padding: 12px 14px; max-height: 170px; overflow-y: auto; }
+  .chat-spotlight .sp-h { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+  .chat-spotlight .sp-h button { background: none; border: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 0 2px; }
+  .chat-spotlight .sp-b { font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
   .thinking { color: var(--muted); font-size: 13px; }
   .thinking::after { content: ''; animation: dots 1.2s steps(4,end) infinite; }
   @keyframes dots { 0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'} }
@@ -498,7 +507,11 @@
       </button>
       <button class="nav-item" data-view="quiz" type="button">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2-2.4 3.8"/><path d="M12 17h.01"/></svg>
-        <span>错题问答</span>
+        <span>复习自测</span>
+      </button>
+      <button class="nav-item" data-view="paper" type="button">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg>
+        <span>试卷导入</span>
       </button>
       <button class="nav-item" data-view="chart" type="button">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 20h20L12 2Z"/><path d="M12 2v9M2 20l10-9 10 9"/><path d="M7 15h10"/></svg>
@@ -532,6 +545,20 @@
     if (token) headers['Authorization'] = 'Bearer ' + token;
     return fetch(API + path, { method: method || 'GET', headers: headers, body: body ? JSON.stringify(body) : undefined })
       .then(function (r) { return r.json(); });
+  }
+  // 视觉 AI 是否就绪（后端配了密钥）
+  var visionReady = false;
+  function checkVision() {
+    return api('/api/hk/ai/config', 'GET', null, getToken()).then(function (r) {
+      visionReady = !!(r && r.configured); return visionReady;
+    }).catch(function () { visionReady = false; return false; });
+  }
+  // 调用后端视觉 AI（真·看图识别数学题）
+  function aiVision(image, prompt) {
+    return api('/api/hk/vision', 'POST', { image: image, prompt: prompt }, getToken()).then(function (r) {
+      if (!r.ok) throw new Error(r.msg || '视觉 AI 失败');
+      return r.text;
+    });
   }
   function loadAllQ() { try { return JSON.parse(localStorage.getItem(Q_KEY) || '{}'); } catch (e) { return {}; } }
   function getQ() { var a = loadAllQ(); return a[currentUser] || []; }
@@ -705,6 +732,7 @@
     passInput.value = ''; confirmInput.value = '';
     // 老数据补字段
     var q = getQ(); if (normalizeQ(q)) saveQ(q);
+    checkVision();
     showView('home');
     // 首次登录：先问效果图频率；否则检查复习提醒
     if (!getFreq()) setTimeout(askFreq, 400);
@@ -786,6 +814,7 @@
     if (view === 'home') renderHome(main);
     else if (view === 'organize') renderOrganize(main);
     else if (view === 'quiz') renderQuiz(main);
+    else if (view === 'paper') renderPaper(main);
     else if (view === 'chart') renderChart(main);
   }
 
@@ -818,6 +847,7 @@
       '<div class="quick-grid">' +
         quickCard('organize', '#ffd166', 'rgba(255,209,102,.14)', 'M4 4h16v16H4z|M8 9h8M8 13h8M8 17h5', '错题整理', '拍照识题，AI 自动给答案') +
         quickCard('quiz', '#4cc9f0', 'rgba(76,201,240,.14)', 'M12 2a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z|M9.5 9a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2-2.4 3.8|M12 17h.01', '复习自测', '回忆答案再对照，记得最牢') +
+        quickCard('paper', '#ff6b9d', 'rgba(255,107,157,.14)', 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z|M14 2v6h6M8 13h8M8 17h6', '试卷导入', '拍试卷/学习单，批量入错题') +
         quickCard('chart', '#2ec4b6', 'rgba(46,196,182,.14)', 'M12 2 2 20h20L12 2Z|M12 2v9M2 20l10-9 10 9', '学习效果图', '三角形雷达图看三科掌握') +
       '</div>' +
       '<div class="card" style="margin-top:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">' +
@@ -912,14 +942,19 @@
 
   // ---------- 错题整理（拍照 → OCR 识题 → AI 给答案） ----------
   var ocrBusy = false;
+  var orgMode = 'photo';
   function renderOrganize(main) {
     var opts = '';
     for (var k in SUBJECTS) { opts += '<option value="' + k + '">' + SUBJECTS[k].name + '</option>'; }
     main.innerHTML =
-      '<div class="welcome"><h1>错题整理</h1><p>拍下错题，AI 自动识别题目并给出答案，一起存到本地。</p></div>' +
-      '<div class="card">' +
+      '<div class="welcome"><h1>错题整理</h1><p>拍照或输入题目，AI 在后台自动识别并给出答案，你不用操心。</p></div>' +
+      '<div class="view-tabs">' +
+        '<button class="view-tab' + (orgMode==='photo'?' active':'') + '" data-org="photo" type="button">拍照添加</button>' +
+        '<button class="view-tab' + (orgMode==='manual'?' active':'') + '" data-org="manual" type="button">手动输入</button>' +
+      '</div>' +
+      '<div class="card" id="photo-panel" style="' + (orgMode==='photo'?'':'display:none;') + '">' +
         '<div class="section-title">拍照添加错题</div>' +
-        '<div class="section-sub">拍照或从相册选图 → 框选题目区域 → AI 识别并解答。</div>' +
+        '<div class="section-sub">拍照或从相册选图 → 框选题目 → AI 自动识别并解答、保存。</div>' +
         '<div class="capture-zone" id="capture-zone">' +
           '<div class="cam-ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffd166" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg></div>' +
           '<h3>点这里拍照 / 上传图片</h3>' +
@@ -941,21 +976,56 @@
         '<div id="ocr-stage" style="display:none;">' +
           '<div class="progress-box"><div class="progress-label" id="ocr-label">准备中…</div><div class="progress-bar"><div class="progress-fill" id="ocr-fill"></div></div></div>' +
           '<img id="ocr-preview" class="preview-img" alt="题目图片">' +
-          '<div class="form-row" style="margin-top:14px;"><label>识别到的题目（可修改）</label><textarea id="q-text" class="ocr-edit" rows="3" placeholder="识别结果会显示在这里"></textarea></div>' +
-          '<div class="form-grid">' +
-            '<div class="form-row"><label>科目</label><select id="q-subject">' + opts + '</select></div>' +
-            '<div class="form-row"><label>掌握状态</label><select id="q-mastered"><option value="0">未掌握</option><option value="1">已掌握</option></select></div>' +
-          '</div>' +
-          '<button class="btn gold" id="q-add" type="button" style="display:none;">AI 解答并保存</button>' +
           '<div class="inline-msg" id="q-msg"></div>' +
         '</div>' +
       '</div>' +
+      '<div class="card" id="manual-panel" style="' + (orgMode==='manual'?'':'display:none;') + '">' +
+        '<div class="section-title">手动输入错题</div>' +
+        '<div class="section-sub">输入题目，AI 会自动判断科目、生成答案并存好，你不用点确认。</div>' +
+        '<div class="form-row"><label>题目</label><textarea id="m-text" class="ocr-edit" rows="4" placeholder="把题目抄在这里，例如：解方程 2x+3=11"></textarea></div>' +
+        '<button class="btn gold" id="m-add" type="button" style="width:100%">添加，AI 自动生成答案</button>' +
+        '<div class="inline-msg" id="m-msg"></div>' +
+      '</div>' +
       '<div id="q-list-wrap"></div>';
 
+    // tab 切换
+    var orgTabs = main.querySelectorAll('[data-org]');
+    for (var t = 0; t < orgTabs.length; t++) {
+      orgTabs[t].addEventListener('click', function () {
+        orgMode = this.getAttribute('data-org');
+        renderOrganize(main);
+      });
+    }
     $('capture-zone').addEventListener('click', function () { $('q-file').click(); });
     $('q-file').addEventListener('change', function (e) {
       var f = e.target.files[0];
       if (f) handleImage(f);
+    });
+    // 手动输入：AI 后台自动判科目 + 出答案 + 保存
+    $('m-add').addEventListener('click', function () {
+      var text = ($('m-text').value || '').trim();
+      if (!text) { $('m-msg').textContent = '请输入题目'; $('m-msg').className = 'inline-msg err'; return; }
+      var btn = this; btn.disabled = true; btn.textContent = 'AI 正在识别科目并解答…';
+      $('m-msg').textContent = '';
+      aiAsk('判断下面这道题属于语文/数学/英语中的哪一科，并解答它。\n题目：' + text +
+        '\n请严格按这个格式输出两行（不要多余内容）：\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
+        .then(function (r) {
+          var subj = 'chinese', ans = r;
+          var sm = r.match(/科目[：:]\s*(语文|数学|英语)/);
+          if (sm) subj = sm[1]==='数学'?'math':(sm[1]==='英语'?'english':'chinese');
+          var am = r.match(/答案[：:]\s*([\s\S]+)/);
+          if (am) ans = am[1].trim();
+          addQuestionSilent(text, ans, subj, '');
+          $('m-text').value = ''; btn.disabled = false; btn.textContent = '添加，AI 自动生成答案';
+          $('m-msg').textContent = '已添加到「' + SUBJECTS[subj].name + '」错题集'; $('m-msg').className = 'inline-msg ok';
+          renderQList();
+        })
+        .catch(function () {
+          addQuestionSilent(text, '（AI 暂时不可用，稍后可在问答里再问）', 'chinese', '');
+          $('m-text').value = ''; btn.disabled = false; btn.textContent = '添加，AI 自动生成答案';
+          $('m-msg').textContent = '已保存（AI 暂时忙）'; $('m-msg').className = 'inline-msg ok';
+          renderQList();
+        });
     });
     renderQList();
   }
@@ -1059,12 +1129,25 @@
       c.width = Math.round(sw); c.height = Math.round(sh);
       c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
     }
-    var dataUrl = c.toDataURL('image/jpeg', 0.75);
+    // 修复小图问题：框选区域太小时放大到最短边≥700px，并留白边，避免 OCR 把内容缩在角落认不出
+    var MIN_SIDE = 700, PAD = 40;
+    if (Math.min(c.width, c.height) < MIN_SIDE) {
+      var scale = MIN_SIDE / Math.min(c.width, c.height);
+      var nw = Math.round(c.width * scale), nh = Math.round(c.height * scale);
+      var big = document.createElement('canvas');
+      big.width = nw + PAD*2; big.height = nh + PAD*2;
+      var bx = big.getContext('2d');
+      bx.fillStyle = '#fff'; bx.fillRect(0,0,big.width,big.height);
+      bx.drawImage(c, PAD, PAD, nw, nh);
+      c = big;
+    }
+    var dataUrl = c.toDataURL('image/jpeg', 0.85);
     window.__curImage__ = dataUrl;
     $('crop-stage').style.display='none';
     $('ocr-stage').style.display='block';
     $('ocr-preview').src = dataUrl;
-    runOCR(dataUrl);
+    if (visionReady) runVision(dataUrl);
+    else runOCR(dataUrl);
   }
 
   function setProgress(label, pct) {
@@ -1073,92 +1156,211 @@
     if (f) f.style.width = pct + '%';
   }
 
+  // 视觉 AI 直接读图（能看懂数学公式，比 OCR 准）
+  function runVision(dataUrl) {
+    setProgress('AI 正在看图识别题目…（数学公式也能看懂）', 25);
+    aiVision(dataUrl, '请识别这张图片里的题目，判断科目，并给出答案。严格按三行输出，不要多余内容：\n题目：题目文字\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
+      .then(function (r) {
+        var clean = '（图片题目）', subj = 'chinese', ans = '（AI 未给出答案）';
+        var qm = r.match(/题目[：:]\s*([\s\S]*?)\n/); if (qm && qm[1].trim()) clean = qm[1].trim();
+        var sm = r.match(/科目[：:]\s*(语文|数学|英语)/); if (sm) subj = sm[1]==='数学'?'math':(sm[1]==='英语'?'english':'chinese');
+        var am = r.match(/答案[：:]\s*([\s\S]+)/); if (am) ans = am[1].trim();
+        ocrBusy = false;
+        addQuestionSilent(clean, ans, subj, dataUrl);
+        finishPhoto('已保存到「' + SUBJECTS[subj].name + '」，AI 已看图识别并解答');
+      })
+      .catch(function () {
+        ocrBusy = false;
+        setProgress('视觉 AI 暂不可用，改用文字识别…', 30);
+        runOCR(dataUrl);
+      });
+  }
+
   function runOCR(dataUrl) {
     if (typeof Tesseract === 'undefined') {
-      // OCR 库没加载（离线等），让用户手输题目
       ocrBusy = false;
-      setProgress('OCR 库未加载，请手动输入题目', 100);
-      $('q-text').value = '';
-      $('q-add').style.display = 'inline-block';
+      finishPhoto('OCR 库未加载，请改用「手动输入」');
       return;
     }
     setProgress('正在识别题目文字…（首次需下载中文包，稍等）', 15);
     Tesseract.recognize(dataUrl, 'chi_sim+eng', {
       logger: function (m) {
-        if (m.status === 'recognizing text') setProgress('正在识别题目… ' + Math.round(m.progress * 100) + '%', 15 + Math.round(m.progress * 60));
+        if (m.status === 'recognizing text') setProgress('正在识别题目… ' + Math.round(m.progress * 100) + '%', 15 + Math.round(m.progress * 50));
       }
     }).then(function (res) {
       var raw = (res.data.text || '').replace(/\n{2,}/g, '\n').trim();
-      $('q-text').value = raw;
-      // AI 纠错：根据科目纠正 OCR 误识别（如数学里的 ×→x、0→O 等），避免数学题被当成语文题
-      var subjKey = $('q-subject').value;
-      var subjName = SUBJECTS[subjKey] ? SUBJECTS[subjKey].name : '通用';
-      setProgress('AI 正在校正识别结果（' + subjName + '）…', 80);
-      aiAsk('这是从一张' + subjName + '题目照片里 OCR 识别出的文字：\n【' + raw + '】\n' +
-        'OCR 常把字符认错（如数学里的 × 其实是变量 x、0/O 混淆、公式符号错乱）。' +
-        '请只做识别纠错，还原题目原本的文字，不要解题、不要加解释、不要复述这段话，只输出纠正后的题目文字。')
-        .then(function (fixed) {
-          var clean = (fixed || '').trim();
-          if (clean && !/free limit|wait|rate|429/i.test(clean) && clean.length < 500) $('q-text').value = clean;
+      if (!raw) { ocrBusy = false; finishPhoto('没识别到文字，请重拍或改用「手动输入」'); return; }
+      setProgress('AI 正在纠错、判科目并解答…', 75);
+      // 一次调用完成：纠错 + 判科目 + 解答（省限流、全自动，不用你确认）
+      aiAsk('这是一张题目照片，OCR 识别出的原始文字如下（可能有错字，如数学 × 其实是变量 x、0/O 混淆）：\n【' + raw + '】\n' +
+        '请纠正识别错误还原题目，判断科目，并给出答案。严格按三行输出（不要多余内容）：\n' +
+        '题目：纠正后的题目文字\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
+        .then(function (r) {
+          var clean = raw, subj = 'chinese', ans = '（AI 暂时无法解答，可稍后在问答里再问）';
+          var qm = r.match(/题目[：:]\s*([\s\S]*?)\n/); if (qm && qm[1].trim()) clean = qm[1].trim();
+          var sm = r.match(/科目[：:]\s*(语文|数学|英语)/); if (sm) subj = sm[1]==='数学'?'math':(sm[1]==='英语'?'english':'chinese');
+          var am = r.match(/答案[：:]\s*([\s\S]+)/); if (am) ans = am[1].trim();
           ocrBusy = false;
-          setProgress('识别完成（AI 已校正），可修改后点「AI 解答并保存」', 100);
-          $('q-add').style.display = 'inline-block';
-          $('q-add').onclick = function () { saveWithAI($('q-text').value.trim()); };
+          addQuestionSilent(clean, ans, subj, window.__curImage__ || '');
+          finishPhoto('已保存到「' + SUBJECTS[subj].name + '」，AI 已自动识别并解答');
         })
         .catch(function () {
           ocrBusy = false;
-          setProgress('识别完成，可修改题目后点「AI 解答并保存」', 100);
-          $('q-add').style.display = 'inline-block';
-          $('q-add').onclick = function () { saveWithAI($('q-text').value.trim()); };
+          addQuestionSilent(raw, '（AI 暂时不可用，稍后可在问答里再问）', 'chinese', window.__curImage__ || '');
+          finishPhoto('已保存原始识别结果（AI 暂时忙）');
         });
     }).catch(function (err) {
       ocrBusy = false;
-      setProgress('识别失败，请手动输入题目', 100);
-      $('q-add').style.display = 'inline-block';
-      $('q-add').onclick = function () { saveWithAI($('q-text').value.trim()); };
+      finishPhoto('识别失败，请重拍或改用「手动输入」');
     });
   }
 
-  // AI 生成答案并保存（图片+题目+答案一起存本地）
-  function saveWithAI(fallbackText) {
-    var text = ($('q-text').value || '').trim() || fallbackText;
-    if (!text) { qmsg('请填写或识别题目', 'err'); return; }
-    var btn = $('q-add'); btn.disabled = true; btn.textContent = 'AI 正在解答…';
-    qmsg('AI 正在生成答案…', '');
-    aiAsk('请解答这道题，直接给出答案和简要步骤，用中文回答。题目：' + text + '\n要求：简洁，不要复述题目。')
-      .then(function (answer) {
-        commitQuestion(text, answer);
-      })
-      .catch(function (err) {
-        // AI 失败也允许保存（答案为空，之后可问 AI）
-        commitQuestion(text, '（AI 暂时不可用，可到「错题问答」再问一次）');
-      });
-  }
-
-  function commitQuestion(text, answer) {
+  // 静默保存一道错题（不依赖表单 DOM）
+  function addQuestionSilent(text, answer, subject, image) {
     var arr = getQ();
     arr.unshift({
       id: 'q' + Date.now() + Math.floor(Math.random() * 1000),
-      subject: $('q-subject').value,
-      text: text, answer: answer,
-      image: window.__curImage__ || '',
-      chats: [],
+      subject: SUBJECTS[subject] ? subject : 'chinese',
+      text: text, answer: answer || '',
+      image: image || '', chats: [],
       created: Date.now(), reviews: [], reviewStep: 0,
-      mastered: $('q-mastered').value === '1',
-      tries: 0, correct: 0
+      mastered: false, tries: 0, correct: 0
     });
-    saveQ(arr);
-    logActivity('add');
-    // 重置表单
-    $('q-text').value = ''; $('ocr-preview').src = '';
+    saveQ(arr); logActivity('add');
+    return arr[0];
+  }
+
+  // 拍照流程识别后：AI 后台自动判科目+出答案+保存（不弹确认）
+  function commitQuestion(text, answer) {
+    var image = window.__curImage__ || '';
+    setProgress('AI 正在判断科目并生成答案…', 90);
+    aiAsk('判断下面这道题属于语文/数学/英语中的哪一科，并解答它。\n题目：' + text +
+      '\n请严格按两行输出（不要多余内容）：\n科目：语文或数学或英语\n答案：简洁的答案与步骤')
+      .then(function (r) {
+        var subj = 'chinese', ans = r;
+        var sm = r.match(/科目[：:]\s*(语文|数学|英语)/);
+        if (sm) subj = sm[1]==='数学'?'math':(sm[1]==='英语'?'english':'chinese');
+        var am = r.match(/答案[：:]\s*([\s\S]+)/);
+        if (am) ans = am[1].trim();
+        addQuestionSilent(text, ans, subj, image);
+        finishPhoto('已保存（' + SUBJECTS[subj].name + '），AI 已自动出答案');
+      })
+      .catch(function () {
+        addQuestionSilent(text, '（AI 暂时不可用，稍后可在问答里再问）', 'chinese', image);
+        finishPhoto('已保存（AI 暂时忙，稍后可再问）');
+      });
+  }
+  function finishPhoto(msgText) {
     $('ocr-stage').style.display = 'none';
-    $('q-add').style.display = 'none'; $('q-add').disabled = false; $('q-add').textContent = 'AI 解答并保存';
+    $('crop-stage').style.display = 'none';
+    $('capture-zone').style.display = 'flex';
     window.__curImage__ = '';
     setProgress('', 0);
     renderQList();
+    qmsg(msgText, 'ok');
   }
 
   function qmsg(t, c) { var el = $('q-msg'); if (el) { el.textContent = t; el.className = 'inline-msg ' + (c || ''); } }
+
+  // ---------- 试卷导入：拍照试卷/学习单 → AI 拆成多题 → 批量加入错题 ----------
+  var paperItems = [];
+  function renderPaper(main) {
+    main.innerHTML =
+      '<div class="welcome"><h1>试卷导入</h1><p>考完试、做完学习单，拍下来，AI 自动拆出每道题并加入错题本。</p></div>' +
+      '<div class="card">' +
+        '<div class="section-title">上传试卷 / 学习单</div>' +
+        '<div class="section-sub">可一次选多张图片。AI 会识别其中的题目、判断科目、给出答案。</div>' +
+        '<div class="capture-zone" id="paper-zone">' +
+          '<div class="cam-ico"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffd166" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg></div>' +
+          '<h3>点这里拍照 / 选试卷图片</h3><p>支持一次选多张，AI 自动拆题</p>' +
+          '<input type="file" id="paper-file" accept="image/*" multiple>' +
+        '</div>' +
+        '<div class="progress-box" id="paper-progress" style="display:none;"><div class="progress-label" id="paper-label">准备中…</div><div class="progress-bar"><div class="progress-fill" id="paper-fill"></div></div></div>' +
+        '<div class="inline-msg" id="paper-msg"></div>' +
+      '</div>' +
+      '<div id="paper-result"></div>';
+    $('paper-zone').addEventListener('click', function () { $('paper-file').click(); });
+    $('paper-file').addEventListener('change', function (e) {
+      var files = Array.prototype.slice.call(e.target.files || []);
+      if (files.length) processPaper(files);
+    });
+    drawPaperResult();
+  }
+  function processPaper(files) {
+    var box = $('paper-progress'); box.style.display = 'block';
+    $('paper-label').textContent = '正在识别试卷文字…（首次需下载中文包）'; $('paper-fill').style.width = '10%';
+    var chain = Promise.resolve('');
+    // 依次 OCR 每张图，拼文字
+    files.forEach(function (f, idx) {
+      chain = chain.then(function (acc) {
+        $('paper-label').textContent = '识别第 ' + (idx+1) + '/' + files.length + ' 张…';
+        return new Promise(function (resolve) {
+          var reader = new FileReader();
+          reader.onload = function (ev) {
+            var img = new Image();
+            img.onload = function () {
+              if (typeof Tesseract === 'undefined') { resolve(acc); return; }
+              Tesseract.recognize(ev.target.result, 'chi_sim+eng').then(function (res) {
+                resolve(acc + '\n' + (res.data.text || ''));
+              }).catch(function () { resolve(acc); });
+            };
+            img.onerror = function () { resolve(acc); };
+            img.src = ev.target.result;
+          };
+          reader.onerror = function () { resolve(acc); };
+          reader.readAsDataURL(f);
+        });
+      });
+    });
+    chain.then(function (allText) {
+      if (!allText.trim()) { $('paper-label').textContent = '没识别到文字'; return; }
+      $('paper-label').textContent = 'AI 正在拆分题目并解答…'; $('paper-fill').style.width = '75%';
+      return aiAsk('下面是一张试卷/学习单 OCR 识别出的文字。请拆出其中每一道题，判断科目和答案。\n' +
+        '只输出 JSON 数组，格式：[{"t":"题目文字","s":"语文|数学|英语","a":"答案"}]\n' +
+        '不要输出任何多余文字。\n识别文字：\n' + allText.slice(0, 6000))
+        .then(function (r) {
+          var arr = [];
+          try {
+            var m = r.match(/\[[\s\S]*\]/);
+            arr = JSON.parse(m ? m[0] : r);
+          } catch (e) { arr = []; }
+          paperItems = (Array.isArray(arr) ? arr : []).map(function (x) {
+            return { t: String(x.t||'').trim(), s: x.s==='数学'?'math':(x.s==='英语'?'english':'chinese'), a: String(x.a||'').trim(), picked: true };
+          }).filter(function (x) { return x.t.length > 2; });
+          $('paper-progress').style.display = 'none';
+          $('paper-msg').textContent = '识别到 ' + paperItems.length + ' 道题，勾选后加入';
+          $('paper-msg').className = 'inline-msg ok';
+          drawPaperResult();
+        });
+    }).catch(function () {
+      $('paper-label').textContent = '处理失败，请重拍';
+    });
+  }
+  function drawPaperResult() {
+    var box = $('paper-result'); if (!box) return;
+    if (!paperItems.length) { box.innerHTML = ''; return; }
+    var html = '<div class="card"><div class="section-title">识别出的题目</div>' +
+      '<div class="section-sub">默认全选，取消不想加入的，然后批量添加。</div>';
+    paperItems.forEach(function (it, i) {
+      html += '<label class="review-row" style="align-items:flex-start;cursor:pointer;">' +
+        '<input type="checkbox" data-pi="' + i + '"' + (it.picked?' checked':'') + ' style="margin-top:3px;">' +
+        '<span style="flex:1;"><span class="subj-tag ' + SUBJECTS[it.s].cls + '">' + SUBJECTS[it.s].name + '</span> ' +
+        '<span style="font-size:13px;line-height:1.6;">' + escapeHtml(it.t) + '</span>' +
+        (it.a ? '<br><span style="font-size:12px;color:#7ee0c0;">答：' + fmtAI(escapeHtml(it.a)) + '</span>' : '') + '</span></label>';
+    });
+    html += '<div class="modal-btns"><button class="btn gold" id="paper-add" type="button">加入错题本</button></div></div>';
+    box.innerHTML = html;
+    var cbs = box.querySelectorAll('[data-pi]');
+    for (var i=0;i<cbs.length;i++) cbs[i].addEventListener('change', function () { paperItems[parseInt(this.getAttribute('data-pi'),10)].picked = this.checked; });
+    $('paper-add').addEventListener('click', function () {
+      var n = 0;
+      paperItems.forEach(function (it) { if (it.picked) { addQuestionSilent(it.t, it.a, it.s, ''); n++; } });
+      paperItems = []; drawPaperResult();
+      this.textContent = '已加入 ' + n + ' 道';
+      var self = this; setTimeout(function () { self.textContent = '加入错题本'; }, 2500);
+    });
+  }
+
   var qFilter = 'all';
   function renderQList() {
     var wrap = $('q-list-wrap'); if (!wrap) return;
@@ -1303,23 +1505,55 @@
       var label = q.text.length > 30 ? q.text.slice(0, 30) + '…' : q.text;
       opts += '<option value="' + q.id + '"' + (q.id === activeChatId ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
     });
-    box.innerHTML = '<div class="card chat-wrap">' +
+    box.innerHTML = '<div class="card chat-wrap chat-shell">' +
       '<div class="chat-select-row"><label style="font-size:13px;color:var(--muted);font-weight:600;">针对题目：</label><select id="chat-q">' + opts + '</select></div>' +
+      '<div class="chat-spotlight" id="chat-spotlight" style="display:none;">' +
+        '<div class="sp-h"><span id="sp-title">讲解</span><button type="button" id="sp-close" aria-label="关闭">×</button></div>' +
+        '<div class="sp-b" id="sp-body"></div>' +
+      '</div>' +
       '<div class="chat-msgs" id="chat-msgs"></div>' +
-      '<div class="chat-input-row"><textarea id="chat-input" rows="2" placeholder="输入你的问题，例如：这一步为什么这样算？"></textarea>' +
-      '<button class="btn gold" id="chat-send" type="button" style="height:48px;">发送</button></div>' +
-      '<div class="quick-ask">' +
-        '<button type="button" data-q="请讲解这道题的解法">讲解解法</button>' +
-        '<button type="button" data-q="这道题容易错在哪里？">易错点</button>' +
-        '<button type="button" data-q="请给我一道类似的练习题">出类似题</button>' +
-      '</div></div>';
+      '<div class="chat-dock">' +
+        '<div class="chat-input-row"><textarea id="chat-input" rows="1" placeholder="输入你的问题，例如：这一步为什么这样算？"></textarea>' +
+        '<button class="btn gold" id="chat-send" type="button" style="height:48px;">发送</button></div>' +
+        '<div class="quick-ask">' +
+          '<button type="button" data-q="请讲解这道题的解法" data-label="讲解解法">讲解解法</button>' +
+          '<button type="button" data-q="这道题容易错在哪里？" data-label="易错点">易错点</button>' +
+          '<button type="button" data-q="请给我一道类似的练习题" data-label="出类似题">出类似题</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
     var sel = $('chat-q');
-    sel.addEventListener('change', function () { activeChatId = sel.value; loadChat(); });
+    sel.addEventListener('change', function () {
+      activeChatId = sel.value;
+      closeSpotlight();
+      loadChat();
+    });
     $('chat-send').addEventListener('click', sendChat);
     $('chat-input').addEventListener('keydown', function (e) { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
+    $('sp-close').addEventListener('click', closeSpotlight);
     var quickBtns = box.querySelectorAll('.quick-ask button');
-    for (var i=0;i<quickBtns.length;i++) quickBtns[i].addEventListener('click', function () { $('chat-input').value=this.getAttribute('data-q'); sendChat(); });
+    for (var i=0;i<quickBtns.length;i++) quickBtns[i].addEventListener('click', function () {
+      var btn = this;
+      // 高亮当前按钮
+      for (var j=0;j<quickBtns.length;j++) quickBtns[j].classList.remove('active');
+      btn.classList.add('active');
+      // 顶部显示讲解卡（占位，AI 回答后填入）
+      showSpotlight(btn.getAttribute('data-label'), '正在生成' + btn.getAttribute('data-label') + '…');
+      $('chat-input').value = btn.getAttribute('data-q');
+      sendChat();
+    });
     loadChat();
+  }
+  function showSpotlight(title, body) {
+    var sp = $('chat-spotlight'); if (!sp) return;
+    $('sp-title').textContent = title;
+    $('sp-body').textContent = body;
+    sp.style.display = 'block';
+  }
+  function closeSpotlight() {
+    var sp = $('chat-spotlight'); if (sp) sp.style.display = 'none';
+    var btns = document.querySelectorAll('.quick-ask button.active');
+    for (var i=0;i<btns.length;i++) btns[i].classList.remove('active');
   }
 
   function getChat() {
@@ -1372,6 +1606,10 @@
   function sendChat() {
     var input = $('chat-input'), text = (input.value || '').trim();
     if (!text) { input.focus(); return; }
+    // 若由快捷按钮触发，回答后把内容填入顶部讲解卡
+    var activeQuick = document.querySelector('.quick-ask button.active');
+    var spotLabel = activeQuick ? activeQuick.getAttribute('data-label') : '';
+    if (!spotLabel) closeSpotlight(); // 普通提问：清掉旧的高亮和讲解卡
     var arr = getQ(), ctx = '';
     if (activeChatId) {
       for (var i = 0; i < arr.length; i++) {
@@ -1400,12 +1638,15 @@
       persistChat(arr, chats);
       sendBtn.disabled = false;
       loadChat();
+      if (spotLabel) showSpotlight(spotLabel, fmtAI(ans));
       // 仅自由提问、且问题较长（像一道题）时，才询问是否加入错题集
-      if (!activeChatId && text.length >= 8) askAddToBook(text, ans, 'chinese');
+      if (!activeChatId && text.length >= 8 && !spotLabel) askAddToBook(text, ans, 'chinese');
     }).catch(function (err) {
-      chats[chats.length - 1].a = localFallback(text);
+      var fb = localFallback(text);
+      chats[chats.length - 1].a = fb;
       persistChat(arr, chats);
       sendBtn.disabled = false;
+      if (spotLabel) showSpotlight(spotLabel, fb);
       loadChat();
       // 仅在自由提问且问题较长时提示加入错题集（避免连续对话反复弹窗）
       if (!activeChatId && text.length >= 8) askAddToBook(text, '', 'chinese');
