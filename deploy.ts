@@ -1633,6 +1633,39 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     return jsonResp({ ok: true });
   }
 
+  // ---------- 金小助视觉 AI 代理（密钥藏后端，前端不暴露） ----------
+  // 环境变量：HK_AI_KEY（智谱 API Key）、可选 HK_AI_MODEL（默认 glm-4v-flash）
+  // 未配置 Key 时返回 configured:false，前端自动回退到免 Key 方案。
+  if (path === '/api/hk/ai/config' && req.method === 'GET') {
+    return jsonResp({ ok: true, configured: !!(Deno.env.get('HK_AI_KEY') || '') });
+  }
+  if (path === '/api/hk/vision' && req.method === 'POST') {
+    const key = Deno.env.get('HK_AI_KEY') || '';
+    if (!key) return jsonResp({ ok: false, msg: '视觉 AI 尚未配置密钥', configured: false }, 503);
+    const { image, prompt } = await readBody(req);
+    if (!image || !prompt) return jsonResp({ ok: false, msg: '缺少图片或问题' }, 400);
+    const model = Deno.env.get('HK_AI_MODEL') || 'glm-4v-flash';
+    try {
+      const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: String(prompt) },
+            { type: 'image_url', image_url: { url: String(image) } }
+          ]}]
+        })
+      });
+      const data = await resp.json();
+      const text = data?.choices?.[0]?.message?.content;
+      if (!text) return jsonResp({ ok: false, msg: 'AI 未返回结果', raw: JSON.stringify(data).slice(0, 300) }, 502);
+      return jsonResp({ ok: true, text: String(text) });
+    } catch (e) {
+      return jsonResp({ ok: false, msg: 'AI 调用失败: ' + (e as Error).message }, 502);
+    }
+  }
+
   // POST /api/auth/send-code { phone } —— 生成 10 位验证码并（可选）发送短信
   if (path === '/api/auth/send-code' && req.method === 'POST') {
     const { phone } = await readBody(req);
