@@ -1680,8 +1680,8 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
       ? body.messages
       : [{ role: 'user', content: String(body.prompt || '') }];
     if (!messages[0] || !messages[0].content) return jsonResp({ ok: false, msg: '缺少问题' }, 400);
-    // 免费文本模型：4.7-Flash 推理更强（问答用），拥挤/超时自动回退快版
-    const models = [Deno.env.get('HK_AI_TEXT_MODEL') || 'glm-4.7-flash', 'glm-4-flash', 'glm-4-flash-250414'];
+    // 免费文本模型：4.5-Flash 稳定且推理更强（问答主力）；4.7 更聪明但常返回 1305 拥挤，作机会性补位
+    const models = [Deno.env.get('HK_AI_TEXT_MODEL') || 'glm-4.5-flash', 'glm-4.7-flash', 'glm-4-flash', 'glm-4-flash-250414'];
     let lastErr = '';
     for (const model of models) {
       try {
