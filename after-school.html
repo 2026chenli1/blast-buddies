@@ -1396,56 +1396,77 @@
     });
   }
   // 试卷拆题要求：按题号逐题写「第几题 → 题目要求 → 答案」，三科都必须给答案
+  var PAPER_FIELDS =
+    '每个字段的含义（**不要填反**）：\n' +
+    '  · n = 题号（试卷上的序号）\n' +
+    '  · t = 题目要求，即题干原文（例："填空：床前明月光，____。"），**绝对不要只写题型名**\n' +
+    '  · s = 科目，只能填 语文 / 数学 / 英语\n' +
+    '  · q = 题型，从 口算/列式/解答/选择/填空/默写/翻译/字词/阅读/习作/其他 中选一个，按原题型判断（填空题写「填空」，习作题写「习作」）\n' +
+    '  · a = 一段完整规范的标准答案（语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案；不能留空或写「略」）\n' +
+    '  · w = 这题是否被老师判错/标记，布尔值 true/false\n' +
+    '示例：{"n":"1","t":"填空：床前明月光，____。","s":"语文","q":"填空","a":"疑是地上霜","w":false}\n';
   var PAPER_PROMPT_IMG =
-    '请仔细看这张试卷/学习单图片，按试卷上的题号顺序逐题整理。\n' +
-    '【最重要：只看错题】如果这张卷子已经被批改过（有老师画的圈、打勾、打叉、半勾、波浪线、横线、红笔订正、扣分、分数、等级评语等痕迹），' +
-    '就只输出【被标记做错】的题，做对且没有标记的题一律不要输出。语文尤其注意：圈出来的错别字、画波浪线的句子、旁边写的订正字、' +
-    '打半勾的阅读题、习作旁的批注或扣分，都算被标记做错。若整张卷子没有批改痕迹，则输出所有题。\n' +
-    '每一题写清楚：①题号 ②题目要求（只写题干，不要混入答案）③这一题的标准答案 ④题型 ⑤是否被判错 w。\n' +
-    '【标准答案要求】语文、数学、英语三科都必须给出答案，不能留空或写「略」。\n' +
-    '  · 语文：默写、填空、字词写准确答案；阅读按要点写出一段完整参考答案；习作/作文给出写作要点或范文。\n' +
-    '  · 英语：单词、选择、翻译、完形写出答案。\n' +
-    '  · 数学：写出简要步骤和结果。\n' +
-    '【题型按原题型判断】填空题就写「填空」，习作题就写「习作」，不要把所有语文题都当成一种。\n' +
-    '只输出 JSON 数组：[{"n":"1","t":"题目要求","s":"语文|数学|英语","q":"题型","a":"标准答案","w":true或false}]\n' +
-    'w 表示这题是否被老师判错/标记（有批改痕迹时才需要准确判断；无批改痕迹时全部填 false）。\n' +
-    '题型 q 从这些里选：口算/列式/解答/选择/填空/默写/翻译/字词/阅读/习作/其他。' +
-    'w 必须是布尔值 true/false，不要用字符串。不要输出 JSON 以外的任何文字。';
+    '请仔细看这张试卷/学习单图片，按题号顺序逐题整理。\n' +
+    '【先判断有没有被批改】graded 只有在图片里确实能看到老师批改痕迹时才填 true：' +
+    '画圈、打勾、打叉、半勾、波浪线、红笔订正、扣分、分数、等级评语等。' +
+    '语文卷尤其注意圈出的错别字、病句波浪线、阅读半勾、习作旁批注或扣分。' +
+    '**如果是干净未批改的空白卷/练习单，graded 必须填 false。**\n' +
+    'graded=true 时：items 里只放【被标记做错】的题（w=true），做对且无标记的题不要放。\n' +
+    'graded=false 时：items 放所有题，w 全部填 false。\n' +
+    PAPER_FIELDS +
+    '只输出一个 JSON 对象，格式：{"graded":true或false,"items":[{...}]}。不要输出 JSON 以外的任何文字。';
   var PAPER_PROMPT_TEXT =
     '下面是试卷/学习单 OCR 出的文字，请按题号顺序逐题整理。\n' +
-    '若文字里能看出批改结果（✗、圈、订正、扣分、半勾等），只保留做错的题；否则保留所有题。\n' +
-    '语文、数学、英语三科都要给出标准答案，语文阅读按要点写参考答案、习作给写作要点或范文。\n' +
-    '题型按原题型判断：填空题写「填空」，习作题写「习作」。\n' +
-    '只输出 JSON 数组 [{"n":"题号","t":"题目要求","s":"语文|数学|英语","q":"题型","a":"标准答案","w":true或false}]，不要多余文字。\n文字：\n';
+    '只有文字里能看出批改痕迹（✗、圈、订正、扣分、半勾等）时 graded 才填 true，此时只保留做错的题（w=true）；' +
+    '干净未批改的卷子 graded 必须填 false 并保留所有题。\n' +
+    PAPER_FIELDS +
+    '只输出一个 JSON 对象：{"graded":true或false,"items":[{...}]}，不要多余文字。\n文字：\n';
   var QTYPE_MAP = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','习作':'composition','作文':'composition','写话':'composition','小练笔':'composition','其他':'other',
                     'oral':'oral','column':'column','solve':'solve','choice':'choice','blank':'blank','dictation':'dictation','translate':'translate','word':'word','reading':'reading','composition':'composition' };
   function isWrongFlag(v) {
     return v === true || v === 1 || v === 'true' || v === 'True' || v === '错' || v === '✗' || v === '×';
   }
   function parsePaperJSON(r) {
-    var arr = [];
+    var parsed = null;
     try {
       var c = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
-      var m = c.match(/\[[\s\S]*\]/);
-      arr = JSON.parse(m ? m[0] : c);
-    } catch (e) { arr = []; }
-    var items = (Array.isArray(arr) ? arr : []).map(function (x, i) {
+      // 优先整体解析（对象格式带 graded 标志）；兼容旧的纯数组返回
+      try { parsed = JSON.parse(c); } catch (e) {
+        var m = c.match(/\[[\s\S]*\]/) || c.match(/\{[\s\S]*\}/);
+        if (m) parsed = JSON.parse(m[0]);
+      }
+    } catch (e) { parsed = null; }
+    var graded = false, raw = [];
+    if (Array.isArray(parsed)) {
+      raw = parsed; // 老格式：没有 graded 标志，一律当作未批改
+    } else if (parsed && Array.isArray(parsed.items)) {
+      raw = parsed.items;
+      graded = (parsed.graded === true || parsed.graded === 'true' || parsed.graded === 'True');
+    }
+    var items = raw.map(function (x, i) {
       var no = String(x.n || x.no || x.num || (i+1) || '').trim();
       no = no.replace(/^第\s*/, '').replace(/题$/, '').replace(/[.、．]$/, '').trim();
+      // 容错：AI 偶尔把 s/q 填反
+      var sRaw = String(x.s||'').trim(), qRaw = String(x.q||'').trim();
+      var subj = /数学|英语|语文/.test(sRaw) ? sRaw : (/数学|英语|语文/.test(qRaw) ? qRaw : '语文');
+      var qt = QTYPE_MAP[qRaw] || (/^(口算|列式|解答|选择|填空|默写|翻译|字词|阅读|习作|作文|写话|其他)$/.test(sRaw) ? QTYPE_MAP[sRaw] : 'other');
       return {
         n: no || String(i+1),
         t: String(x.t||'').trim(),
-        s: x.s==='数学'?'math':(x.s==='英语'?'english':'chinese'),
-        q: QTYPE_MAP[String(x.q||'').trim()] || 'other',
+        s: subj==='数学'?'math':(subj==='英语'?'english':'chinese'),
+        q: qt,
         a: String(x.a||'').trim(),
         wrong: isWrongFlag(x.w),
         picked: true
       };
     }).filter(function (x) { return x.t.length > 2; });
-    // 只要 AI 明确标出了错题（说明卷子被批改过），就只保留做错的题
-    var hasGraded = items.some(function (x) { return x.wrong; });
-    var out = hasGraded ? items.filter(function (x) { return x.wrong; }) : items;
-    out.graded = hasGraded;
+    // 只有明确判定为「批改过的卷子」才只留错题；若标记缺失则退回全部，避免误杀成 0 题
+    var out = items;
+    if (graded) {
+      var wrongs = items.filter(function (x) { return x.wrong; });
+      if (wrongs.length) out = wrongs;
+    }
+    out.graded = graded;
     return out;
   }
   var paperGraded = false; // 本次试卷是否被批改过（只收错题）
@@ -1463,22 +1484,29 @@
         // 先试视觉 AI；失败自动退回 OCR + 文本 AI
         function ocrFallback() {
           return new Promise(function (resolve) {
-            if (typeof Tesseract === 'undefined') { resolve(acc); return; }
+            var done = false;
+            // OCR 首次要下载中文包，设上限避免整页卡死
+            var timer = setTimeout(function () { if (!done) { done = true; resolve(acc); } }, 25000);
+            function finish(v) { if (done) return; done = true; clearTimeout(timer); resolve(v); }
+            if (typeof Tesseract === 'undefined') { finish(acc); return; }
             Tesseract.recognize(shot.src, 'chi_sim+eng').then(function (res) {
               var txt = res.data.text || '';
-              if (!txt.trim()) { resolve(acc); return; }
+              if (!txt.trim()) { finish(acc); return; }
               aiAsk(PAPER_PROMPT_TEXT + txt.slice(0,5000))
                 .then(function (r) {
                   var got = parsePaperJSON(r);
                   if (got.graded) paperGraded = true;
-                  resolve(acc.concat(got));
+                  finish(acc.concat(got));
                 })
-                .catch(function () { resolve(acc); });
-            }).catch(function () { resolve(acc); });
+                .catch(function () { finish(acc); });
+            }).catch(function () { finish(acc); });
           });
         }
-        return aiVision(shot.src, prompt)
-          .then(function (r) {
+        // 视觉 AI 设总超时，避免多模型回退时整页长时间卡住
+        return Promise.race([
+          aiVision(shot.src, prompt),
+          new Promise(function (_, rej) { setTimeout(function () { rej(new Error('vision timeout')); }, 45000); })
+        ]).then(function (r) {
             var got = parsePaperJSON(r);
             if (got.graded) paperGraded = true;
             return got.length ? acc.concat(got) : ocrFallback();
@@ -1487,12 +1515,25 @@
       });
     });
     chain.then(function (items) {
+      // 缺标准答案的题，用文本 AI 补生成一段，保证之后能严格判卷
+      var need = items.filter(function (it) { return !it.a; });
+      if (!need.length) return items;
+      $('paper-label').textContent = 'AI 正在补全标准答案…';
+      return Promise.all(need.map(function (it) {
+        var p = '请为下面这道题写出一段完整、规范的标准答案，供老师判卷使用。\n' +
+          '【科目】' + (SUBJECTS[it.s]||SUBJECTS.chinese).name + '\n' +
+          '【题型】' + (QTYPES[it.q]||QTYPES.other).name + '\n' +
+          '【题目要求】' + it.t + '\n' +
+          '语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案。只输出答案正文。';
+        return aiAsk(p).then(function (r) { it.a = String(r).trim(); }).catch(function () {});
+      })).then(function () { return items; });
+    }).then(function (items) {
       paperItems = items;
       $('paper-progress').style.display = 'none';
       $('paper-run').disabled = false;
       $('paper-msg').textContent = paperGraded
         ? '已按批改标记挑出 ' + paperItems.length + ' 道错题（做对的没收录），AI 已给出标准答案'
-        : '识别到 ' + paperItems.length + ' 道题，勾选后加入';
+        : '识别到 ' + paperItems.length + ' 道题，AI 已给出标准答案';
       $('paper-msg').className = 'inline-msg ok';
       drawPaperResult();
     }).catch(function () {
@@ -1581,6 +1622,19 @@
       });
     });
     chain.then(function (items) {
+      // AI 偶尔漏写答案，逐题用文本模型补出一段标准答案（保证复习时能严格判卷）
+      var need = items.filter(function (it) { return !it.a; });
+      if (!need.length) return items;
+      return Promise.all(need.map(function (it) {
+        var p = '请为下面这道题写出一段完整、规范的标准答案，供老师判卷使用。\n' +
+          '【科目】' + (SUBJECTS[it.s]||SUBJECTS.chinese).name + '\n' +
+          '【题型】' + (QTYPES[it.q]||QTYPES.other).name + '\n' +
+          '【题目要求】' + it.t + '\n' +
+          (it.why ? '【学生错因】' + it.why + '\n' : '') +
+          '语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案。只输出答案正文，不要多余说明。';
+        return aiAsk(p).then(function (r) { it.a = String(r).trim(); }).catch(function () {});
+      })).then(function () { return items; });
+    }).then(function (items) {
       closeModal();
       scanItems = items;
       drawScanResult(box);
