@@ -270,6 +270,11 @@
   .quick-ask button { font-size: 12px; padding: 7px 13px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid var(--border); color: var(--muted); transition: all .12s ease; }
   .quick-ask button:hover { color: var(--accent); border-color: rgba(255,209,102,.4); }
   .quick-ask button.active { color: var(--bg); background: linear-gradient(145deg, #ffd166, #ffb703); border-color: var(--accent2); font-weight: 800; }
+  /* 常驻：把最近一轮问答加入错题集，三个小按钮随时可按，不弹窗 */
+  .quick-add { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .quick-add .qa-label { font-size: 11px; color: var(--muted); font-weight: 700; }
+  .quick-add button { font-size: 12px; padding: 6px 12px; border-radius: 999px; background: rgba(46,196,182,.10); border: 1px solid rgba(46,196,182,.35); color: #7ee0c0; }
+  .quick-add button:hover { background: rgba(46,196,182,.22); color: #a8ecd8; }
   /* 固定在对话上方的讲解卡 */
   .chat-spotlight { flex: none; margin: 0 0 12px; border: 1px solid rgba(255,209,102,.35); background: rgba(255,209,102,.07); border-radius: 12px; padding: 12px 14px; max-height: 170px; overflow-y: auto; }
   .chat-spotlight .sp-h { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
@@ -1269,7 +1274,7 @@
   }
 
   // 静默保存一道错题（不依赖表单 DOM）
-  function addQuestionSilent(text, answer, subject, image, qtype) {
+  function addQuestionSilent(text, answer, subject, image, qtype, extra) {
     var arr = getQ();
     var obj = {
       id: 'q' + Date.now() + Math.floor(Math.random() * 1000),
@@ -1281,6 +1286,10 @@
     };
     // 题型：优先用识别结果，否则根据题干和科目自动判断
     obj.qtype = qtype && QTYPES[qtype] ? qtype : guessQType(obj);
+    // 错因 / 思考过程 / 答案解析等附加信息，随错题一起保存
+    if (extra) {
+      for (var k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) obj[k] = extra[k];
+    }
     arr.unshift(obj);
     saveQ(arr); logActivity('add');
     return arr[0];
@@ -1402,29 +1411,48 @@
     '  · t = 题目要求，即题干原文（例："填空：床前明月光，____。"），**绝对不要只写题型名**\n' +
     '  · s = 科目，只能填 语文 / 数学 / 英语\n' +
     '  · q = 题型，从 口算/列式/解答/选择/填空/默写/翻译/字词/阅读/习作/其他 中选一个，按原题型判断（填空题写「填空」，习作题写「习作」）\n' +
-    '  · a = 一段完整规范的标准答案（语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案；不能留空或写「略」）\n' +
-    '  · w = 这题是否被老师判错/标记，布尔值 true/false\n' +
-    '示例：{"n":"1","t":"填空：床前明月光，____。","s":"语文","q":"填空","a":"疑是地上霜","w":false}\n';
+    '  · a = 答案解析：一段完整规范的标准答案（语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案；不能留空或写「略」）\n' +
+    '  · w = 这题是否做错（老师标记或你自己判卷都算），布尔值 true/false\n' +
+    '  · why = 错在哪里（一句话指出学生答案的问题；没错就留空）\n' +
+    '  · think = 思考过程（为什么这样判、正确思路是什么；没错就留空）\n' +
+    '  · s 科目必须按题干判断：含 f(x)、等号、不等式、函数、求值、方程等数学特征的一律填「数学」，' +
+    '**绝不能把高考数学题认成语文选择题**；英文题干填「英语」。\n' +
+    '示例：{"n":"1","t":"填空：床前明月光，____。","s":"语文","q":"填空","a":"疑是地上霜","w":false,"why":"","think":""}\n';
   var PAPER_PROMPT_IMG =
     '请仔细看这张试卷/学习单图片，按题号顺序逐题整理。\n' +
-    '【先判断有没有被批改】graded 只有在图片里确实能看到老师批改痕迹时才填 true：' +
-    '画圈、打勾、打叉、半勾、波浪线、红笔订正、扣分、分数、等级评语等。' +
-    '语文卷尤其注意圈出的错别字、病句波浪线、阅读半勾、习作旁批注或扣分。' +
-    '**如果是干净未批改的空白卷/练习单，graded 必须填 false。**\n' +
-    'graded=true 时：items 里只放【被标记做错】的题（w=true），做对且无标记的题不要放。\n' +
-    'graded=false 时：items 放所有题，w 全部填 false。\n' +
+    '【什么时候需要只保留错题】graded 填 true 的条件，满足其一即可：\n' +
+    '  ① 图片里有老师批改痕迹：画圈、打勾、打叉、半勾、波浪线、红笔订正、扣分、分数、等级评语；' +
+    '语文卷尤其注意圈出的错别字、病句波浪线、阅读半勾、习作旁批注或扣分。\n' +
+    '  ② **没有任何批注，但能看到学生写下的答案**：这时你要自己当老师判卷，逐题比对标准答案，' +
+    '语文填空/阅读/字词/习作也要判（意思相同、要点答到算对；答非所问、错别字改义、漏关键要点、不切题算错），' +
+    '把判错的题挑出来，graded 同样填 true。\n' +
+    '  ③ 干净未批改、也看不到学生作答的空白练习单：graded 填 false，items 放所有题，w 全填 false。\n' +
+    'graded=true 时：items 只放做错的题（w=true），并**必须写清 why（错在哪里）与 think（思考过程）**，' +
+    'a 里给出一段完整的答案解析。\n' +
     PAPER_FIELDS +
     '只输出一个 JSON 对象，格式：{"graded":true或false,"items":[{...}]}。不要输出 JSON 以外的任何文字。';
   var PAPER_PROMPT_TEXT =
     '下面是试卷/学习单 OCR 出的文字，请按题号顺序逐题整理。\n' +
-    '只有文字里能看出批改痕迹（✗、圈、订正、扣分、半勾等）时 graded 才填 true，此时只保留做错的题（w=true）；' +
-    '干净未批改的卷子 graded 必须填 false 并保留所有题。\n' +
+    'graded 填 true 的条件：能看出批改痕迹（✗、圈、订正、扣分、半勾等），或能看到学生作答且你判出有错题；' +
+    '此时只保留做错的题（w=true）并写清 why（错在哪里）、think（思考过程）、a（答案解析）。' +
+    '干净未批改且无学生作答的卷子 graded 填 false 并保留所有题。\n' +
     PAPER_FIELDS +
     '只输出一个 JSON 对象：{"graded":true或false,"items":[{...}]}，不要多余文字。\n文字：\n';
   var QTYPE_MAP = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','习作':'composition','作文':'composition','写话':'composition','小练笔':'composition','其他':'other',
                     'oral':'oral','column':'column','solve':'solve','choice':'choice','blank':'blank','dictation':'dictation','translate':'translate','word':'word','reading':'reading','composition':'composition' };
   function isWrongFlag(v) {
     return v === true || v === 1 || v === 'true' || v === 'True' || v === '错' || v === '✗' || v === '×';
+  }
+  // 学科自检：视觉模型偶尔把高考数学题误判成语文选择题，这里按题干特征纠正
+  function fixSubject(text, s) {
+    var t = String(text || '');
+    var mathHit = /(f\(x\)|[xXyY]\s*[=＝]|[=＝]\s*[?？]|\d+\s*[+\-×÷*\/]\s*\d+|不等式|解方程|函数|最小值|最大值|求值|计算|平方|根号|√|∑|\^\s*\d|三角形|圆的|概率|数列|导数|积分|方程|化简|sin|cos|log)/i.test(t);
+    var cnHit = /(默写|习作|作文|写话|阅读短文|解释词语|近义词|反义词|病句|古诗|诗句|看拼音写词语|组词)/.test(t);
+    var engHit = /(translate|choose the|fill in|complete the|单词|英译汉|汉译英)/i.test(t);
+    if (mathHit && s !== 'math') return 'math';
+    if (!mathHit && engHit && s !== 'english') return 'english';
+    if (!mathHit && cnHit && s === 'math') return 'chinese';
+    return s;
   }
   function parsePaperJSON(r) {
     var parsed = null;
@@ -1450,12 +1478,15 @@
       var sRaw = String(x.s||'').trim(), qRaw = String(x.q||'').trim();
       var subj = /数学|英语|语文/.test(sRaw) ? sRaw : (/数学|英语|语文/.test(qRaw) ? qRaw : '语文');
       var qt = QTYPE_MAP[qRaw] || (/^(口算|列式|解答|选择|填空|默写|翻译|字词|阅读|习作|作文|写话|其他)$/.test(sRaw) ? QTYPE_MAP[sRaw] : 'other');
+      var t = String(x.t||'').trim();
       return {
         n: no || String(i+1),
-        t: String(x.t||'').trim(),
-        s: subj==='数学'?'math':(subj==='英语'?'english':'chinese'),
+        t: t,
+        s: fixSubject(t, subj==='数学'?'math':(subj==='英语'?'english':'chinese')),
         q: qt,
         a: String(x.a||'').trim(),
+        why: String(x.why||'').trim(),
+        think: String(x.think||'').trim(),
         wrong: isWrongFlag(x.w),
         picked: true
       };
@@ -1515,17 +1546,35 @@
       });
     });
     chain.then(function (items) {
-      // 缺标准答案的题，用文本 AI 补生成一段，保证之后能严格判卷
-      var need = items.filter(function (it) { return !it.a; });
+      // 缺答案解析 / 错因 / 思考过程时，用文本 AI 补齐，保证每道错题三段齐全
+      var need = items.filter(function (it) {
+        return !it.a || (paperGraded && (!it.why || !it.think));
+      });
       if (!need.length) return items;
-      $('paper-label').textContent = 'AI 正在补全标准答案…';
+      $('paper-label').textContent = 'AI 正在补全解析…';
       return Promise.all(need.map(function (it) {
-        var p = '请为下面这道题写出一段完整、规范的标准答案，供老师判卷使用。\n' +
+        var p = '请为下面这道题补齐判卷信息。\n' +
           '【科目】' + (SUBJECTS[it.s]||SUBJECTS.chinese).name + '\n' +
           '【题型】' + (QTYPES[it.q]||QTYPES.other).name + '\n' +
           '【题目要求】' + it.t + '\n' +
-          '语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案。只输出答案正文。';
-        return aiAsk(p).then(function (r) { it.a = String(r).trim(); }).catch(function () {});
+          (it.why ? '【已知错因】' + it.why + '\n' : '') +
+          '请写出：a = 一段完整规范的答案解析（语文阅读按要点、习作给要点或范文）；' +
+          'why = 错在哪里（一句话）；think = 思考过程（为什么这样判、正确思路是什么）。\n' +
+          '只输出 JSON：{"a":"答案解析","why":"错在哪里","think":"思考过程"}，不要多余文字。';
+        return aiAsk(p).then(function (r) {
+          var c = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
+          var m = c.match(/\{[\s\S]*\}/);
+          if (m) {
+            try {
+              var j = JSON.parse(m[0]);
+              if (j.a) it.a = String(j.a).trim();
+              if (j.why) it.why = String(j.why).trim();
+              if (j.think) it.think = String(j.think).trim();
+              return;
+            } catch (e) { /* 落到纯文本兜底 */ }
+          }
+          if (!it.a) it.a = String(r).trim();
+        }).catch(function () {});
       })).then(function () { return items; });
     }).then(function (items) {
       paperItems = items;
@@ -1558,7 +1607,9 @@
           '<span class="qtype-tag">' + (QTYPES[it.q]?QTYPES[it.q].name:'其他') + '</span>' +
         '</div>' +
         '<div class="pq-line"><span class="pq-lbl">题目要求</span><div class="pq-val">' + fmtAI(escapeHtml(it.t)) + '</div></div>' +
-        '<div class="pq-line"><span class="pq-lbl ans">答案</span><div class="pq-val ans">' +
+        (it.why ? '<div class="pq-line"><span class="pq-lbl">错在哪</span><div class="pq-val" style="font-size:12px;color:#ff9b9b">' + fmtAI(escapeHtml(it.why)) + '</div></div>' : '') +
+        (it.think ? '<div class="pq-line"><span class="pq-lbl">思考过程</span><div class="pq-val" style="font-size:12px;color:var(--muted)">' + fmtAI(escapeHtml(it.think)) + '</div></div>' : '') +
+        '<div class="pq-line"><span class="pq-lbl ans">' + (paperGraded ? '答案解析' : '答案') + '</span><div class="pq-val ans">' +
           (it.a ? fmtAI(escapeHtml(it.a)) : '<span style="color:var(--muted)">AI 未给出答案，可勾选后到「AI 问答」再问</span>') +
         '</div></div>' +
       '</div>';
@@ -1575,7 +1626,11 @@
     $('paper-add').addEventListener('click', function () {
       var n = 0;
       paperItems.forEach(function (it) {
-        if (it.picked) { addQuestionSilent('第 ' + it.n + ' 题：' + it.t, it.a, it.s, '', it.q); n++; }
+        if (it.picked) {
+          addQuestionSilent('第 ' + it.n + ' 题：' + it.t, it.a, it.s, '', it.q,
+            { why: it.why || '', think: it.think || '', analysis: it.a || '' });
+          n++;
+        }
       });
       paperItems = []; drawPaperResult();
       this.textContent = '已加入 ' + n + ' 道';
@@ -1585,18 +1640,23 @@
 
   // ---------- 拍照挑错题：AI 从批改过的卷子里找出打叉/画圈/半对/标错的题 ----------
   var SCAN_PROMPT =
-    '这是一张已经批改过的试卷/作业照片。**只找出做错或被老师标记的题目**，做对且没有标记的题一律不要收录。\n' +
-    '批改标记包括：打叉(✗/×)、画圈、半对(√上加一笔/半勾)、划线或波浪线标出、写了订正、红笔批注、扣分、等级评语、写了错误答案。\n' +
-    '【语文卷特别注意】老师常这样标错：圈出错别字、在错字旁写订正字、用波浪线划出病句、阅读题打半勾或扣分、' +
-    '习作/作文旁的批注与扣分、填空处画圈或打叉。这些都要算作做错的题；只打勾且无任何标记的语文题不要收录。\n' +
-    '对每一道错题整理出：①题号 ②题目要求(题干原文，不要混入答案) ③科目 ④题型 ⑤一段完整规范的标准答案 ⑥错因。\n' +
-    '【题型必须按原题型判断】填空题写「填空」，习作/作文/写话题写「习作」，阅读题写「阅读」，默写写「默写」，字词题写「字词」，' +
-    '不要把所有语文题都归成一种。标准答案：语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案。\n' +
-    '只输出 JSON 数组：[{"n":"题号","t":"题目要求","s":"语文|数学|英语","q":"题型","a":"标准答案","why":"错因"}]\n' +
+    '这是一张试卷/作业照片。**只输出做错的题**，做对的题一律不要收录。\n' +
+    '【判断哪题错了，两条路都要走】\n' +
+    '① 有老师批改痕迹时按标记：打叉(✗/×)、画圈、半勾、波浪线、红笔订正、批注、扣分、等级评语。\n' +
+    '  语文卷特别注意圈出的错别字、病句波浪线、阅读半勾、习作旁批注或扣分、填空处画圈。\n' +
+    '② **没有任何批注时，你要自己当老师判卷**：读出学生在题后/空格里写的答案，与标准答案比对，' +
+    '自己判断对错，只输出做错的题。语文填空、阅读、字词、习作都要逐题判：' +
+    '意思相同、要点答到算对；答非所问、错别字导致词义改变、漏掉关键要点、内容不切题算错。\n' +
+    '【每道错题必须写全四件事】①题号 ②题目要求(题干原文，不要混入答案) ③**错在哪里** why ④**思考过程** think ' +
+    '⑤**答案解析** a（一段完整规范的标准答案/参考答案）。思考过程要写清楚"为什么这样判、正确思路是什么"。\n' +
+    '【科目判断】含 f(x)、等号、不等式、函数、计算、求值、方程等数学特征的一律判「数学」，' +
+    '绝不能把高考数学题认成语文选择题；英文题干判「英语」；默写/习作/阅读/字词等判「语文」。\n' +
+    '【题型按原题型判断】填空题写「填空」，习作/作文/写话写「习作」，阅读写「阅读」，默写写「默写」，字词写「字词」。\n' +
+    '只输出 JSON 数组：[{"n":"题号","t":"题目要求","s":"语文|数学|英语","q":"题型","a":"答案解析","why":"错在哪里","think":"思考过程"}]\n' +
     '题型 q 从：口算/列式/解答/选择/填空/默写/翻译/字词/阅读/习作/其他 中选。不要输出 JSON 以外的任何文字。';
   var scanItems = [];
   function scanWrongPapers(files, box) {
-    showModal('<h3 style="margin-top:0">AI 正在挑错题…</h3><p style="color:var(--muted)">正在看 ' + files.length + ' 张图，按打叉、画圈、勾/半勾、订正、红笔批注等批改痕迹找做错的题（语文的圈出错字、波浪线、习作批注也算）</p>');
+    showModal('<h3 style="margin-top:0">AI 正在挑错题…</h3><p style="color:var(--muted)">正在看 ' + files.length + ' 张图：有老师批注就按圈/勾/叉/订正判断；没有批注就由 AI 自己读学生答案判卷，挑出错题并写出错因、思考过程与答案解析</p>');
     var chain = Promise.resolve([]);
     files.forEach(function (f) {
       chain = chain.then(function (acc) {
@@ -1622,17 +1682,32 @@
       });
     });
     chain.then(function (items) {
-      // AI 偶尔漏写答案，逐题用文本模型补出一段标准答案（保证复习时能严格判卷）
-      var need = items.filter(function (it) { return !it.a; });
+      // AI 偶尔漏写解析，逐题补齐「错在哪里 / 思考过程 / 答案解析」
+      var need = items.filter(function (it) { return !it.a || !it.why || !it.think; });
       if (!need.length) return items;
       return Promise.all(need.map(function (it) {
-        var p = '请为下面这道题写出一段完整、规范的标准答案，供老师判卷使用。\n' +
+        var p = '这是一道被判错的题，请补齐判卷信息。\n' +
           '【科目】' + (SUBJECTS[it.s]||SUBJECTS.chinese).name + '\n' +
           '【题型】' + (QTYPES[it.q]||QTYPES.other).name + '\n' +
           '【题目要求】' + it.t + '\n' +
-          (it.why ? '【学生错因】' + it.why + '\n' : '') +
-          '语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案。只输出答案正文，不要多余说明。';
-        return aiAsk(p).then(function (r) { it.a = String(r).trim(); }).catch(function () {});
+          (it.why ? '【已知错因】' + it.why + '\n' : '') +
+          '请写出：a = 一段完整规范的答案解析（语文阅读按要点、习作给要点或范文）；' +
+          'why = 错在哪里（一句话）；think = 思考过程（为什么这样判、正确的思路是什么）。\n' +
+          '只输出 JSON：{"a":"答案解析","why":"错在哪里","think":"思考过程"}，不要多余文字。';
+        return aiAsk(p).then(function (r) {
+          var c = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
+          var m = c.match(/\{[\s\S]*\}/);
+          if (m) {
+            try {
+              var j = JSON.parse(m[0]);
+              if (j.a) it.a = String(j.a).trim();
+              if (j.why) it.why = String(j.why).trim();
+              if (j.think) it.think = String(j.think).trim();
+              return;
+            } catch (e) { /* 落到纯文本兜底 */ }
+          }
+          if (!it.a) it.a = String(r).trim();
+        }).catch(function () {});
       })).then(function () { return items; });
     }).then(function (items) {
       closeModal();
@@ -1650,21 +1725,25 @@
     var qmap = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','习作':'composition','作文':'composition','写话':'composition','小练笔':'composition','其他':'other' };
     return (Array.isArray(arr) ? arr : []).map(function (x, i) {
       var no = String(x.n || (i+1)).replace(/^第\s*/,'').replace(/题$/,'').trim() || String(i+1);
+      var t = String(x.t||'').trim();
       return {
-        n: no, t: String(x.t||'').trim(),
-        s: x.s==='数学'?'math':(x.s==='英语'?'english':'chinese'),
+        n: no, t: t,
+        s: fixSubject(t, x.s==='数学'?'math':(x.s==='英语'?'english':'chinese')),
         q: qmap[String(x.q||'').trim()] || 'other',
-        a: String(x.a||'').trim(), why: String(x.why||'').trim(), picked: true
+        a: String(x.a||'').trim(),
+        why: String(x.why||'').trim(),
+        think: String(x.think||'').trim(),
+        picked: true
       };
     }).filter(function (x) { return x.t.length > 2; });
   }
   function drawScanResult(box) {
     if (!scanItems.length) {
-      showModal('<h3 style="margin-top:0">没找到被标记的错题</h3><p style="color:var(--muted);line-height:1.7">可能是照片里的叉/圈不够清楚，或这张卷子全做对了。可以换张更清晰的再试。</p><div class="modal-btns"><button class="btn gold" id="sm-ok" type="button">知道了</button></div>');
+      showModal('<h3 style="margin-top:0">没找到错题</h3><p style="color:var(--muted);line-height:1.7">可能是照片里没有批改痕迹、也看不清学生写的答案，或这张卷子全做对了。可以换张更清晰的再试，或直接用「试卷导入」把所有题收进来。</p><div class="modal-btns"><button class="btn gold" id="sm-ok" type="button">知道了</button></div>');
       $('sm-ok').onclick = closeModal; return;
     }
     var html = '<div class="card" id="scan-card"><div class="section-title">AI 找到 ' + scanItems.length + ' 道错题</div>' +
-      '<div class="section-sub">只保留了做错的题（做对的没收录）。按原题型标好：填空题就是填空、习作题就是习作，并附 AI 生成的标准答案与错因。</div>';
+      '<div class="section-sub">有老师批注就按圈/勾/叉判断，没有批注就由 AI 自己判卷挑出错题；每题都写出错在哪里、思考过程与答案解析。</div>';
     scanItems.forEach(function (it, i) {
       var sb = SUBJECTS[it.s];
       html += '<div class="pq-item' + (it.picked?'':' off') + '" data-sc="' + i + '">' +
@@ -1673,8 +1752,9 @@
         '<span class="subj-tag ' + sb.cls + '">' + sb.name + '</span>' +
         '<span class="qtype-tag">' + QTYPES[it.q].name + '</span></div>' +
         '<div class="pq-line"><span class="pq-lbl">题目要求</span><div class="pq-val">' + fmtAI(escapeHtml(it.t)) + '</div></div>' +
-        '<div class="pq-line"><span class="pq-lbl ans">答案</span><div class="pq-val ans">' + fmtAI(escapeHtml(it.a)) + '</div></div>' +
-        (it.why ? '<div class="pq-line"><span class="pq-lbl">错因</span><div class="pq-val" style="font-size:12px;color:var(--muted)">' + escapeHtml(it.why) + '</div></div>' : '') +
+        (it.why ? '<div class="pq-line"><span class="pq-lbl">错在哪</span><div class="pq-val" style="font-size:12px;color:#ff9b9b">' + fmtAI(escapeHtml(it.why)) + '</div></div>' : '') +
+        (it.think ? '<div class="pq-line"><span class="pq-lbl">思考过程</span><div class="pq-val" style="font-size:12px;color:var(--muted)">' + fmtAI(escapeHtml(it.think)) + '</div></div>' : '') +
+        '<div class="pq-line"><span class="pq-lbl ans">答案解析</span><div class="pq-val ans">' + fmtAI(escapeHtml(it.a)) + '</div></div>' +
       '</div>';
     });
     html += '<div class="modal-btns"><button class="btn gold" id="scan-add" type="button">加入错题本</button><button class="btn" id="scan-cancel" type="button">取消</button></div></div>';
@@ -1693,7 +1773,8 @@
       var n = 0;
       scanItems.forEach(function (it) {
         if (it.picked) {
-          addQuestionSilent('第 ' + it.n + ' 题：' + it.t, it.a, it.s, '', it.q);
+          addQuestionSilent('第 ' + it.n + ' 题：' + it.t, it.a, it.s, '', it.q,
+            { why: it.why || '', think: it.think || '', analysis: it.a || '' });
           n++;
         }
       });
@@ -1975,7 +2056,13 @@
           '<button type="button" data-label="易错点">易错点</button>' +
           '<button type="button" data-label="出类似题">出类似题</button>' +
         '</div>' +
-        '<div class="inline-msg" id="quick-hint" style="margin-top:8px;font-size:12px;color:var(--muted);">选一道错题，点上方的方向标签，再输入你想问的内容。</div>' +
+        '<div class="quick-add">' +
+          '<span class="qa-label">加入错题集：</span>' +
+          '<button type="button" data-add="chinese">＋语文</button>' +
+          '<button type="button" data-add="math">＋数学</button>' +
+          '<button type="button" data-add="english">＋英语</button>' +
+        '</div>' +
+        '<div class="inline-msg" id="quick-hint" style="margin-top:8px;font-size:12px;color:var(--muted);">选一道错题，点上方的方向标签，再输入你想问的内容；下方三个按钮随时可把刚才的问答收进错题集。</div>' +
       '</div>' +
     '</div>';
     var sel = $('chat-q');
@@ -1992,6 +2079,10 @@
     $('chat-send').addEventListener('click', sendChat);
     $('chat-input').addEventListener('keydown', function (e) { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } });
     $('sp-close').addEventListener('click', closeSpotlight);
+    var addBtns = box.querySelectorAll('.quick-add button[data-add]');
+    for (var ai=0; ai<addBtns.length; ai++) addBtns[ai].addEventListener('click', function () {
+      addLatestChatToBook(this.getAttribute('data-add'));
+    });
     var quickBtns = box.querySelectorAll('.quick-ask button');
     for (var i=0;i<quickBtns.length;i++) quickBtns[i].addEventListener('click', function () {
       var btn = this;
@@ -2129,17 +2220,30 @@
       persistChat(arr, chats);
       sendBtn.disabled = false;
       loadChat();
-      // 仅自由提问、且问题较长（像一道题）时，才询问是否加入错题集
-      if (!activeChatId && text.length >= 8 && !spotLabel) askAddToBook(text, ans, 'chinese');
+      // 不再弹窗询问；下方三个常驻小按钮随时可加入错题集
     }).catch(function (err) {
       var fb = localFallback(text);
       chats[chats.length - 1].a = fb;
       persistChat(arr, chats);
       sendBtn.disabled = false;
       loadChat();
-      // 仅在自由提问且问题较长时提示加入错题集（避免连续对话反复弹窗）
-      if (!activeChatId && text.length >= 8) askAddToBook(text, '', 'chinese');
     });
+  }
+  // 常驻按钮：把最近一轮问答按所选科目加入错题集（不弹窗）
+  function addLatestChatToBook(subj) {
+    var hint = $('quick-hint');
+    var chats = chatsIn(getQ());
+    var last = chats.length ? chats[chats.length - 1] : null;
+    if (!last || !last.q || !last.a) {
+      if (hint) { hint.textContent = '先问一个问题、等 AI 回答完，再点科目按钮收进错题集。'; hint.className = 'inline-msg'; }
+      return;
+    }
+    addQuestionSilent(last.q, last.a, subj, '');
+    if (hint) {
+      hint.textContent = '已把刚才的问答加入「' + SUBJECTS[subj].name + '」错题集';
+      hint.className = 'inline-msg ok';
+      setTimeout(function () { hint.textContent = '选一道错题，点上方的方向标签，再输入你想问的内容；下方三个按钮随时可把刚才的问答收进错题集。'; hint.className = 'inline-msg'; }, 3000);
+    }
   }
   function openChatWith(id) { activeChatId = id; quizMode = 'chat'; showView('quiz'); }
 
