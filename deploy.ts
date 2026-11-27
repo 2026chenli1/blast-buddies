@@ -1644,13 +1644,15 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     if (!key) return jsonResp({ ok: false, msg: '视觉 AI 尚未配置密钥', configured: false }, 503);
     const { image, prompt } = await readBody(req);
     if (!image || !prompt) return jsonResp({ ok: false, msg: '缺少图片或问题' }, 400);
-    const models = [Deno.env.get('HK_AI_MODEL') || 'glm-4v-flash', 'glm-4.1v-thinking-flash', 'glm-4v-flash'];
+    // 免费视觉模型：thinking 版先上（公式/学科判断更准），失败自动回退快版
+    const models = [Deno.env.get('HK_AI_MODEL') || 'glm-4.1v-thinking-flash', 'glm-4v-flash'];
     let lastErr = '';
     for (const model of models) {
       try {
         const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+          signal: AbortSignal.timeout(30000),
           body: JSON.stringify({
             model,
             messages: [{ role: 'user', content: [
@@ -1678,14 +1680,15 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
       ? body.messages
       : [{ role: 'user', content: String(body.prompt || '') }];
     if (!messages[0] || !messages[0].content) return jsonResp({ ok: false, msg: '缺少问题' }, 400);
-    // 免费文本模型，首选拥挤时自动换备用
-    const models = [Deno.env.get('HK_AI_TEXT_MODEL') || 'glm-4-flash', 'glm-4-flash-250414', 'glm-4.5-flash'];
+    // 免费文本模型：4.7-Flash 推理更强（问答用），拥挤/超时自动回退快版
+    const models = [Deno.env.get('HK_AI_TEXT_MODEL') || 'glm-4.7-flash', 'glm-4-flash', 'glm-4-flash-250414'];
     let lastErr = '';
     for (const model of models) {
       try {
         const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+          signal: AbortSignal.timeout(25000),
           body: JSON.stringify({ model, messages })
         });
         const data = await resp.json();
