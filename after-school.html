@@ -1657,7 +1657,8 @@
         // 视觉 AI 设总超时，避免多模型回退时整页长时间卡住
         return Promise.race([
           aiVision(shot.src, prompt),
-          new Promise(function (_, rej) { setTimeout(function () { rej(new Error('vision timeout')); }, 45000); })
+          // 复杂高考卷识别较慢（含模型重试），给足时间，别过早掉进 OCR 兜底
+          new Promise(function (_, rej) { setTimeout(function () { rej(new Error('vision timeout')); }, 90000); })
         ]).then(function (r) {
             var got = parsePaperJSON(r);
             if (got.graded) paperGraded = true;
@@ -1701,10 +1702,12 @@
       paperItems = items;
       $('paper-progress').style.display = 'none';
       $('paper-run').disabled = false;
-      $('paper-msg').textContent = paperGraded
-        ? '已按批改标记挑出 ' + paperItems.length + ' 道错题（做对的没收录），AI 已给出标准答案'
-        : '识别到 ' + paperItems.length + ' 道题，AI 已给出标准答案';
-      $('paper-msg').className = 'inline-msg ok';
+      $('paper-msg').textContent = !paperItems.length
+        ? '没能识别出题目：可能是图片太模糊或 AI 超时了，请重试，或换张更清晰的图'
+        : (paperGraded
+          ? '已按批改标记挑出 ' + paperItems.length + ' 道错题（做对的没收录），AI 已给出标准答案'
+          : '识别到 ' + paperItems.length + ' 道题，AI 已给出标准答案');
+      $('paper-msg').className = paperItems.length ? 'inline-msg ok' : 'inline-msg err';
       drawPaperResult();
     }).catch(function () {
       $('paper-label').textContent = '处理失败，请重试';
