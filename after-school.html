@@ -594,8 +594,9 @@
     }).catch(function () { visionReady = false; return false; });
   }
   // 调用后端视觉 AI（真·看图识别数学题）
-  function aiVision(image, prompt) {
-    return api('/api/hk/vision', 'POST', { image: image, prompt: prompt }, getToken()).then(function (r) {
+  // accurate=true：整张试卷/挑错题这类复杂图，用更稳的推理视觉模型，宁可慢几秒也要识别全
+  function aiVision(image, prompt, accurate) {
+    return api('/api/hk/vision', 'POST', { image: image, prompt: prompt, accurate: accurate === true }, getToken()).then(function (r) {
       if (!r.ok) throw new Error(r.msg || '视觉 AI 失败');
       return r.text;
     });
@@ -1579,16 +1580,47 @@
     if (!mathHit && cnHit && s === 'math') return 'chinese';
     return s;
   }
+  // 急救解析：AI 偶尔把外层 JSON 写坏（漏 "items"、少逗号），仍要把里面的题目对象捞出来
+  function extractJsonObjects(s) {
+    var out = [], depth = 0, start = -1, inStr = false, esc = false;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === '\\') esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') { inStr = true; continue; }
+      if (ch === '{') { if (depth === 0) start = i; depth++; }
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0 && start >= 0) { out.push(s.slice(start, i + 1)); start = -1; }
+      }
+    }
+    return out;
+  }
   function parsePaperJSON(r) {
     var parsed = null;
+    var c = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
     try {
-      var c = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
       // 优先整体解析（对象格式带 graded 标志）；兼容旧的纯数组返回
       try { parsed = JSON.parse(c); } catch (e) {
         var m = c.match(/\[[\s\S]*\]/) || c.match(/\{[\s\S]*\}/);
         if (m) parsed = JSON.parse(m[0]);
       }
     } catch (e) { parsed = null; }
+    if (!parsed || (!Array.isArray(parsed) && !Array.isArray(parsed.items))) {
+      // 外层坏了：把每个含题干的题目对象救回来，一律按未批改处理
+      var salvaged = [];
+      extractJsonObjects(c).forEach(function (chunk) {
+        try {
+          var o = JSON.parse(chunk);
+          if (o && (o.t || o['t题干原文'] || o['题干'])) salvaged.push(o);
+        } catch (e2) { /* 跳过坏片段 */ }
+      });
+      if (salvaged.length) parsed = { graded: false, evidence: '', items: salvaged };
+    }
     var graded = false, raw = [];
     if (Array.isArray(parsed)) {
       raw = parsed; // 老格式：没有 graded 标志，一律当作未批改
@@ -1668,7 +1700,7 @@
         }
         // 视觉 AI 设总超时，避免多模型回退时整页长时间卡住
         return Promise.race([
-          aiVision(shot.src, prompt),
+          aiVision(shot.src, prompt, true),
           // 复杂高考卷识别较慢（含模型重试），给足时间，别过早掉进 OCR 兜底
           new Promise(function (_, rej) { setTimeout(function () { rej(new Error('vision timeout')); }, 90000); })
         ]).then(function (r) {
@@ -1805,7 +1837,7 @@
               var c = document.createElement('canvas');
               c.width = Math.round(im.width*sc); c.height = Math.round(im.height*sc);
               c.getContext('2d').drawImage(im,0,0,c.width,c.height);
-              aiVision(c.toDataURL('image/jpeg',0.85), SCAN_PROMPT)
+              aiVision(c.toDataURL('image/jpeg',0.85), SCAN_PROMPT, true)
                 .then(function (r) { resolve(acc.concat(parseScanJSON(r))); })
                 .catch(function () { resolve(acc); });
             };
