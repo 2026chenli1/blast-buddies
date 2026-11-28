@@ -1443,6 +1443,14 @@
   function isWrongFlag(v) {
     return v === true || v === 1 || v === 'true' || v === 'True' || v === '错' || v === '✗' || v === '×';
   }
+  // AI 偶尔把字段名写成「n题号」「t题干原文」等，这里做宽松取值
+  function fv(x, key, aliases) {
+    if (x[key] !== undefined && x[key] !== null) return x[key];
+    var list = aliases || [];
+    for (var i=0;i<list.length;i++) if (x[list[i]] !== undefined && x[list[i]] !== null) return x[list[i]];
+    for (var k in x) if (Object.prototype.hasOwnProperty.call(x, k) && k.charAt(0) === key && k.length > 1) return x[k];
+    return '';
+  }
   // 学科自检：视觉模型偶尔把高考数学题误判成语文选择题，这里按题干特征纠正
   function fixSubject(text, s) {
     var t = String(text || '');
@@ -1472,22 +1480,23 @@
       graded = (parsed.graded === true || parsed.graded === 'true' || parsed.graded === 'True');
     }
     var items = raw.map(function (x, i) {
-      var no = String(x.n || x.no || x.num || (i+1) || '').trim();
+      var no = String(fv(x, 'n', ['no','num','题号']) || (i+1)).trim();
       no = no.replace(/^第\s*/, '').replace(/题$/, '').replace(/[.、．]$/, '').trim();
-      // 容错：AI 偶尔把 s/q 填反
-      var sRaw = String(x.s||'').trim(), qRaw = String(x.q||'').trim();
+      // 容错：AI 偶尔把 s/q 填反，或把键名写成「s科目」「q题型」
+      var sRaw = String(fv(x, 's', ['科目','subject'])||'').trim();
+      var qRaw = String(fv(x, 'q', ['题型','qtype'])||'').trim();
       var subj = /数学|英语|语文/.test(sRaw) ? sRaw : (/数学|英语|语文/.test(qRaw) ? qRaw : '语文');
       var qt = QTYPE_MAP[qRaw] || (/^(口算|列式|解答|选择|填空|默写|翻译|字词|阅读|习作|作文|写话|其他)$/.test(sRaw) ? QTYPE_MAP[sRaw] : 'other');
-      var t = String(x.t||'').trim();
+      var t = String(fv(x, 't', ['题干','题目要求','text'])||'').trim();
       return {
         n: no || String(i+1),
         t: t,
         s: fixSubject(t, subj==='数学'?'math':(subj==='英语'?'english':'chinese')),
         q: qt,
-        a: String(x.a||'').trim(),
-        why: String(x.why||'').trim(),
-        think: String(x.think||'').trim(),
-        wrong: isWrongFlag(x.w),
+        a: String(fv(x, 'a', ['答案','标准答案','答案解析','answer'])||'').trim(),
+        why: String(fv(x, 'why', ['错因','错在哪里'])||'').trim(),
+        think: String(fv(x, 'think', ['思考过程','思路'])||'').trim(),
+        wrong: isWrongFlag(fv(x, 'w', ['wrong','是否做错'])),
         picked: true
       };
     }).filter(function (x) { return x.t.length > 2; });
@@ -1725,14 +1734,15 @@
     var qmap = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','习作':'composition','作文':'composition','写话':'composition','小练笔':'composition','其他':'other' };
     return (Array.isArray(arr) ? arr : []).map(function (x, i) {
       var no = String(x.n || (i+1)).replace(/^第\s*/,'').replace(/题$/,'').trim() || String(i+1);
-      var t = String(x.t||'').trim();
+      var t = String(fv(x, 't', ['题干','题目要求','text'])||'').trim();
+      var sRaw = String(fv(x, 's', ['科目','subject'])||'').trim();
       return {
         n: no, t: t,
-        s: fixSubject(t, x.s==='数学'?'math':(x.s==='英语'?'english':'chinese')),
-        q: qmap[String(x.q||'').trim()] || 'other',
-        a: String(x.a||'').trim(),
-        why: String(x.why||'').trim(),
-        think: String(x.think||'').trim(),
+        s: fixSubject(t, sRaw==='数学'?'math':(sRaw==='英语'?'english':'chinese')),
+        q: qmap[String(fv(x, 'q', ['题型','qtype'])||'').trim()] || 'other',
+        a: String(fv(x, 'a', ['答案','标准答案','答案解析','answer'])||'').trim(),
+        why: String(fv(x, 'why', ['错因','错在哪里'])||'').trim(),
+        think: String(fv(x, 'think', ['思考过程','思路'])||'').trim(),
         picked: true
       };
     }).filter(function (x) { return x.t.length > 2; });
