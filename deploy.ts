@@ -1711,7 +1711,7 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     if (!key) return jsonResp({ ok: false, msg: '视觉 AI 尚未配置密钥', configured: false }, 503);
     const { image, prompt } = await readBody(req);
     if (!image || !prompt) return jsonResp({ ok: false, msg: '缺少图片或问题' }, 400);
-    // 并发竞速：thinking 版（准）2.5s 优先窗口，超时就用先返回的快版，避免排队累积等待
+    // 并发竞速：thinking 版（准）1.8s 优先窗口，超时就用先返回的快版，避免排队累积等待
     const hit = await zhipuRace(
       key,
       Deno.env.get('HK_AI_MODEL') || 'glm-4.1v-thinking-flash',
@@ -1720,7 +1720,7 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
         { type: 'text', text: String(prompt) },
         { type: 'image_url', image_url: { url: String(image) } }
       ]}] }),
-      2500,
+      1800,
     );
     if (hit) return jsonResp({ ok: true, text: hit.text, model: hit.model });
     return jsonResp({ ok: false, msg: 'AI 调用失败，请重试' }, 502);
@@ -1739,7 +1739,7 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     const smart = Deno.env.get('HK_AI_TEXT_MODEL') || 'glm-4.5-flash';
     // 问答（fast）走并发竞速：4.5 聪明版 2 秒优先窗口，超时立刻用先返回的 4-flash
     if (body.fast === true) {
-      const hit = await zhipuRace(key, smart, 'glm-4-flash', (model) => ({ model, messages }), 2000);
+      const hit = await zhipuRace(key, smart, 'glm-4-flash', (model) => ({ model, messages }), 1200);
       if (hit) return jsonResp({ ok: true, text: hit.text, model: hit.model });
       return jsonResp({ ok: false, msg: 'AI 调用失败，请重试' }, 502);
     }
