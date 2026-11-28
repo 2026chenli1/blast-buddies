@@ -1714,7 +1714,8 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
   if (path === '/api/hk/vision' && req.method === 'POST') {
     const key = Deno.env.get('HK_AI_KEY') || '';
     if (!key) return jsonResp({ ok: false, msg: '视觉 AI 尚未配置密钥', configured: false }, 503);
-    const { image, prompt } = await readBody(req);
+    const body = await readBody(req);
+    const image = body.image, prompt = body.prompt;
     if (!image || !prompt) return jsonResp({ ok: false, msg: '缺少图片或问题' }, 400);
     // 试卷图（尤其高考数学题）识别要 6–15 秒，超时必须给足，否则会识别成 0 道题
     const smartVision = Deno.env.get('HK_AI_MODEL') || 'glm-4.1v-thinking-flash';
@@ -1722,6 +1723,16 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
       { type: 'text', text: String(prompt) },
       { type: 'image_url', image_url: { url: String(image) } }
     ]}] });
+    // 整张试卷 / 挑错题：快版模型在长提示词下会写坏 JSON、还会漏题，改用推理视觉模型求稳
+    if (body.accurate === true) {
+      for (const model of [smartVision, 'glm-4v-flash']) {
+        try {
+          const hit = await zhipuOnce(key, model, makeBody(model), 30000);
+          if (hit) return jsonResp({ ok: true, text: hit.text, model: hit.model });
+        } catch (_) { /* 换下一个 */ }
+      }
+      return jsonResp({ ok: false, msg: 'AI 识别这张图超时了，请重试或换张更清晰的图片' }, 502);
+    }
     const hit = await zhipuRace(key, smartVision, 'glm-4v-flash', makeBody, 2000, 28000, 24000);
     if (hit) return jsonResp({ ok: true, text: hit.text, model: hit.model });
     // 竞速全失败时顺序重试一次，避免复杂卷子直接变成 0 题
