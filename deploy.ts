@@ -1343,21 +1343,24 @@ async function zhipuOnce(key: string, model: string, bodyObj: unknown, timeoutMs
   return { text: String(text), model };
 }
 // smart 模型享有 headStartMs 优先窗口（更聪明）；超时后谁先成功就用谁，耗时≈最快的模型
+// perCallMs / hardLimitMs 可按场景调：问答要快，复杂试卷图必须给足时间，否则会识别成 0 题
 async function zhipuRace(
   key: string,
   smartModel: string,
   fastModel: string,
   makeBody: (model: string) => unknown,
   headStartMs = 2000,
+  perCallMs = 12000,
+  hardLimitMs = 9000,
 ): Promise<ZhipuHit | null> {
-  const smart = zhipuOnce(key, smartModel, makeBody(smartModel), 12000).catch(() => null);
-  const fast = zhipuOnce(key, fastModel, makeBody(fastModel), 12000).catch(() => null);
+  const smart = zhipuOnce(key, smartModel, makeBody(smartModel), perCallMs).catch(() => null);
+  const fast = zhipuOnce(key, fastModel, makeBody(fastModel), perCallMs).catch(() => null);
   const early = await Promise.race([
     smart,
     new Promise<null>((r) => setTimeout(() => r(null), headStartMs)),
   ]);
   if (early) return early;
-  const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 9000));
+  const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), hardLimitMs));
   return await Promise.any([
     smart.then((v) => { if (!v) throw new Error('empty'); return v; }),
     fast.then((v) => { if (!v) throw new Error('empty'); return v; }),
@@ -1713,19 +1716,22 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     if (!key) return jsonResp({ ok: false, msg: '视觉 AI 尚未配置密钥', configured: false }, 503);
     const { image, prompt } = await readBody(req);
     if (!image || !prompt) return jsonResp({ ok: false, msg: '缺少图片或问题' }, 400);
-    // 并发竞速：thinking 版（准）1.8s 优先窗口，超时就用先返回的快版，避免排队累积等待
-    const hit = await zhipuRace(
-      key,
-      Deno.env.get('HK_AI_MODEL') || 'glm-4.1v-thinking-flash',
-      'glm-4v-flash',
-      (model) => ({ model, messages: [{ role: 'user', content: [
-        { type: 'text', text: String(prompt) },
-        { type: 'image_url', image_url: { url: String(image) } }
-      ]}] }),
-      1800,
-    );
+    // 试卷图（尤其高考数学题）识别要 6–15 秒，超时必须给足，否则会识别成 0 道题
+    const smartVision = Deno.env.get('HK_AI_MODEL') || 'glm-4.1v-thinking-flash';
+    const makeBody = (model: string) => ({ model, messages: [{ role: 'user', content: [
+      { type: 'text', text: String(prompt) },
+      { type: 'image_url', image_url: { url: String(image) } }
+    ]}] });
+    const hit = await zhipuRace(key, smartVision, 'glm-4v-flash', makeBody, 2000, 28000, 24000);
     if (hit) return jsonResp({ ok: true, text: hit.text, model: hit.model });
-    return jsonResp({ ok: false, msg: 'AI 调用失败，请重试' }, 502);
+    // 竞速全失败时顺序重试一次，避免复杂卷子直接变成 0 题
+    for (const model of ['glm-4v-flash', smartVision]) {
+      try {
+        const retry = await zhipuOnce(key, model, makeBody(model), 28000);
+        if (retry) return jsonResp({ ok: true, text: retry.text, model: retry.model });
+      } catch (_) { /* 继续下一个 */ }
+    }
+    return jsonResp({ ok: false, msg: 'AI 识别这张图超时了，请重试或换张更清晰的图片' }, 502);
   }
 
   // ---------- 金小助文本 AI 代理（同一个 Key，解除免费接口限流） ----------
