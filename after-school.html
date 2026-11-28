@@ -1522,11 +1522,14 @@
     '  · n = 题号（试卷上的序号）\n' +
     '  · t = 题目要求，即题干原文（例："填空：床前明月光，____。"），**绝对不要只写题型名**\n' +
     '  · s = 科目，只能填 语文 / 数学 / 英语\n' +
-    '  · q = 题型，从 口算/列式/解答/选择/填空/默写/翻译/字词/阅读/习作/其他 中选一个，按原题型判断（填空题写「填空」，习作题写「习作」）\n' +
+    '  · q = 题型，从 口算/列式/解答/选择/填空/默写/翻译/字词/阅读/习作/其他 中选一个，按原题型判断：' +
+    '**题干里印着 A. B. C. D. 四个选项的就是「选择」**，不要写成「解答」；填空题写「填空」，习作题写「习作」。\n' +
     '  · a = 答案解析：一段完整规范的标准答案（语文阅读按要点写参考答案，习作给写作要点或范文，其余写准确答案；不能留空或写「略」）\n' +
     '  · w = 这题是否做错（老师标记或你自己判卷都算），布尔值 true/false\n' +
     '  · why = 错在哪里（一句话指出学生答案的问题；没错就留空）\n' +
     '  · think = 思考过程（为什么这样判、正确思路是什么；没错就留空）\n' +
+    '  · evidence = 你从图上**实际看到**的批改痕迹或学生手写答案的具体描述，例如「第2题旁有红叉」「第3题括号里手写填了B」；' +
+    '**印刷好的选项 A/B/C/D 不是学生作答**。看不到就填空字符串 ""。\n' +
     '  · s 科目必须按题干判断：含 f(x)、等号、不等式、函数、求值、方程等数学特征的一律填「数学」，' +
     '**绝不能把高考数学题认成语文选择题**；英文题干填「英语」。\n' +
     '示例：{"n":"1","t":"填空：床前明月光，____。","s":"语文","q":"填空","a":"疑是地上霜","w":false,"why":"","think":""}\n';
@@ -1538,16 +1541,18 @@
     '  ② **没有任何批注，但能看到学生写下的答案**：这时你要自己当老师判卷，逐题比对标准答案，' +
     '语文填空/阅读/字词/习作也要判（意思相同、要点答到算对；答非所问、错别字改义、漏关键要点、不切题算错），' +
     '把判错的题挑出来，graded 同样填 true。\n' +
-    '  ③ 干净未批改、也看不到学生作答的空白练习单：graded 填 false，items 放所有题，w 全填 false。\n' +
-    'graded=true 时：items 只放做错的题（w=true），并**必须写清 why（错在哪里）与 think（思考过程）**，' +
-    'a 里给出一段完整的答案解析。\n' +
+    '  ③ 干净未批改、也看不到学生作答的空白练习单：graded 填 false，items 放所有题，w 全填 false，evidence 填 ""。\n' +
+    '【非常关键】印刷好的选项 A/B/C/D、题号、印刷的题干都**不算学生作答**，也不算批改痕迹。' +
+    '如果图上只有印刷体题目和选项、没有红笔或手写字迹，就一定是空白卷：graded=false，不要凭空编造谁做错了、' +
+    '不要写 why/think。**只有真的看到了手写作答或批改笔迹，才把具体位置写进 evidence**（evidence 为空则 graded 必须为 false）。\n' +
+    'graded=true 时：items 只放做错的题（w=true），并写清 why（错在哪里）与 think（思考过程），a 里给出完整答案解析。\n' +
     PAPER_FIELDS +
-    '只输出一个 JSON 对象，格式：{"graded":true或false,"items":[{...}]}。不要输出 JSON 以外的任何文字。';
+    '只输出一个 JSON 对象，格式：{"graded":true或false,"evidence":"看到的批改/手写作答描述，没有就填空字符串","items":[{...}]}。不要输出 JSON 以外的任何文字。';
   var PAPER_PROMPT_TEXT =
     '下面是试卷/学习单 OCR 出的文字，请按题号顺序逐题整理。\n' +
     'graded 填 true 的条件：能看出批改痕迹（✗、圈、订正、扣分、半勾等），或能看到学生作答且你判出有错题；' +
-    '此时只保留做错的题（w=true）并写清 why（错在哪里）、think（思考过程）、a（答案解析）。' +
-    '干净未批改且无学生作答的卷子 graded 填 false 并保留所有题。\n' +
+    '此时只保留做错的题（w=true）并写清 why（错在哪里）、think（思考过程）、a（答案解析），并在 evidence 写明依据。' +
+    '印刷的选项 A/B/C/D 不算学生作答；干净未批改且无学生作答的卷子 graded 填 false、evidence 填 "" 并保留所有题，不要编造错因。\n' +
     PAPER_FIELDS +
     '只输出一个 JSON 对象：{"graded":true或false,"items":[{...}]}，不要多余文字。\n文字：\n';
   var QTYPE_MAP = { '口算':'oral','列式':'column','解答':'solve','选择':'choice','填空':'blank','默写':'dictation','翻译':'translate','字词':'word','阅读':'reading','习作':'composition','作文':'composition','写话':'composition','小练笔':'composition','其他':'other',
@@ -1589,7 +1594,12 @@
       raw = parsed; // 老格式：没有 graded 标志，一律当作未批改
     } else if (parsed && Array.isArray(parsed.items)) {
       raw = parsed.items;
-      graded = (parsed.graded === true || parsed.graded === 'true' || parsed.graded === 'True');
+      // 只有 AI 明确给出了「看到批改/手写作答」的证据，才认定这张卷子需要只留错题。
+      // 空白印刷卷常被误判成 graded=true 并凭空编造错因，这里用 evidence 兜底。
+      var ev = String(fv(parsed, 'evidence', ['依据','批改痕迹']) || '').trim();
+      var noEvidenceWords = /^(无|没有|未见|none|null|n\/a|空|)$/i.test(ev);
+      graded = (parsed.graded === true || parsed.graded === 'true' || parsed.graded === 'True')
+        && !!ev && !noEvidenceWords;
     }
     var items = raw.map(function (x, i) {
       var no = String(fv(x, 'n', ['no','num','题号']) || (i+1)).trim();
@@ -1612,6 +1622,8 @@
         picked: true
       };
     }).filter(function (x) { return x.t.length > 2; });
+    // 空白卷：清掉 AI 可能凭空编造的错因/思考过程，保留全部题目
+    if (!graded) items.forEach(function (x) { x.why = ''; x.think = ''; x.wrong = false; });
     // 只有明确判定为「批改过的卷子」才只留错题；若标记缺失则退回全部，避免误杀成 0 题
     var out = items;
     if (graded) {
