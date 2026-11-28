@@ -1535,20 +1535,24 @@
     '**绝不能把高考数学题认成语文选择题**；英文题干填「英语」。\n' +
     '示例：{"n":"1","t":"填空：床前明月光，____。","s":"语文","q":"填空","a":"疑是地上霜","w":false,"why":"","think":""}\n';
   var PAPER_PROMPT_IMG =
-    '请仔细看这张试卷/学习单图片，按题号顺序逐题整理。\n' +
-    '【什么时候需要只保留错题】graded 填 true 的条件，满足其一即可：\n' +
-    '  ① 图片里有老师批改痕迹：画圈、打勾、打叉、半勾、波浪线、红笔订正、扣分、分数、等级评语；' +
+    '请识别这张试卷/学习单图片，**首要任务：按题号顺序把图片里的每一道题都整理进 items**。' +
+    '不管这张卷子有没有被批改、有没有学生作答，都必须先把所有题列出来。\n' +
+    '列完题之后，再判断 graded（只决定要不要筛掉做对的题）：\n' +
+    '  ① 图上确实有红笔批改（圈、勾、叉、半勾、波浪线、扣分、订正、等级评语）或学生手写作答 → graded=true，' +
+    '把看到的具体痕迹写进 evidence；此时 items 只保留做错的题（w=true），写清 why（错在哪里）与 think（思考过程）。' +
     '语文卷尤其注意圈出的错别字、病句波浪线、阅读半勾、习作旁批注或扣分。\n' +
-    '  ② **没有任何批注，但能看到学生写下的答案**：这时你要自己当老师判卷，逐题比对标准答案，' +
-    '语文填空/阅读/字词/习作也要判（意思相同、要点答到算对；答非所问、错别字改义、漏关键要点、不切题算错），' +
-    '把判错的题挑出来，graded 同样填 true。\n' +
-    '  ③ 干净未批改、也看不到学生作答的空白练习单：graded 填 false，items 放所有题，w 全填 false，evidence 填 ""。\n' +
-    '【非常关键】印刷好的选项 A/B/C/D、题号、印刷的题干都**不算学生作答**，也不算批改痕迹。' +
-    '如果图上只有印刷体题目和选项、没有红笔或手写字迹，就一定是空白卷：graded=false，不要凭空编造谁做错了、' +
-    '不要写 why/think。**只有真的看到了手写作答或批改笔迹，才把具体位置写进 evidence**（evidence 为空则 graded 必须为 false）。\n' +
-    'graded=true 时：items 只放做错的题（w=true），并写清 why（错在哪里）与 think（思考过程），a 里给出完整答案解析。\n' +
+    '  ② 看到学生手写作答但没有老师批注 → 自己当老师判卷（意思相同、要点答到算对；答非所问、错别字改义、漏关键要点、不切题算错），只留做错的题，graded=true。\n' +
+    '  ③ **只有印刷体题目和选项、没有红笔或手写笔迹 → 空白卷：graded=false、evidence=""、items 保留全部题、w 全 false、why/think 留空，不要编造错因。**\n' +
+    '【关键】印刷的选项 A/B/C/D、题号、印刷题干都不算学生作答；带 A/B/C/D 选项的题 q 填「选择」。\n' +
     PAPER_FIELDS +
-    '只输出一个 JSON 对象，格式：{"graded":true或false,"evidence":"看到的批改/手写作答描述，没有就填空字符串","items":[{...}]}。不要输出 JSON 以外的任何文字。';
+    '【空白卷输出示例】{"graded":false,"evidence":"","items":[{"n":"7","t":"（题干原文）","s":"数学","q":"选择","a":"标准答案","w":false,"why":"","think":""}]}\n' +
+    '只输出一个 JSON 对象，不要输出 JSON 以外的任何文字。';
+  // 主提示词偶尔被模型写坏/返回空数组时，用极简提示词重试一次，保证至少把题拆出来
+  var PAPER_PROMPT_SIMPLE =
+    '请识别图片里的每一道题，按题号顺序输出 JSON 数组，不要漏题。\n' +
+    '格式：[{"n":"题号","t":"题干原文","s":"语文|数学|英语","q":"题型","a":"标准答案"}]。\n' +
+    '带 A/B/C/D 选项的题 q 填「选择」；含 f(x)、等号、不等式、函数、方程的一律 s 填「数学」。\n' +
+    '只输出 JSON 数组，不要解释。';
   var PAPER_PROMPT_TEXT =
     '下面是试卷/学习单 OCR 出的文字，请按题号顺序逐题整理。\n' +
     'graded 填 true 的条件：能看出批改痕迹（✗、圈、订正、扣分、半勾等），或能看到学生作答且你判出有错题；' +
@@ -1610,7 +1614,7 @@
         if (m) parsed = JSON.parse(m[0]);
       }
     } catch (e) { parsed = null; }
-    if (!parsed || (!Array.isArray(parsed) && !Array.isArray(parsed.items))) {
+    if (!parsed || (!Array.isArray(parsed) && (!Array.isArray(parsed.items) || !parsed.items.length))) {
       // 外层坏了：把每个含题干的题目对象救回来，一律按未批改处理
       var salvaged = [];
       extractJsonObjects(c).forEach(function (chunk) {
@@ -1705,8 +1709,15 @@
           new Promise(function (_, rej) { setTimeout(function () { rej(new Error('vision timeout')); }, 90000); })
         ]).then(function (r) {
             var got = parsePaperJSON(r);
-            if (got.graded) paperGraded = true;
-            return got.length ? acc.concat(got) : ocrFallback();
+            if (got.length) {
+              if (got.graded) paperGraded = true;
+              return acc.concat(got);
+            }
+            // 主提示词返回 0 题（模型写坏 JSON 或给了空 items）：用极简提示词重试一次
+            return aiVision(shot.src, PAPER_PROMPT_SIMPLE, true).then(function (r2) {
+              var got2 = parsePaperJSON(r2);
+              return got2.length ? acc.concat(got2) : ocrFallback();
+            }).catch(ocrFallback);
           })
           .catch(ocrFallback);
       });
