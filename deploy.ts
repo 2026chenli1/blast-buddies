@@ -1,5 +1,3 @@
-import { handleWerewolf } from './werewolf.ts';
-
 // ============================================================
 // Blast Buddies 联机服务器（Deno Deploy 版）
 // 作用：静态文件 + WebSocket 房间转发（host-authoritative）
@@ -1635,6 +1633,35 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     return jsonResp({ ok: true });
   }
 
+  // ---------- 跨设备同步：同一账号的错题 / 聊天 / 设置存云端 ----------
+  // GET  /api/hk/sync → 取回该账号最新快照
+  // POST /api/hk/sync → 上传本机快照（整体覆盖，带服务端时间戳）
+  if (path === '/api/hk/sync' && req.method === 'GET') {
+    const nm = await hkAuthed(req);
+    if (!nm) return jsonResp({ ok: false, msg: '未登录' }, 401);
+    const r = await kv.get(['hk_sync', nm]);
+    return jsonResp({ ok: true, data: r.value || null });
+  }
+  if (path === '/api/hk/sync' && req.method === 'POST') {
+    const nm = await hkAuthed(req);
+    if (!nm) return jsonResp({ ok: false, msg: '未登录' }, 401);
+    const body = await readBody(req);
+    const payload = {
+      q: body.q ?? [],
+      freq: body.freq ?? 'daily',
+      act: body.act ?? {},
+      free: body.free ?? [],
+      updatedAt: Date.now(),
+      device: String(body.device ?? '').slice(0, 40),
+    };
+    // 控制体积，避免把异常大的数据写进 KV
+    if (JSON.stringify(payload).length > 900_000) {
+      return jsonResp({ ok: false, msg: '数据过大' }, 413);
+    }
+    await kv.set(['hk_sync', nm], payload);
+    return jsonResp({ ok: true, updatedAt: payload.updatedAt });
+  }
+
   // ---------- 金小助视觉 AI 代理（密钥藏后端，前端不暴露） ----------
   // 环境变量：HK_AI_KEY（智谱 API Key）、可选 HK_AI_MODEL（默认 glm-4v-flash）
   // 未配置 Key 时返回 configured:false，前端自动回退到免 Key 方案。
@@ -1654,7 +1681,8 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
         const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-          signal: AbortSignal.timeout(30000),
+          // 免费模型偶发排队，12s 未返回立刻回退快版，避免识别长时间卡住
+          signal: AbortSignal.timeout(12000),
           body: JSON.stringify({
             model,
             messages: [{ role: 'user', content: [
@@ -1690,7 +1718,8 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
         const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-          signal: AbortSignal.timeout(25000),
+          // 10s 未返回立刻切下一个免费模型；配合前端精简提示词，问答通常 3-6s
+          signal: AbortSignal.timeout(10000),
           body: JSON.stringify({ model, messages })
         });
         const data = await resp.json();
@@ -3022,12 +3051,6 @@ function showLogin() {
 // ---------- 入口 ----------
 Deno.serve(async (req, connInfo) => {
   const url = new URL(req.url);
-
-  // 狼人杀联机（独立模块，未命中时返回 null 交回游戏主逻辑）
-  if (url.pathname.startsWith('/werewolf')) {
-    const wwRes = await handleWerewolf(req, url);
-    if (wwRes) return wwRes;
-  }
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
 
   if (upgrade === 'websocket') {
