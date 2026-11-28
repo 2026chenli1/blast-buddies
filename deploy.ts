@@ -1,5 +1,3 @@
-import { handleWerewolf } from './werewolf.ts';
-
 // ============================================================
 // Blast Buddies 联机服务器（Deno Deploy 版）
 // 作用：静态文件 + WebSocket 房间转发（host-authoritative）
@@ -1327,6 +1325,44 @@ async function readBody(req: Request): Promise<Record<string, unknown>> {
   }
 }
 
+// ---------- 免费模型并发竞速：解决「排队时链式回退越等越慢」 ----------
+const ZHIPU_API = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+type ZhipuHit = { text: string; model: string };
+async function zhipuOnce(key: string, model: string, bodyObj: unknown, timeoutMs: number): Promise<ZhipuHit> {
+  const resp = await fetch(ZHIPU_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+    signal: AbortSignal.timeout(timeoutMs),
+    body: JSON.stringify(bodyObj),
+  });
+  const data = await resp.json();
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text) throw new Error('empty response');
+  return { text: String(text), model };
+}
+// smart 模型享有 headStartMs 优先窗口（更聪明）；超时后谁先成功就用谁，耗时≈最快的模型
+async function zhipuRace(
+  key: string,
+  smartModel: string,
+  fastModel: string,
+  makeBody: (model: string) => unknown,
+  headStartMs = 2000,
+): Promise<ZhipuHit | null> {
+  const smart = zhipuOnce(key, smartModel, makeBody(smartModel), 12000).catch(() => null);
+  const fast = zhipuOnce(key, fastModel, makeBody(fastModel), 12000).catch(() => null);
+  const early = await Promise.race([
+    smart,
+    new Promise<null>((r) => setTimeout(() => r(null), headStartMs)),
+  ]);
+  if (early) return early;
+  const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 9000));
+  return await Promise.any([
+    smart.then((v) => { if (!v) throw new Error('empty'); return v; }),
+    fast.then((v) => { if (!v) throw new Error('empty'); return v; }),
+    timeout,
+  ]).catch(() => null);
+}
+
 // 从 Authorization: Bearer <token> 解析用户
 async function authUser(req: Request) {
   const h = req.headers.get('authorization') || '';
@@ -1675,31 +1711,19 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
     if (!key) return jsonResp({ ok: false, msg: '视觉 AI 尚未配置密钥', configured: false }, 503);
     const { image, prompt } = await readBody(req);
     if (!image || !prompt) return jsonResp({ ok: false, msg: '缺少图片或问题' }, 400);
-    // 免费视觉模型：thinking 版先上（公式/学科判断更准），失败自动回退快版
-    const models = [Deno.env.get('HK_AI_MODEL') || 'glm-4.1v-thinking-flash', 'glm-4v-flash'];
-    let lastErr = '';
-    for (const model of models) {
-      try {
-        const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-          // 免费模型偶发排队，12s 未返回立刻回退快版，避免识别长时间卡住
-          signal: AbortSignal.timeout(12000),
-          body: JSON.stringify({
-            model,
-            messages: [{ role: 'user', content: [
-              { type: 'text', text: String(prompt) },
-              { type: 'image_url', image_url: { url: String(image) } }
-            ]}]
-          })
-        });
-        const data = await resp.json();
-        const text = data?.choices?.[0]?.message?.content;
-        if (text) return jsonResp({ ok: true, text: String(text), model });
-        lastErr = JSON.stringify(data).slice(0, 200);
-      } catch (e) { lastErr = (e as Error).message; }
-    }
-    return jsonResp({ ok: false, msg: 'AI 调用失败: ' + lastErr }, 502);
+    // 并发竞速：thinking 版（准）2.5s 优先窗口，超时就用先返回的快版，避免排队累积等待
+    const hit = await zhipuRace(
+      key,
+      Deno.env.get('HK_AI_MODEL') || 'glm-4.1v-thinking-flash',
+      'glm-4v-flash',
+      (model) => ({ model, messages: [{ role: 'user', content: [
+        { type: 'text', text: String(prompt) },
+        { type: 'image_url', image_url: { url: String(image) } }
+      ]}] }),
+      2500,
+    );
+    if (hit) return jsonResp({ ok: true, text: hit.text, model: hit.model });
+    return jsonResp({ ok: false, msg: 'AI 调用失败，请重试' }, 502);
   }
 
   // ---------- 金小助文本 AI 代理（同一个 Key，解除免费接口限流） ----------
@@ -1712,16 +1736,22 @@ async function handleApi(req: Request, url: URL, connInfo?: Deno.ServeHandlerInf
       ? body.messages
       : [{ role: 'user', content: String(body.prompt || '') }];
     if (!messages[0] || !messages[0].content) return jsonResp({ ok: false, msg: '缺少问题' }, 400);
-    // 免费文本模型：4.5-Flash 稳定且推理更强（问答主力）；4.7 更聪明但常返回 1305 拥挤，作机会性补位
-    const models = [Deno.env.get('HK_AI_TEXT_MODEL') || 'glm-4.5-flash', 'glm-4.7-flash', 'glm-4-flash', 'glm-4-flash-250414'];
+    const smart = Deno.env.get('HK_AI_TEXT_MODEL') || 'glm-4.5-flash';
+    // 问答（fast）走并发竞速：4.5 聪明版 2 秒优先窗口，超时立刻用先返回的 4-flash
+    if (body.fast === true) {
+      const hit = await zhipuRace(key, smart, 'glm-4-flash', (model) => ({ model, messages }), 2000);
+      if (hit) return jsonResp({ ok: true, text: hit.text, model: hit.model });
+      return jsonResp({ ok: false, msg: 'AI 调用失败，请重试' }, 502);
+    }
+    // 判卷 / 拆题等结构化任务保持顺序链，优先用聪明的 4.5，失败快速回退
+    const models = [smart, 'glm-4-flash', 'glm-4-flash-250414'];
     let lastErr = '';
     for (const model of models) {
       try {
-        const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+        const resp = await fetch(ZHIPU_API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-          // 10s 未返回立刻切下一个免费模型；配合前端精简提示词，问答通常 3-6s
-          signal: AbortSignal.timeout(10000),
+          signal: AbortSignal.timeout(9000),
           body: JSON.stringify({ model, messages })
         });
         const data = await resp.json();
@@ -3053,12 +3083,6 @@ function showLogin() {
 // ---------- 入口 ----------
 Deno.serve(async (req, connInfo) => {
   const url = new URL(req.url);
-
-  // 狼人杀联机（独立模块，未命中时返回 null 交回游戏主逻辑）
-  if (url.pathname.startsWith('/werewolf')) {
-    const wwRes = await handleWerewolf(req, url);
-    if (wwRes) return wwRes;
-  }
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
 
   if (upgrade === 'websocket') {
