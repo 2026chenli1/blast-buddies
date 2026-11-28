@@ -1033,8 +1033,9 @@
 
   // ---------- AI 调用：先试后端智谱（已配 Key、不限流），失败才回退免 Key 接口 ----------
   // 不依赖 visionReady 异步标志，避免刚进页面时检测未完成而误走限流通道
-  function aiAsk(prompt) {
-    return api('/api/hk/ai/chat', 'POST', { prompt: prompt }, getToken()).then(function (r) {
+  // fast=true：问答走后端并发竞速（聪明模型 2 秒优先窗口，超时立刻用快模型）
+  function aiAsk(prompt, fast) {
+    return api('/api/hk/ai/chat', 'POST', { prompt: prompt, fast: fast === true }, getToken()).then(function (r) {
       if (!r.ok) throw new Error(r.msg || 'AI 服务返回失败');
       return String(r.text).replace(/\n{3,}/g, '\n\n').trim();
     }).catch(function () { return freeAI(prompt); });
@@ -2391,7 +2392,7 @@
     var subjectText = activeChatId ? ctx.replace(/^题目：/, '').replace(/\n$/, '') : '';
     var fullQuestion = spotLabel ? ('【' + spotLabel + '方向】' + text) : text;
     var prompt = buildAgentPrompt(fullQuestion, history, subjectText);
-    aiAsk(prompt).then(function (ans) {
+    aiAsk(prompt, true).then(function (ans) {
       chats[chats.length - 1].a = ans;
       persistChat(arr, chats);
       sendBtn.disabled = false;
