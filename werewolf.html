@@ -51,6 +51,11 @@ label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin:0 0
 .hint{font-size:11px;color:var(--muted);margin-top:6px}
 .rooms{margin-top:16px;padding:18px 22px}
 .rooms h2{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.queue-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.queue-item{border:1px solid var(--line);border-radius:11px;padding:9px 10px;background:#fdfbfa;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.queue-item b{font-size:15px}
+.queue-item small{color:var(--muted);font-size:11px}
+.queue-item.on{border-color:var(--blue);background:#f3f9fd}
 .room-item{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:8px;background:#fdfbfa}
 .room-code{font-family:ui-monospace,Consolas,monospace;font-size:17px;font-weight:800;letter-spacing:2px}
 .msg{min-height:20px;font-size:12px;color:var(--danger);margin-top:10px}
@@ -147,42 +152,40 @@ label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin:0 0
         <svg class="ico" style="width:30px;height:30px" viewBox="0 0 24 24" fill="none" stroke="#9cc3e0" stroke-width="1.6"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4a8.5 8.5 0 1 0 11.5 11.5z"/><circle cx="17" cy="6" r="1"/></svg>
         <span>月夜狼人杀</span>
       </h1>
-      <p>房间码联机 · 人数凑齐自动开局 · 天亮轮流发言 · 原生麦克风</p>
+      <p>自由匹配 · 自己选人数 · 凑齐自动开局 · 天亮轮流发言 · 原生麦克风</p>
       <div class="badges">
+        <span class="pill">没有房主</span>
+        <span class="pill">按人数匹配</span>
         <span class="pill">发言 10-60 秒可选</span>
-        <span class="pill">投票时长可选</span>
         <span class="pill">自动跳过死亡玩家</span>
         <span class="pill">无麦克风自动转打字</span>
       </div>
     </div>
-    <div class="lobby-grid">
-      <div class="card pane">
-        <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#9cc3e0" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg>创建房间</h2>
-        <p class="sub">设定人数与时长，把房间码发给朋友，人满自动开始。</p>
-        <div class="field"><label>你的昵称</label><input id="cName" maxlength="12" placeholder="例如：小c"></div>
-        <div class="row2">
-          <div class="field"><label>开局人数（4-12）</label><select id="cSlots"></select></div>
-          <div class="field"><label>房间码（可留空随机）</label><input id="cCode" maxlength="4" placeholder="自动生成" style="text-transform:uppercase"></div>
+    <div class="card pane" style="max-width:600px;margin:0 auto">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#9cc3e0" stroke-width="1.8"><circle cx="8" cy="8" r="3"/><path d="M2 20a6 6 0 0 1 12 0"/><circle cx="18" cy="9" r="2.5"/><path d="M15 20a5 5 0 0 1 7-4"/></svg>开始匹配</h2>
+      <p class="sub">自己选好人数，点「开始匹配」。只要同样选了这个人数的玩家凑够，立刻自动开局 —— 没有房主，不用房间码。</p>
+      <div class="field"><label>你的昵称</label><input id="cName" maxlength="12" placeholder="例如：小c"></div>
+      <div class="field"><label>本局人数（4-12）</label><select id="cSlots"></select></div>
+      <div class="field"><label>每人发言时长</label><div class="seg" id="cSpeech"></div></div>
+      <div class="field"><label>投票阶段时长</label><div class="seg pink" id="cVote"></div></div>
+      <div class="hint">发言 / 投票时长以本局最先开始匹配的玩家为准；想自己定就早点开始匹配。</div>
+      <button class="btn-main" style="width:100%;margin-top:14px" id="btnMatch">开始匹配</button>
+      <div id="matchingBox" class="hidden" style="margin-top:16px">
+        <div class="waiting" style="padding:18px 6px">
+          <div class="ring"></div>
+          <div id="matchText">正在寻找同样选择这个人数档位的玩家…</div>
+          <div class="progress" style="width:100%;justify-content:center;margin:12px 0 0"><div class="bar" style="max-width:320px"><i id="matchBar" style="width:0%"></i></div><b id="matchCount">0 / 6</b></div>
+          <div class="hint">凑齐后会自动进入游戏，不用再点任何按钮。</div>
         </div>
-        <div class="field"><label>每人发言时长</label><div class="seg" id="cSpeech"></div></div>
-        <div class="field"><label>投票阶段时长</label><div class="seg pink" id="cVote"></div></div>
-        <button class="btn-main" style="width:100%" id="btnCreate">创建房间</button>
-        <div class="msg" id="lobbyMsg"></div>
+        <button class="btn-ghost" style="width:100%" id="btnCancelMatch">取消匹配</button>
       </div>
-      <div class="card pane">
-        <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#f2b8c6" stroke-width="1.8"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg>加入房间</h2>
-        <p class="sub">输入朋友给出的 4 位房间码即可加入。</p>
-        <div class="field"><label>你的昵称</label><input id="jName" maxlength="12" placeholder="例如：小明"></div>
-        <div class="field"><label>房间码</label><input id="jCode" maxlength="4" placeholder="例如：A7K2" style="text-transform:uppercase;letter-spacing:4px;font-size:20px;font-weight:800"></div>
-        <button class="btn-pink" style="width:100%" id="btnJoin">加入房间</button>
-        <div class="hint">同一昵称不能重复；刷新页面会自动回到原房间。</div>
-        <div style="margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
-          <label>不想建房？快速加入一个正在等人的房间</label>
-          <button class="btn-ghost" style="width:100%" id="btnQuick">快速加入</button>
-        </div>
-      </div>
+      <div class="msg" id="lobbyMsg"></div>
     </div>
-    <div class="card rooms hidden" id="roomList"></div>
+    <div class="card rooms" style="max-width:600px;margin:16px auto 0">
+      <h2><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#9a8d94" stroke-width="1.8"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>各人数档位正在等待的玩家</h2>
+      <div class="queue-grid" id="queueList"></div>
+      <div class="hint" style="margin-top:10px">点某个档位可直接把「本局人数」设成它，方便和朋友凑到同一档。</div>
+    </div>
     <p class="foot-note">语音使用浏览器原生麦克风，需要 HTTPS 或 localhost；没有麦克风 / 拒绝授权时自动切换为打字发言。</p>
   </div>
 
@@ -190,10 +193,9 @@ label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin:0 0
   <div id="game" class="hidden">
     <div class="card topbar">
       <div>
-        <div style="font-size:10px;color:var(--muted);letter-spacing:1px">房间码</div>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:1px">对局编号</div>
         <div class="code" id="gCode">----</div>
       </div>
-      <button class="btn-sm btn-ghost" id="btnCopy">复制房间码</button>
       <span class="chip" id="gPhase">等待</span>
       <span class="chip" id="gRound">第 0 夜</span>
       <span class="chip" id="gAlive">存活 0</span>
@@ -306,9 +308,11 @@ function applyState(st) {
 function leave(silent) {
   const old = ROOM;
   if (!silent && NAME && old) api('/action', { t:'leave', id:MY, name:NAME, room:old }).catch(() => {});
+  if (matching) cancelMatch();
+  stopMatch();
   ROOM = ''; S = null; lastPhase = ''; localStorage.removeItem('ww_room');
   $('#game').classList.add('hidden'); $('#lobby').classList.remove('hidden');
-  stopMic(); closeWS(); loadRooms();
+  stopMic(); closeWS(); loadQueue();
 }
 
 // ---------------- 麦克风 / 语音 ----------------
@@ -423,7 +427,7 @@ function renderRole(st) {
   const m = st.me;
   if (!m) { $('#roleWrap').innerHTML = ''; return; }
   if (st.phase === 'lobby') {
-    $('#roleWrap').innerHTML = '<h3>我的信息</h3><div style="font-size:13px">' + esc(m.name) + ' · ' + m.seat + ' 号' + (m.host ? ' · 房主' : '') + '</div><div class="hint" style="margin-top:8px">身份在开局后发放。</div>';
+    $('#roleWrap').innerHTML = '<h3>我的信息</h3><div style="font-size:13px">' + esc(m.name) + ' · ' + m.seat + ' 号</div><div class="hint" style="margin-top:8px">身份在开局后发放。</div>';
     return;
   }
   const wolf = m.role === 'wolf';
@@ -453,7 +457,6 @@ function renderSeats(st) {
   const html = st.players.map(p => {
     let tag = '';
     if (!p.alive) tag = '<span class="tag">已出局</span>';
-    else if (p.host) tag = '<span class="tag">房主</span>';
     if (p.id === MY) tag = '<span class="tag">我</span>';
     if (p.speaking) tag += '<span class="tag" style="background:#dff0e7;color:#4b8565">发言中</span>';
     if (st.phase === 'vote' && p.voted) tag += '<span class="tag">已投</span>';
@@ -469,15 +472,10 @@ function renderStage(st) {
   let h = '';
   const title = (t, s) => '<h2 class="phase-title">' + t + '</h2><p class="phase-sub">' + s + '</p>';
   if (st.phase === 'lobby') {
-    h += title('等待玩家凑齐', '人数达到 ' + st.config.slots + ' 人后自动开局，无需房主点开始。');
+    h += title('等待玩家凑齐', '同样选择 ' + st.config.slots + ' 人局的玩家凑齐后自动开局。');
     h += '<div class="progress"><div class="bar"><i style="width:' + Math.round(100 * st.players.length / st.config.slots) + '%"></i></div><b>' + st.players.length + ' / ' + st.config.slots + '</b></div>';
     h += '<div class="big-msg">设置：每人发言 ' + st.config.speechSec + ' 秒 · 投票 ' + st.config.voteSec + ' 秒</div>';
-    if (m.host) {
-      h += '<div class="field"><label>调整开局人数（不少于当前人数）</label><select id="gSlots"></select></div>';
-      h += '<div class="field"><label>每人发言时长</label><div class="seg" id="gSpeech"></div></div>';
-      h += '<div class="field"><label>投票阶段时长</label><div class="seg pink" id="gVote"></div></div>';
-      h += '<div class="action-row"><button class="btn-mint" id="btnSaveCfg">保存设置</button><button class="btn-main" id="btnStartNow">立即开始（至少 4 人）</button></div>';
-    } else h += '<div class="waiting"><div class="ring"></div><div>等待房主或新玩家加入…</div></div>';
+    h += '<div class="waiting"><div class="ring"></div><div>凑齐后自动开局，无需任何人点开始。</div></div>';
   } else if (st.phase === 'reveal') {
     h += title('身份发放', '请记住自己的身份，天黑后开始行动。');
     h += '<div class="big-msg night">' + esc(m.roleName || '') + ' · ' + esc(m.roleDesc || '') + '</div>';
@@ -547,39 +545,12 @@ function renderStage(st) {
     h += '<div class="big-msg win">' + (st.winners === 'good' ? '所有狼人已出局，好人获胜！' : '狼人数量不少于好人，狼人获胜！') + '</div>';
     h += '<table class="role-table"><tr><th>座位</th><th>玩家</th><th>身份</th><th>状态</th></tr>' + st.players.map(p =>
       '<tr><td>' + p.seat + '号</td><td>' + esc(p.name) + '</td><td>' + (ROLE_NAME[p.role] || '—') + '</td><td>' + (p.alive ? '存活' : '出局') + '</td></tr>').join('') + '</table>';
-    if (m.host) h += '<div class="action-row"><button class="btn-main" id="btnRestart">再来一局</button></div>';
+    h += '<div class="action-row"><button class="btn-main" id="btnBackLobby">返回大厅 · 重新匹配</button></div>';
   }
   e.innerHTML = h;
   bindStage(st);
 }
 function bindStage(st) {
-  const seg = (id, opts, cur, cb) => {
-    const box = $(id); if (!box) return;
-    box.innerHTML = opts.map(o => '<button data-v="' + o + '" class="' + (o === cur ? 'on' : '') + '">' + o + 's</button>').join('');
-    box.querySelectorAll('button').forEach(b => b.addEventListener('click', () => cb(+b.dataset.v)));
-  };
-  const selBox = (id, cur) => {
-    const e = $(id); if (!e) return;
-    e.innerHTML = Array.from({length:9}, (_, i) => i + 4).map(n => '<option value="' + n + '"' + (n === cur ? ' selected' : '') + '>' + n + ' 人</option>').join('');
-  };
-  if (st.phase === 'lobby' && st.me && st.me.host) {
-    const c = Object.assign({}, st.config);
-    selBox('#gSlots', c.slots);
-    seg('#gSpeech', SPEECH_OPTIONS, c.speechSec, () => {});
-    seg('#gVote', SPEECH_OPTIONS, c.voteSec, () => {});
-    const pick = (id, key) => {
-      const box = $(id); if (!box) return;
-      box.onclick = (ev) => {
-        const b = ev.target.closest('button'); if (!b) return;
-        box.querySelectorAll('button').forEach(x => x.classList.remove('on'));
-        b.classList.add('on'); c[key] = +b.dataset.v;
-      };
-    };
-    pick('#gSpeech', 'speechSec'); pick('#gVote', 'voteSec');
-    const save = $('#btnSaveCfg');
-    if (save) save.onclick = () => act({ t:'config', slots:+$('#gSlots').value, speechSec:c.speechSec, voteSec:c.voteSec });
-    const start = $('#btnStartNow'); if (start) start.onclick = () => act({ t:'start' });
-  }
   const on = (id, fn) => { const b = $(id); if (b) b.onclick = fn; };
   on('#btnWolfSkip', () => act({ t:'night', target:'' }));
   on('#btnSave', () => act({ t:'night', kind:'save' }));
@@ -593,7 +564,10 @@ function bindStage(st) {
   });
   on('#btnAbstain', () => act({ t:'vote', target:'' }));
   on('#btnHunterSkip', () => act({ t:'hunter', target:'' }));
-  on('#btnRestart', () => act({ t:'restart' }));
+  on('#btnBackLobby', () => {
+    api('/action', { t:'resetMatch', id:MY, name:NAME }).catch(() => {});
+    leave(true); toast('已返回大厅，可以重新选人数匹配');
+  });
   const ta = $('#speechText');
   if (ta) ta.onkeydown = (ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); const b = $('#btnSendText'); if (b) b.click(); } };
   // 发言者开麦 / 非发言者关麦
@@ -648,73 +622,92 @@ function segInit(id, opts, cur, onPickFn) {
     b.classList.add('on'); onPickFn(+b.dataset.v);
   };
 }
+let matching = false, matchTimer = null;
+
+function setMatchingUI(on) {
+  matching = on;
+  $('#matchingBox').classList.toggle('hidden', !on);
+  $('#btnMatch').classList.toggle('hidden', on);
+  if (on) localStorage.setItem('ww_matching', String(cfg.slots));
+  else localStorage.removeItem('ww_matching');
+}
+async function matchTick() {
+  if (!matching || ROOM) return;
+  try {
+    const j = await api('/action', { t:'match', id:MY, name:NAME, slots:cfg.slots, speechSec:cfg.speechSec, voteSec:cfg.voteSec });
+    if (j.state && j.code) {
+      ROOM = j.code; localStorage.setItem('ww_room', ROOM);
+      stopMatch(); applyState(j.state); openWS();
+      toast('匹配成功，' + j.state.players.length + ' 人自动开局');
+      return;
+    }
+    const count = j.count || 0, slots = j.slots || cfg.slots;
+    $('#matchText').textContent = '正在寻找同样选择 ' + slots + ' 人局的玩家…';
+    $('#matchCount').textContent = count + ' / ' + slots;
+    $('#matchBar').style.width = Math.round(100 * count / slots) + '%';
+  } catch (e) { $('#lobbyMsg').textContent = e.message; }
+}
+function startMatch() {
+  if (matching || ROOM) return;
+  $('#lobbyMsg').textContent = '';
+  setMatchingUI(true);
+  matchTick();
+  clearInterval(matchTimer);
+  matchTimer = setInterval(matchTick, 1200);
+}
+function stopMatch() {
+  setMatchingUI(false);
+  clearInterval(matchTimer); matchTimer = null;
+}
+async function cancelMatch() {
+  stopMatch();
+  try { await api('/action', { t:'cancelMatch', id:MY, name:NAME }); } catch (_) {}
+  loadQueue();
+}
 function initLobby() {
   $('#cSlots').innerHTML = Array.from({length:9}, (_, i) => i + 4).map(n => '<option value="' + n + '"' + (n === cfg.slots ? ' selected' : '') + '>' + n + ' 人</option>').join('');
   segInit('#cSpeech', SPEECH_OPTIONS, cfg.speechSec, v => cfg.speechSec = v);
   segInit('#cVote', SPEECH_OPTIONS, cfg.voteSec, v => cfg.voteSec = v);
-  $('#cName').value = NAME; $('#jName').value = NAME;
-  $('#btnCreate').onclick = async () => {
+  $('#cName').value = NAME;
+  $('#cSlots').onchange = () => { cfg.slots = +$('#cSlots').value; loadQueue(); };
+  $('#btnMatch').onclick = async () => {
     NAME = ($('#cName').value || '').trim().slice(0,12) || '玩家' + Math.floor(Math.random()*90+10);
     localStorage.setItem('ww_name', NAME);
     await initMic(); ensurePlayCtx();
     cfg.slots = +$('#cSlots').value;
-    const code = ($('#cCode').value || '').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
-    try {
-      const j = await api('/action', { t:'create', id:MY, name:NAME, code, slots:cfg.slots, speechSec:cfg.speechSec, voteSec:cfg.voteSec });
-      ROOM = j.code; localStorage.setItem('ww_room', ROOM);
-      applyState(j.state); openWS(); toast('房间 ' + ROOM + ' 已创建');
-    } catch (e) { $('#lobbyMsg').textContent = e.message; }
+    startMatch();
   };
-  $('#btnJoin').onclick = async () => {
-    NAME = ($('#jName').value || '').trim().slice(0,12) || '玩家' + Math.floor(Math.random()*90+10);
-    localStorage.setItem('ww_name', NAME);
-    const code = ($('#jCode').value || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
-    if (code.length !== 4) { $('#lobbyMsg').textContent = '请输入 4 位房间码'; return; }
-    await initMic(); ensurePlayCtx();
-    try {
-      const j = await api('/action', { t:'join', id:MY, name:NAME, room:code });
-      ROOM = j.code; localStorage.setItem('ww_room', ROOM);
-      applyState(j.state); openWS();
-    } catch (e) { $('#lobbyMsg').textContent = e.message; }
-  };
-  $('#btnQuick').onclick = async () => {
-    NAME = ($('#jName').value || '').trim().slice(0,12) || '玩家' + Math.floor(Math.random()*90+10);
-    localStorage.setItem('ww_name', NAME);
-    await initMic(); ensurePlayCtx();
-    try {
-      const j = await api('/action', { t:'quickjoin', id:MY, name:NAME });
-      ROOM = j.code; localStorage.setItem('ww_room', ROOM);
-      applyState(j.state); openWS();
-    } catch (e) { $('#lobbyMsg').textContent = e.message; }
-  };
-  $('#btnCopy').onclick = () => {
-    const t = ROOM;
-    navigator.clipboard?.writeText(t).then(() => toast('已复制房间码 ' + t)).catch(() => toast('房间码：' + t));
-  };
+  $('#btnCancelMatch').onclick = cancelMatch;
   $('#btnLeave').onclick = () => leave(false);
   $('#gMic').style.cursor = 'pointer';
   $('#gMic').onclick = async () => { micTried = false; micDenied = false; await initMic(); toast(micReady ? '麦克风已连接' : '仍未获得麦克风授权，继续用打字发言'); };
   document.addEventListener('pointerdown', () => { if (ROOM) ensurePlayCtx(); });
 }
-async function loadRooms() {
+async function loadQueue() {
   try {
-    const j = await api('/rooms');
-    const box = $('#roomList');
-    if (!j.rooms || !j.rooms.length) { box.classList.add('hidden'); return; }
-    box.classList.remove('hidden');
-    box.innerHTML = '<h2>正在等人的房间</h2>' + j.rooms.map(r =>
-      '<div class="room-item"><div><span class="room-code">' + esc(r.code) + '</span> <span class="hint" style="display:inline">' + r.players + '/' + r.slots + ' 人 · 发言 ' + r.speechSec + 's</span></div>' +
-      '<button class="btn-sm btn-main" data-c="' + esc(r.code) + '">加入</button></div>').join('');
-    box.querySelectorAll('button[data-c]').forEach(b => b.onclick = () => { $('#jCode').value = b.dataset.c; $('#btnJoin').click(); });
+    const j = await api('/queue');
+    const counts = j.counts || {};
+    const cur = +$('#cSlots').value;
+    $('#queueList').innerHTML = Array.from({length:9}, (_, i) => i + 4).map(n =>
+      '<button class="queue-item ' + (cur === n ? 'on' : '') + '" data-n="' + n + '"><b>' + n + ' 人</b><small>' + (counts[n] || 0) + ' 人在等</small></button>').join('');
+    $('#queueList').querySelectorAll('button[data-n]').forEach(b => b.onclick = () => {
+      $('#cSlots').value = b.dataset.n; cfg.slots = +b.dataset.n; loadQueue();
+    });
   } catch (_) {}
 }
 function boot() {
   initLobby();
-  loadRooms();
+  loadQueue();
+  setInterval(() => { if (!ROOM) loadQueue(); }, 4000);
   setInterval(updateTimer, 250);
   setInterval(() => { if (ROOM && !syncPending) sync(); }, 1600);
   setInterval(() => { if (ROOM) act({ t:'ping' }); }, 8000);
   if (ROOM) { initMic().then(() => { ensurePlayCtx(); sync().then(() => { if (ROOM) openWS(); }); }); }
+  else if (localStorage.getItem('ww_matching') && NAME) {
+    cfg.slots = +localStorage.getItem('ww_matching') || 6;
+    $('#cSlots').value = cfg.slots;
+    initMic().then(() => { ensurePlayCtx(); startMatch(); });
+  }
   updateMicChip();
 }
 boot();

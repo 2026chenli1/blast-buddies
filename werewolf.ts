@@ -134,8 +134,8 @@ async function mutate(code: string, fn: (r: Room) => void | boolean, silent = fa
     const res = fn(next);
     if (res === false) return null;
     next.serverNow = now();
-    const ok = await kv.atomic().check(e).set(['werewolf', code], next).commit();
-    if (ok) { if (!silent) announce(code, next.phaseId); return next; }
+    const commitRes = await kv.atomic().check(e).set(['werewolf', code], next).commit();
+    if (commitRes.ok) { if (!silent) announce(code, next.phaseId); return next; }
   }
   return null;
 }
@@ -587,6 +587,105 @@ function makeRoom(code: string, cfg: any, id: string, name: string): Room {
 function cleanName(v: any) { return String(v || '').trim().replace(/[<>]/g, '').slice(0, 12) || '玩家'; }
 function cleanCode(v: any) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4); }
 
+// ---------- 自由匹配（按人数分桶，没有房主） ----------
+// 每个玩家自己选人数并点「开始匹配」，同档位凑够 N 人立刻自动成局。
+interface QueueEntry {
+  id: string; name: string; slots: number; speechSec: number; voteSec: number; ts: number;
+}
+const QUEUE_TTL = 5 * 60 * 1000;
+const SLOT_MIN = 4, SLOT_MAX = 12;
+const qKey = (slots: number) => ['werewolf', 'queue', String(slots)];
+const assignKey = (id: string) => ['werewolf', 'assign', id];
+const clampSlots = (v: any) => Math.min(SLOT_MAX, Math.max(SLOT_MIN, +v || 6));
+
+async function readQueue(slots: number): Promise<QueueEntry[]> {
+  const e = await kv.get<QueueEntry[]>(qKey(slots));
+  return (Array.isArray(e.value) ? e.value : []).filter((x) => x && x.id && now() - x.ts < QUEUE_TTL);
+}
+
+async function queueCounts(): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (let n = SLOT_MIN; n <= SLOT_MAX; n++) out[n] = (await readQueue(n)).length;
+  return out;
+}
+
+function newCode(): string { return crypto.randomUUID().replace(/-/g, '').slice(0, 4).toUpperCase(); }
+
+function makeMatchedRoom(code: string, group: QueueEntry[]): Room {
+  const leader = group[0];
+  const r = makeRoom(code, leader, leader.id, leader.name);
+  r.config.slots = group.length;
+  r.players = group.map((g, i) => ({
+    id: g.id, name: g.name, seat: i + 1, role: 'villager' as Role, alive: true,
+    host: false, connected: true, lastSeen: now(),
+  }));
+  r.log = [];
+  addLog(r, `${group.length} 人都选择了 ${group.length} 人局，匹配成功，自动开局。`, 'system');
+  addLog(r, `本局发言 ${r.config.speechSec} 秒 / 投票 ${r.config.voteSec} 秒（采用首位匹配玩家的设置）。`, 'system');
+  startGame(r);
+  return r;
+}
+
+async function handleMatch(a: any, id: string, name: string): Promise<Response> {
+  const slots = clampSlots(a.slots);
+  const speechSec = SPEECH_OPTIONS.includes(+a.speechSec) ? +a.speechSec : 30;
+  const voteSec = VOTE_OPTIONS.includes(+a.voteSec) ? +a.voteSec : 20;
+
+  // 已经成局的玩家（含刷新重连）直接回原对局
+  const asg = await kv.get<{ code: string; ts: number }>(assignKey(id));
+  if (asg.value?.code) {
+    const r = (await load(asg.value.code)).value;
+    if (r && r.phase !== 'over') return json({ ok: true, code: r.code, state: view(r, id) });
+    await kv.delete(assignKey(id));
+  }
+
+  const key = qKey(slots);
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const e = await kv.get<QueueEntry[]>(key);
+    const q = (Array.isArray(e.value) ? e.value : []).filter((x) => x && x.id && now() - x.ts < QUEUE_TTL);
+    const mine = q.find((x) => x.id === id);
+    if (mine) { mine.ts = now(); mine.name = name; }
+    else q.push({ id, name, slots, speechSec, voteSec, ts: now() });
+
+    if (q.length >= slots) {
+      const group = q.slice(0, slots);
+      const rest = q.slice(slots);
+      let code = '';
+      for (let i = 0; i < 6; i++) { const c = newCode(); if (!(await load(c)).value) { code = c; break; } }
+      if (!code) return json({ error: '匹配繁忙，请稍后重试' });
+      const room = makeMatchedRoom(code, group);
+      const atomic = kv.atomic().check(e).set(key, rest).set(['werewolf', code], room);
+      for (const g of group) atomic.set(assignKey(g.id), { code, ts: now() });
+      if (!(await atomic.commit()).ok) continue;
+      announce(code, room.phaseId);
+      return json({ ok: true, code, state: view(room, id), matched: true });
+    }
+
+    if (!(await kv.atomic().check(e).set(key, q).commit()).ok) continue;
+    return json({ ok: true, matching: true, slots, count: q.length, need: slots - q.length, speechSec, voteSec });
+  }
+  return json({ error: '匹配繁忙，请稍后重试' });
+}
+
+async function handleCancelMatch(id: string): Promise<Response> {
+  for (let n = SLOT_MIN; n <= SLOT_MAX; n++) {
+    const key = qKey(n);
+    for (let i = 0; i < 4; i++) {
+      const e = await kv.get<QueueEntry[]>(key);
+      const q = Array.isArray(e.value) ? e.value : [];
+      const next = q.filter((x) => x && x.id !== id);
+      if (next.length === q.length) break;
+      if ((await kv.atomic().check(e).set(key, next).commit()).ok) break;
+    }
+  }
+  return json({ ok: true });
+}
+
+async function handleResetMatch(id: string): Promise<Response> {
+  await kv.delete(assignKey(id));
+  return json({ ok: true });
+}
+
 export async function handleWerewolf(req: Request, url: URL): Promise<Response | null> {
   const p = url.pathname;
   if (p === '/werewolf/ws') {
@@ -611,6 +710,7 @@ export async function handleWerewolf(req: Request, url: URL): Promise<Response |
     return response;
   }
   if (p === '/werewolf' || p === '/werewolf/') return page();
+  if (p === '/werewolf/queue') return json({ counts: await queueCounts() });
   if (p === '/werewolf/rooms') return json({ rooms: await listRooms() });
   if (p === '/werewolf/state') {
     const code = cleanCode(url.searchParams.get('room'));
@@ -628,6 +728,11 @@ export async function handleWerewolf(req: Request, url: URL): Promise<Response |
     const code = a.t === 'create' || a.t === 'quickjoin' ? '' : cleanCode(a.room);
     let err = '';
     let result: Room | null = null;
+
+    // 自由匹配（主入口，无房主）
+    if (a.t === 'match') return handleMatch(a, id, name);
+    if (a.t === 'cancelMatch') return handleCancelMatch(id);
+    if (a.t === 'resetMatch') return handleResetMatch(id);
 
     if (a.t === 'create') {
       const c = cleanCode(a.code) || Math.random().toString(36).slice(2, 6).toUpperCase();

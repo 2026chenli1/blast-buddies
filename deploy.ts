@@ -1,3 +1,5 @@
+import { handleWerewolf } from './werewolf.ts';
+
 // ============================================================
 // Blast Buddies 联机服务器（Deno Deploy 版）
 // 作用：静态文件 + WebSocket 房间转发（host-authoritative）
@@ -3051,6 +3053,12 @@ function showLogin() {
 // ---------- 入口 ----------
 Deno.serve(async (req, connInfo) => {
   const url = new URL(req.url);
+
+  // 狼人杀联机（独立模块，未命中时返回 null 交回游戏主逻辑）
+  if (url.pathname.startsWith('/werewolf')) {
+    const wwRes = await handleWerewolf(req, url);
+    if (wwRes) return wwRes;
+  }
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
 
   if (upgrade === 'websocket') {
