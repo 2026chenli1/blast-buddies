@@ -458,7 +458,7 @@ function renderSeats(st) {
     if (p.id === MY) tag = '<span class="tag">我</span>';
     if (p.speaking) tag += '<span class="tag" style="background:#dff0e7;color:#4b8565">发言中</span>';
     if (st.phase === 'vote' && p.voted) tag += '<span class="tag">已投</span>';
-    if ((st.phase === 'over' || p.role) && p.role) tag += '<span class="tag">' + ROLE_NAME[p.role] + '</span>';
+    if (st.phase !== 'lobby' && p.role) tag += '<span class="tag">' + ROLE_NAME[p.role] + '</span>';
     return '<div class="seat ' + (p.id === MY ? 'me ' : '') + (p.alive ? '' : 'dead ') + (p.speaking ? 'speaking ' : '') + (sel === p.id ? 'sel ' : '') + (can && p.alive ? 'clickable' : '') + '" data-id="' + p.id + '">' +
       '<div class="no">' + p.seat + '</div><div class="nm">' + esc(p.name) + '</div>' + tag + '</div>';
   }).join('');
