@@ -695,6 +695,114 @@
              rate: totalReview ? Math.round(totalOk / totalReview * 100) : 0 };
   }
 
+  // ---------- 跨设备实时同步：同一账号的错题 / 聊天 / 设置存云端 ----------
+  // 写操作自动排队上传（600ms 防抖），每 5 秒轮询拉取；后台标签页不轮询
+  var SYNC_KEYS = [Q_KEY, FREQ_KEY, ACT_KEY, FREE_KEY];
+  var syncDirty = false, syncBusy = false, syncApplying = false;
+  var syncLastApplied = 0, syncTimer = null, syncPoll = null;
+  var syncDevice = (function () {
+    try {
+      var d = localStorage.getItem('houkebang_device_v1');
+      if (!d) { d = 'D' + Math.random().toString(36).slice(2, 10); localStorage.setItem('houkebang_device_v1', d); }
+      return d;
+    } catch (e) { return 'D?'; }
+  })();
+  function syncPack() {
+    var af = {}, aa = {};
+    try { af = JSON.parse(localStorage.getItem(FREQ_KEY) || '{}'); } catch (e) {}
+    try { aa = JSON.parse(localStorage.getItem(ACT_KEY) || '{}'); } catch (e) {}
+    return {
+      q: getQ(), freq: af[currentUser] || 'daily', act: aa[currentUser] || {},
+      free: getFreeChat(), device: syncDevice
+    };
+  }
+  function syncApply(data) {
+    if (!data || !currentUser) return false;
+    syncApplying = true;
+    try {
+      var aq = loadAllQ(); aq[currentUser] = Array.isArray(data.q) ? data.q : [];
+      localStorage.setItem(Q_KEY, JSON.stringify(aq));
+      var af = {}; try { af = JSON.parse(localStorage.getItem(FREQ_KEY) || '{}'); } catch (e) {}
+      if (data.freq) { af[currentUser] = data.freq; localStorage.setItem(FREQ_KEY, JSON.stringify(af)); }
+      var aa = {}; try { aa = JSON.parse(localStorage.getItem(ACT_KEY) || '{}'); } catch (e) {}
+      if (data.act) { aa[currentUser] = data.act; localStorage.setItem(ACT_KEY, JSON.stringify(aa)); }
+      var ar = loadAllFree(); ar[currentUser] = Array.isArray(data.free) ? data.free : [];
+      localStorage.setItem(FREE_KEY, JSON.stringify(ar));
+    } finally { syncApplying = false; }
+    syncLastApplied = data.updatedAt || Date.now();
+    syncDirty = false;
+    return true;
+  }
+  function showSyncTip(msg) {
+    var old = document.getElementById('sync-tip'); if (old) old.remove();
+    var tip = document.createElement('div');
+    tip.id = 'sync-tip'; tip.textContent = msg;
+    tip.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:9999;background:rgba(46,196,182,.95);color:#08221f;font-size:12px;font-weight:800;padding:9px 14px;border-radius:999px;box-shadow:0 4px 18px rgba(0,0,0,.25);';
+    document.body.appendChild(tip);
+    setTimeout(function () { tip.remove(); }, 2200);
+  }
+  function schedulePush() {
+    if (!getToken() || !currentUser || syncApplying) return;
+    syncDirty = true;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(pushSync, 600);
+  }
+  function pushSync() {
+    if (syncBusy || !getToken() || !currentUser || !syncDirty) return;
+    syncBusy = true; syncDirty = false;
+    api('/api/hk/sync', 'POST', syncPack(), getToken()).then(function (r) {
+      syncBusy = false;
+      if (r && r.ok) syncLastApplied = Math.max(syncLastApplied, r.updatedAt || 0);
+      else syncDirty = true;
+    }).catch(function () { syncBusy = false; syncDirty = true; });
+  }
+  function pullSync() {
+    if (syncBusy || syncDirty || !getToken() || !currentUser || document.hidden) return;
+    syncBusy = true;
+    api('/api/hk/sync', 'GET', null, getToken()).then(function (r) {
+      syncBusy = false;
+      var d = r && r.ok ? r.data : null;
+      if (d && (d.updatedAt || 0) > syncLastApplied && syncApply(d)) {
+        var cur = document.querySelector('.nav-item.active');
+        var v = cur ? cur.getAttribute('data-view') : 'home';
+        // 答题/录入页不重绘，避免打断正在输入的内容
+        if (v === 'home' || v === 'chart' || v === 'organize') showView(v);
+        showSyncTip('已同步另一台设备的更新');
+      }
+    }).catch(function () { syncBusy = false; });
+  }
+  function syncInit() {
+    syncLastApplied = 0; syncDirty = false;
+    if (syncPoll) clearInterval(syncPoll);
+    api('/api/hk/sync', 'GET', null, getToken()).then(function (r) {
+      var d = r && r.ok ? r.data : null;
+      var localQ = getQ();
+      // 按 id 合并两边错题（同 id 以云端为准），两台设备各自新增的题都不会丢
+      var map = {};
+      localQ.forEach(function (q) { if (q && q.id) map[q.id] = q; });
+      var cloudLen = d && Array.isArray(d.q) ? d.q.length : 0;
+      if (d && Array.isArray(d.q)) d.q.forEach(function (q) { if (q && q.id) map[q.id] = q; });
+      var merged = Object.keys(map).map(function (k) { return map[k]; });
+      if (d) {
+        d.q = merged; syncApply(d);
+        var cur = document.querySelector('.nav-item.active');
+        if (cur) showView(cur.getAttribute('data-view'));
+        if (merged.length !== cloudLen) schedulePush(); // 本地有云端没有的题，回传
+      } else if (merged.length) {
+        schedulePush();
+      }
+      if (merged.length && localQ.length !== merged.length) showSyncTip('已从云端合并 ' + merged.length + ' 道错题');
+    }).catch(function () {});
+    syncPoll = setInterval(pullSync, 5000);
+  }
+  function syncStop() { if (syncPoll) { clearInterval(syncPoll); syncPoll = null; } syncDirty = false; }
+  // 拦截 localStorage 写入：所有错题/聊天/设置变更自动排队上传
+  var _origSetItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (k, v) {
+    _origSetItem.call(this, k, v);
+    if (SYNC_KEYS.indexOf(k) >= 0) schedulePush();
+  };
+
   // ---------- 通用弹窗 ----------
   function closeModal() { var m = $('hk-modal'); if (m) m.remove(); }
   function showModal(html) {
@@ -773,6 +881,7 @@
     var q = getQ(); if (normalizeQ(q)) saveQ(q);
     checkVision();
     showView('home');
+    syncInit(); // 拉取云端快照并开启跨设备 5 秒轮询
     // 首次登录：先问效果图频率；否则检查复习提醒
     if (!getFreq()) setTimeout(askFreq, 400);
     else setTimeout(maybeReviewReminder, 500);
@@ -826,6 +935,7 @@
   function logout() {
     var t = getToken();
     if (t) api('/api/hk/logout', 'POST', {}, t).catch(function () {});
+    syncStop();
     setToken('');
     currentUser = '';
     activeChatId = '';
@@ -953,9 +1063,8 @@
   // ---------- AI 学习智能体：人设 + 学情 + 多轮记忆 ----------
   var AGENT_NAME = '金小助';
   var AGENT_PERSONA =
-    '你是「' + AGENT_NAME + '」，一位耐心、专业的中小学学习助手。' +
-    '你的教学风格：引导式启发，不直接给答案就完事，而是先提示思路、拆解步骤、鼓励思考；' +
-    '回答简洁友好、用中文、像身边的老师。遇到不确定的题会诚实说明。';
+    '你是「' + AGENT_NAME + '」，中小学学习助手。用中文简洁作答：先给思路，再给结论，' +
+    '回答控制在 150 字以内，不要长篇铺陈、不要重复问候。';
 
   // 生成学生当前学情（从本地错题库统计），让 AI 认识这个学生
   function learningProfile() {
@@ -978,13 +1087,14 @@
     if (subjectText) s += '【当前讨论的题目】' + subjectText + '\n';
     if (history && history.length) {
       s += '【之前的对话（请记住并延续）】\n';
-      history.slice(-6).forEach(function (h) {
-        s += '学生：' + h.q + '\n' + AGENT_NAME + '：' + (h.a || '（未回答）') + '\n';
+      // 只带最近 2 轮，长历史会显著拖慢生成
+      history.slice(-2).forEach(function (h) {
+        s += '学生：' + h.q + '\n' + AGENT_NAME + '：' + String(h.a || '（未回答）').slice(0, 200) + '\n';
       });
       s += '\n';
     }
     s += '【学生现在问】' + question + '\n';
-    s += '请以' + AGENT_NAME + '的身份回答，结合上面的学情与对话历史，保持连贯，不要重复自我介绍。';
+    s += '请以' + AGENT_NAME + '的身份回答，保持连贯，不要重复自我介绍；回答不超过 150 字。';
     return s;
   }
 
@@ -1937,38 +2047,66 @@
     return 'solve';
   }
   // AI 批改：严格评判 + 语义等价算对 + 每次都给出标准答案
-  function gradeAnswer(q, studentAns) {
+  function truthyFlag(v) {
+    return v === true || v === 1 || v === 'true' || v === 'True' || v === '对' || v === '正确';
+  }
+  // 双判卷：解题过程 + 最终答案，两项都对才算通过
+  function gradeAnswer(q, process, studentAns) {
     var qt = QTYPES[qtypeOf(q)];
     var subj = (SUBJECTS[q.subject]||SUBJECTS.chinese).name;
-    var prompt = '你是一位严格的判卷老师，请判断学生这道题答得对不对。\n' +
+    var prompt = '你是一位严格的判卷老师。学生要同时写出【解题过程】和【答案】，请分别判断。\n' +
       '【科目】' + subj + '\n' +
       '【题型】' + qt.name + '\n' +
       '【题目要求】' + q.text + '\n' +
       '【标准答案】' + (q.answer || '（题目未给出，请你先自行写出一段标准答案再判断）') + '\n' +
-      '【学生作答】' + studentAns + '\n' +
+      '【学生解题过程】' + (process || '（未写）') + '\n' +
+      '【学生答案】' + studentAns + '\n' +
       '【本题判卷标准】' + qt.rule + '\n' +
       '【通用规则，必须遵守】\n' +
-      '1. 严格：不能因为学生写了字就判对。答非所问、漏掉关键要点、错别字改变词义、计算错误、与题意无关，一律判错。\n' +
-      '2. 语义等价：语文、英语的主观题，学生的表述和标准答案不一样，但意思相同、关键词或要点答到了，就算对；不要抠字眼。\n' +
-      '3. 默写、字词、古诗类：错别字算错；翻译、阅读、习作类：意思对、要点到即可。\n' +
-      '4. 习作题按是否切题、内容完整、语句通顺、达到字数与格式要求来判，并在 right 里给出写作要点或范文。\n' +
-      '5. 无论判对还是判错，right 都必须给出一段完整、规范的标准答案（语文阅读按要点列出，习作给要点或范文），不能留空。\n' +
-      '只输出 JSON：{"ok":true或false,"comment":"一句话点评，说清对错原因","right":"标准答案"}。\n' +
-      'ok 必须是布尔值 true 或 false，绝对不要用字符串 "true"/"false"。不要输出 JSON 以外的任何文字。';
+      '1. processOk 判断解题过程：思路方向是否正确、关键步骤是否齐全、推理有无明显错误；只抄答案、空泛套话、逻辑跳跃算错。\n' +
+      '2. answerOk 判断最终答案：与标准答案一致或意思相同算对；答非所问、计算错误、错别字改变词义算错。\n' +
+      '3. 严格：不能因为写了字就判对。语文、英语主观题意思相同、要点答到即可，不要抠字眼；默写、字词错别字算错。\n' +
+      '4. ok 必须等于 processOk 且 answerOk —— **两项都对才算通过**，任一项错就判错。\n' +
+      '5. 无论对错，right 都要给一段完整规范的标准答案（阅读按要点、习作给要点或范文），不能留空。\n' +
+      '只输出 JSON：{"processOk":true或false,"answerOk":true或false,"ok":true或false,"comment":"一句话点评，指出哪一项错在哪","right":"标准答案"}。\n' +
+      '三个布尔值都必须是 true/false，绝对不要用字符串。不要输出 JSON 以外的任何文字。';
     return aiAsk(prompt).then(function (r) {
       var clean = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
       var st = clean.indexOf('{'), en = clean.lastIndexOf('}');
       if (st < 0 || en < st) throw new Error('批改返回格式异常');
       var j = JSON.parse(clean.slice(st, en+1));
-      // 严格布尔：AI 偶尔返回字符串 "false"，用 !! 会把 "false" 误判为答对
-      var v = j.ok;
-      var ok = (v === true || v === 1 || v === 'true' || v === 'True' || v === '对' || v === '正确');
+      var processOk = truthyFlag(j.processOk);
+      var answerOk = truthyFlag(j.answerOk);
       return {
-        ok: ok,
+        processOk: processOk, answerOk: answerOk,
+        // 两项都对才通过；若 AI 只给了 ok，也要求与两项一致
+        ok: processOk && answerOk && (j.ok === undefined || truthyFlag(j.ok)),
         comment: String(j.comment||'').trim(),
         right: String(j.right||'').trim() || String(q.answer||'').trim()
       };
     });
+  }
+  // 答错后：按原题型生成几道同类题，加入错题本和当前复习队列
+  function generateSimilar(q, n) {
+    var qt = QTYPES[qtypeOf(q)];
+    var p = '请参照下面这道学生做错的题，出 ' + n + ' 道同题型、同难度但数字或内容不同的类似练习。\n' +
+      '【原题】' + q.text + '\n【原题型】' + qt.name + '\n【科目】' + (SUBJECTS[q.subject]||SUBJECTS.chinese).name + '\n' +
+      '只输出 JSON 数组：[{"t":"题目","s":"语文|数学|英语","q":"题型","a":"标准答案"}]。' +
+      '题型 q 必须与原题一致（' + qt.name + '）。不要输出 JSON 以外的文字。';
+    return aiAsk(p).then(function (r) {
+      var c = String(r).replace(/```json/gi,'').replace(/```/g,'').trim();
+      var m = c.match(/\[[\s\S]*\]/);
+      if (!m) return [];
+      var arr = JSON.parse(m[0]);
+      return (Array.isArray(arr) ? arr : []).map(function (x) {
+        return {
+          t: String(fv(x,'t',['题干','题目'])||'').trim(),
+          s: String(fv(x,'s',['科目'])||'').trim(),
+          q: String(fv(x,'q',['题型'])||'').trim(),
+          a: String(fv(x,'a',['答案'])||'').trim()
+        };
+      }).filter(function (x) { return x.t.length > 2; }).slice(0, n);
+    }).catch(function () { return []; });
   }
 
   var testQueue = [], testPos = 0, testShowAns = false, testGot = 0, testTotal = 0;
@@ -2009,34 +2147,62 @@
     box.innerHTML = '<div class="card test-card">' +
       '<div class="test-progress"><span>第 ' + (testPos+1) + ' / ' + testTotal + ' 题</span><div class="bar"><i style="width:' + Math.round(testPos/testTotal*100) + '%"></i></div>' +
         '<span class="subj-tag ' + s.cls + '">' + s.name + '</span><span class="qtype-tag">' + qt.name + '</span></div>' +
-      '<div style="font-size:12px;color:var(--muted);">按原题型作答，答案先不给你；写完提交，AI 严格批改并给出标准答案。</div>' +
+      '<div style="font-size:12px;color:var(--muted);">解题过程和答案都要写，**两项都对才算通过**；错了要再做一遍，并给你几道类似题练手。</div>' +
       '<div class="test-q">' + escapeHtml(questionForTest(q)) + '</div>' +
       (q.image ? '<img class="preview-img" src="' + q.image + '" alt="题目">' : '') +
-      '<textarea id="t-answer" class="answer-input" rows="' + (qt.rows || 3) + '" placeholder="' + qt.hint + '"></textarea>' +
+      '<div style="font-size:12px;font-weight:800;color:#7ee0c0;margin:4px 0 6px;">① 解题过程</div>' +
+      '<textarea id="t-process" class="answer-input" rows="4" placeholder="写出你的思路和关键步骤，例如：先移项、再合并同类项…"></textarea>' +
+      '<div style="font-size:12px;font-weight:800;color:#ffd166;margin:12px 0 6px;">② 答案</div>' +
+      '<textarea id="t-answer" class="answer-input" rows="2" placeholder="' + qt.hint + '"></textarea>' +
       '<div id="t-grade"></div>' +
-      '<div class="grade-row"><button class="btn gold" id="t-submit" type="button" style="flex:1;padding:14px;">提交答案，让 AI 批改</button></div>' +
-      '<div style="font-size:11px;color:var(--muted);margin-top:14px;">记忆曲线：第 ' + (st.step+1) + ' 轮 · ' + (st.days||'已完成') + ' 天间隔</div>' +
+      '<div class="grade-row"><button class="btn gold" id="t-submit" type="button" style="flex:1;padding:14px;">提交，让 AI 批改过程 + 答案</button></div>' +
+      '<div id="similar-tip" style="font-size:11px;color:var(--muted);margin-top:8px;"></div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:8px;">记忆曲线：第 ' + (st.step+1) + ' 轮 · ' + (st.days||'已完成') + ' 天间隔</div>' +
     '</div>';
-    $('t-answer').focus();
+    $('t-process').focus();
     $('t-submit').addEventListener('click', function () {
+      var proc = ($('t-process').value || '').trim();
       var val = ($('t-answer').value || '').trim();
-      if (!val) { $('t-answer').focus(); return; }
+      if (!proc) { $('t-process').focus(); $('similar-tip').textContent = '请先写解题过程'; return; }
+      if (!val) { $('t-answer').focus(); $('similar-tip').textContent = '请再写出最终答案'; return; }
+      $('similar-tip').textContent = '';
       var btn = this; btn.disabled = true; btn.textContent = 'AI 正在批改…';
-      gradeAnswer(q, val).then(function (g) {
+      gradeAnswer(q, proc, val).then(function (g) {
         if (g.ok) testGot++;
-        markReviewed(q.id, g.ok); // 答对推进间隔，答错退回起点
-        btn.disabled = false; btn.textContent = '提交答案，让 AI 批改';
+        markReviewed(q.id, g.ok); // 两项都对才推进间隔，否则退回起点
+        btn.disabled = false; btn.textContent = '提交，让 AI 批改过程 + 答案';
+        if (!g.ok) {
+          // 错了要再做一遍：把本题插到下一题位置，并异步补几道类似题
+          testQueue.splice(testPos + 2, 0, q.id);
+          testTotal = Math.min(testTotal + 1, 15);
+          generateSimilar(q, 3).then(function (items) {
+            if (!items.length) { var t0=$('similar-tip'); if(t0) t0.textContent='AI 暂时没能生成类似题，本题会再做一遍。'; return; }
+            var newIds = [];
+            items.forEach(function (it) {
+              var subj = it.s === '数学' ? 'math' : (it.s === '英语' ? 'english' : 'chinese');
+              var obj = addQuestionSilent(it.t, it.a, subj, '', QTYPE_MAP[it.q] || qtypeOf(q), { fromSimilar: true });
+              newIds.push(obj.id);
+            });
+            newIds.forEach(function (id) { testQueue.push(id); });
+            testTotal = Math.min(testTotal + newIds.length, 20);
+            var tip = $('similar-tip');
+            if (tip) tip.textContent = '已生成 ' + newIds.length + ' 道类似题，稍后会出现在本轮复习里。';
+          });
+        }
         $('t-grade').innerHTML = '<div class="grade-result ' + (g.ok?'ok':'no') + '">' +
-          '<div class="gh">' + (g.ok ? '答对了 ✓' : '答错了 ✗') + '</div>' +
-          (g.comment ? '<div>' + escapeHtml(g.comment) + '</div>' : '') +
+          '<div class="gh">' + (g.ok ? '两项都对，通过 ✓' : '没通过 ✗ 这道题要做一遍') + '</div>' +
+          '<div style="margin-top:6px;font-size:12px;">解题过程：' + (g.processOk ? '<b style="color:#7ee0c0">正确 ✓</b>' : '<b style="color:#ff9b9b">有误 ✗</b>') +
+            '　｜　答案：' + (g.answerOk ? '<b style="color:#7ee0c0">正确 ✓</b>' : '<b style="color:#ff9b9b">有误 ✗</b>') + '</div>' +
+          (g.comment ? '<div style="margin-top:6px;">' + escapeHtml(g.comment) + '</div>' : '') +
           (g.right ? '<div style="margin-top:8px;color:#7ee0c0;white-space:pre-wrap;">标准答案：' + fmtAI(escapeHtml(g.right)) + '</div>' : '') +
         '</div>' +
-        '<button class="btn gold" id="t-next" type="button" style="width:100%;padding:14px;margin-top:14px;">下一题</button>';
-        $('t-answer').disabled = true;
+        '<button class="btn gold" id="t-next" type="button" style="width:100%;padding:14px;margin-top:14px;">' +
+          (g.ok ? '下一题' : '再做一遍这道题') + '</button>';
+        $('t-answer').disabled = true; $('t-process').disabled = true;
         $('t-submit').style.display = 'none';
         $('t-next').addEventListener('click', function () { nextTest(box); });
       }).catch(function () {
-        btn.disabled = false; btn.textContent = '提交答案，让 AI 批改';
+        btn.disabled = false; btn.textContent = '提交，让 AI 批改过程 + 答案';
         $('t-grade').innerHTML = '<div class="grade-result no">AI 暂未能批改，请稍后重试或换个答案再提交。</div>';
       });
     });
